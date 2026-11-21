@@ -73,6 +73,8 @@ const en = {
   yourTrack: 'Your track',
   slowed: 'Slowed',
   spedUp: 'Sped up',
+  privateWarnTitle: 'Not recommended in Safari Private tabs.',
+  privateWarn: 'This browser adds noise to exported audio as an anti-tracking measure. For a clean file, open THE REMIXITY in a normal tab.',
 };
 
 type Dict = typeof en;
@@ -150,6 +152,8 @@ const ro: Dict = {
   yourTrack: 'Piesa ta',
   slowed: 'Încetinit',
   spedUp: 'Accelerat',
+  privateWarnTitle: 'Nu e recomandat în filele private din Safari.',
+  privateWarn: 'Acest browser adaugă zgomot în audio exportat, ca protecție anti-urmărire. Pentru un fișier curat, deschide THE REMIXITY într-o filă normală.',
 };
 
 const ru: Dict = {
@@ -225,6 +229,8 @@ const ru: Dict = {
   yourTrack: 'Ваш трек',
   slowed: 'Замедлено',
   spedUp: 'Ускорено',
+  privateWarnTitle: 'Не рекомендуется в приватных вкладках Safari.',
+  privateWarn: 'Этот браузер добавляет шум в экспортируемый звук для защиты от слежки. Для чистого файла откройте THE REMIXITY в обычной вкладке.',
 };
 
 const dicts: Record<Lang, Dict> = { en, ro, ru };

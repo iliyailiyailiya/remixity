@@ -7,6 +7,7 @@ import { exportAudio, Format, Stage } from './engine/render';
 import { addMarker, assemble, cut, EditState, initialEdit, keepOnly, removeMarker } from './engine/edit';
 import { readMeta, metaFromFileName } from './engine/meta';
 import { detectBpm } from './engine/bpm';
+import { readbackIsNoisy } from './engine/noisecheck';
 import { Waveform } from './ui/waveform';
 import { Backdrop } from './ui/backdrop';
 import { defaultPalette, generatedCover, paletteFrom } from './ui/palette';
@@ -274,6 +275,9 @@ $('openMenu').addEventListener('click', () => showSheet($('menu')));
 $('openExport').addEventListener('click', () => {
   updateExportName();
   showSheet($('exportSheet'));
+  // Warn when the browser adds anti-tracking noise to read-back audio
+  // (e.g. Safari Private tabs); exports would come out noisy there.
+  void readbackIsNoisy().then((noisy) => ($('privateWarn').hidden = !noisy));
 });
 document.querySelectorAll('input[name="fmt"]').forEach((r) => r.addEventListener('change', updateExportName));
 

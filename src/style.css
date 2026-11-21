@@ -1113,3 +1113,20 @@ input[type='range'] {
     animation-duration: 0.01ms !important;
   }
 }
+
+/* Export warning (browsers that add noise to read-back audio) */
+.warn {
+  margin: -4px 0 16px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(255, 176, 32, 0.16);
+  border: 1px solid rgba(255, 176, 32, 0.45);
+  color: #ffe3b0;
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+.warn b {
+  display: block;
+  color: #ffc861;
+  margin-bottom: 2px;
+}
