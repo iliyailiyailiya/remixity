@@ -2,6 +2,8 @@
 
 A free slowed + reverb and nightcore maker that runs fully in the browser. No uploads, no account, no Pro tier.
 
+Live: https://remixity.vercel.app. Deploy with `vercel deploy --prod` (settings are in `vercel.json`).
+
 ```bash
 npm install
 npm run dev      # http://localhost:5173
