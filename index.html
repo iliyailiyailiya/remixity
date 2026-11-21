@@ -45,11 +45,13 @@
           </div>
         </div>
 
-        <div class="presets" role="group">
+        <div class="presets" id="presets" role="group">
           <button data-preset="original" data-i18n="presetOriginal"></button>
           <button data-preset="slowed" data-i18n="presetSlowed"></button>
           <button data-preset="ultra" data-i18n="presetUltra"></button>
           <button data-preset="nightcore" data-i18n="presetNightcore"></button>
+          <span id="userPresets" class="user-presets"></span>
+          <button id="savePreset" class="save" data-i18n="save"></button>
         </div>
 
         <div class="card">
@@ -98,6 +100,42 @@
           <div class="slider"><span data-i18n="volume"></span><output id="oVolume"></output>
             <input id="volume" type="range" min="-18" max="6" step="0.5" value="0" /></div>
         </div>
+
+        <details class="card fold">
+          <summary><h2 data-i18n="eq"></h2><span id="eqBadge" class="badge"></span></summary>
+          <div class="slider"><span>250 Hz</span><output id="oEqLow"></output>
+            <input id="eqLow" type="range" min="-12" max="12" step="0.5" value="0" /></div>
+          <div class="slider"><span>1 kHz</span><output id="oEqMid"></output>
+            <input id="eqMid" type="range" min="-12" max="12" step="0.5" value="0" /></div>
+          <div class="slider"><span>4 kHz</span><output id="oEqHigh"></output>
+            <input id="eqHigh" type="range" min="-12" max="12" step="0.5" value="0" /></div>
+          <div class="slider"><span data-i18n="air"></span><output id="oEqAir"></output>
+            <input id="eqAir" type="range" min="-12" max="12" step="0.5" value="0" /></div>
+          <div class="slider"><span data-i18n="lowCut"></span><output id="oLowCut"></output>
+            <input id="lowCut" type="range" min="0" max="1" step="0.001" value="0" /></div>
+          <div class="slider"><span data-i18n="highCut"></span><output id="oHighCut"></output>
+            <input id="highCut" type="range" min="0" max="1" step="0.001" value="1" /></div>
+          <button class="ghost" id="eqReset" data-i18n="reset"></button>
+        </details>
+
+        <details class="card fold">
+          <summary><h2 data-i18n="effects"></h2><span id="fxBadge" class="badge"></span></summary>
+          <div class="slider"><span data-i18n="saturation"></span><output id="oDrive"></output>
+            <input id="drive" type="range" min="0" max="1" step="0.01" value="0" /></div>
+          <h3 data-i18n="echo"></h3>
+          <div class="slider"><span data-i18n="mix"></span><output id="oDelayMix"></output>
+            <input id="delayMix" type="range" min="0" max="1" step="0.01" value="0" /></div>
+          <div class="slider"><span data-i18n="echoTime"></span><output id="oDelayTime"></output>
+            <input id="delayTime" type="range" min="0.05" max="1.5" step="0.005" value="0.375" /></div>
+          <div id="sync" class="chips small" hidden>
+            <button data-div="1">1/4</button>
+            <button data-div="0.75">1/8.</button>
+            <button data-div="0.5">1/8</button>
+            <button data-div="0.25">1/16</button>
+          </div>
+          <div class="slider"><span data-i18n="feedback"></span><output id="oDelayFeedback"></output>
+            <input id="delayFeedback" type="range" min="0" max="0.85" step="0.01" value="0.35" /></div>
+        </details>
 
         <div class="card">
           <h2 data-i18n="export"></h2>

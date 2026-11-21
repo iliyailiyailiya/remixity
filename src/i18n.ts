@@ -38,6 +38,20 @@ const en = {
   pause: 'Pause',
   st: 'st',
   ct: 'ct',
+  eq: 'Equalizer',
+  air: 'Air (12 kHz+)',
+  lowCut: 'Low cut',
+  highCut: 'High cut',
+  off: 'off',
+  reset: 'Reset',
+  effects: 'Effects',
+  saturation: 'Saturation',
+  echo: 'Echo',
+  echoTime: 'Time',
+  feedback: 'Repeats',
+  save: '+ Save',
+  savePrompt: 'Name this preset',
+  deletePreset: 'Delete preset',
 };
 
 type Dict = typeof en;
@@ -80,6 +94,20 @@ const ro: Dict = {
   pause: 'Pauză',
   st: 'st',
   ct: 'ct',
+  eq: 'Egalizator',
+  air: 'Aer (12 kHz+)',
+  lowCut: 'Tăiere joase',
+  highCut: 'Tăiere înalte',
+  off: 'oprit',
+  reset: 'Resetează',
+  effects: 'Efecte',
+  saturation: 'Saturație',
+  echo: 'Ecou',
+  echoTime: 'Timp',
+  feedback: 'Repetări',
+  save: '+ Salvează',
+  savePrompt: 'Numele presetării',
+  deletePreset: 'Șterge presetarea',
 };
 
 const ru: Dict = {
@@ -120,6 +148,20 @@ const ru: Dict = {
   pause: 'Пауза',
   st: 'пт',
   ct: 'ц',
+  eq: 'Эквалайзер',
+  air: 'Воздух (12 кГц+)',
+  lowCut: 'Срез низов',
+  highCut: 'Срез верхов',
+  off: 'выкл',
+  reset: 'Сбросить',
+  effects: 'Эффекты',
+  saturation: 'Сатурация',
+  echo: 'Эхо',
+  echoTime: 'Время',
+  feedback: 'Повторы',
+  save: '+ Сохранить',
+  savePrompt: 'Название пресета',
+  deletePreset: 'Удалить пресет',
 };
 
 const dicts: Record<Lang, Dict> = { en, ro, ru };

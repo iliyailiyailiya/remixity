@@ -21,6 +21,6 @@ npm run build    # static site in dist/, host anywhere
 ## Roadmap
 
 1. ~~MVP: load, waveform, tempo/BPM/tap, reverb, bass, volume, presets, MP3/WAV export, EN/RO/RU~~
-2. EQ, delay, filters, saturation (WaveShaper with `oversample: '4x'`), saved presets
+2. ~~EQ, delay, filters, saturation (WaveShaper with `oversample: '4x'`), saved presets~~
 3. Trim, loop, markers, cuts, join
 4. Privacy/terms pages, per-language SEO pages, Plausible/Umami, ads + donate

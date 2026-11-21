@@ -191,29 +191,143 @@ function pitchText(r: number) {
 
 // ---------- effects ----------
 
-type SliderKey = 'reverbMix' | 'decay' | 'tone' | 'bass' | 'volume';
-const sliders: [string, SliderKey, (v: number) => string][] = [
-  ['mix', 'reverbMix', (v) => `${Math.round(v * 100)}%`],
-  ['decay', 'decay', (v) => `${v.toFixed(1)} s`],
-  ['tone', 'tone', (v) => (v < 0.34 ? t('dark') : v > 0.66 ? t('bright') : `${Math.round(v * 100)}%`)],
-  ['bass', 'bass', (v) => `${v > 0 ? '+' : ''}${v.toFixed(1)} dB`],
-  ['volume', 'volume', (v) => `${v > 0 ? '+' : ''}${v.toFixed(1)} dB`],
+type SliderKey = Exclude<keyof FxParams, 'ratio'>;
+interface SliderDef {
+  id: string;
+  key: SliderKey;
+  fmt: (v: number) => string;
+  /** param → slider position (defaults to identity) */
+  to?: (v: number) => number;
+  /** slider position → param */
+  from?: (s: number) => number;
+}
+
+const db = (v: number) => `${v > 0 ? '+' : ''}${v.toFixed(1)} dB`;
+const pct = (v: number) => `${Math.round(v * 100)}%`;
+const hz = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(1)} kHz` : `${Math.round(v)} Hz`);
+
+// Cut filters use a log scale so the slider moves evenly through octaves.
+const LC = [20, 1000];
+const HC = [1000, 20000];
+const logTo = ([a, b]: number[]) => (v: number) => Math.log(v / a) / Math.log(b / a);
+const logFrom = ([a, b]: number[]) => (s: number) => Math.round(a * Math.pow(b / a, s));
+
+const sliders: SliderDef[] = [
+  { id: 'mix', key: 'reverbMix', fmt: pct },
+  { id: 'decay', key: 'decay', fmt: (v) => `${v.toFixed(1)} s` },
+  { id: 'tone', key: 'tone', fmt: (v) => (v < 0.34 ? t('dark') : v > 0.66 ? t('bright') : pct(v)) },
+  { id: 'bass', key: 'bass', fmt: db },
+  { id: 'volume', key: 'volume', fmt: db },
+  { id: 'eqLow', key: 'eqLow', fmt: db },
+  { id: 'eqMid', key: 'eqMid', fmt: db },
+  { id: 'eqHigh', key: 'eqHigh', fmt: db },
+  { id: 'eqAir', key: 'eqAir', fmt: db },
+  { id: 'lowCut', key: 'lowCut', fmt: (v) => (v <= 20 ? t('off') : hz(v)), to: logTo(LC), from: logFrom(LC) },
+  { id: 'highCut', key: 'highCut', fmt: (v) => (v >= 20000 ? t('off') : hz(v)), to: logTo(HC), from: logFrom(HC) },
+  { id: 'drive', key: 'drive', fmt: (v) => (v === 0 ? t('off') : pct(v)) },
+  { id: 'delayMix', key: 'delayMix', fmt: (v) => (v === 0 ? t('off') : pct(v)) },
+  { id: 'delayTime', key: 'delayTime', fmt: (v) => `${Math.round(v * 1000)} ms` },
+  { id: 'delayFeedback', key: 'delayFeedback', fmt: pct },
 ];
 
-for (const [id, key] of sliders) {
-  const el = $<HTMLInputElement>(id);
+for (const s of sliders) {
+  const el = $<HTMLInputElement>(s.id);
   el.addEventListener('input', () => {
-    params[key] = +el.value;
+    params[s.key] = s.from ? s.from(+el.value) : +el.value;
     apply();
   });
 }
 
-document.querySelectorAll<HTMLButtonElement>('[data-preset]').forEach((b) =>
+$('eqReset').addEventListener('click', () => {
+  const { eqLow, eqMid, eqHigh, eqAir, lowCut, highCut } = DEFAULT_PARAMS;
+  Object.assign(params, { eqLow, eqMid, eqHigh, eqAir, lowCut, highCut });
+  apply();
+});
+
+// Echo synced to the tempo you hear (original BPM × speed).
+document.querySelectorAll<HTMLButtonElement>('[data-div]').forEach((b) =>
   b.addEventListener('click', () => {
-    Object.assign(params, PRESETS[b.dataset.preset!]);
+    if (!origBpm) return;
+    const beat = 60 / (origBpm * params.ratio);
+    params.delayTime = Math.min(1.5, Math.max(0.05, beat * +b.dataset.div!));
     apply();
   }),
 );
+
+// Built-in presets start from the defaults so they also clear EQ and effects.
+document.querySelectorAll<HTMLButtonElement>('[data-preset]').forEach((b) =>
+  b.addEventListener('click', () => {
+    Object.assign(params, DEFAULT_PARAMS, PRESETS[b.dataset.preset!]);
+    apply();
+  }),
+);
+
+// ---------- saved presets (this browser only) ----------
+
+interface UserPreset {
+  name: string;
+  params: Partial<FxParams>;
+}
+
+function loadUserPresets(): UserPreset[] {
+  try {
+    const raw = JSON.parse(localStorage.getItem('presets') || '[]');
+    return Array.isArray(raw) ? raw.filter((p) => p && typeof p.name === 'string' && p.params) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveUserPresets(list: UserPreset[]) {
+  try {
+    localStorage.setItem('presets', JSON.stringify(list));
+  } catch {
+    /* storage blocked or full */
+  }
+}
+
+function renderUserPresets() {
+  const box = $('userPresets');
+  box.replaceChildren();
+  loadUserPresets().forEach((p, i) => {
+    const chip = document.createElement('span');
+    chip.className = 'user-chip';
+    const use = document.createElement('button');
+    use.textContent = p.name;
+    use.addEventListener('click', () => {
+      // Only take known numeric keys from storage.
+      const clean: Partial<FxParams> = {};
+      for (const k of Object.keys(DEFAULT_PARAMS) as (keyof FxParams)[]) {
+        if (typeof p.params[k] === 'number' && Number.isFinite(p.params[k])) clean[k] = p.params[k];
+      }
+      Object.assign(params, DEFAULT_PARAMS, clean);
+      apply();
+    });
+    const del = document.createElement('button');
+    del.className = 'del';
+    del.textContent = '×';
+    del.setAttribute('aria-label', `${t('deletePreset')}: ${p.name}`);
+    del.addEventListener('click', () => {
+      const list = loadUserPresets();
+      list.splice(i, 1);
+      saveUserPresets(list);
+      renderUserPresets();
+    });
+    chip.append(use, del);
+    box.append(chip);
+  });
+}
+
+$('savePreset').addEventListener('click', () => {
+  const name = prompt(t('savePrompt'))?.trim().slice(0, 40);
+  if (!name) return;
+  const list = loadUserPresets().filter((p) => p.name !== name);
+  list.push({ name, params: { ...params } });
+  saveUserPresets(list);
+  renderUserPresets();
+});
+
+renderUserPresets();
 
 function apply() {
   player?.setParams({ ...params });
@@ -285,10 +399,19 @@ function render() {
   targetInput.disabled = !origBpm;
   $('nudgeUnit').textContent = origBpm ? 'BPM' : '%';
 
-  for (const [id, key, fmt] of sliders) {
-    $<HTMLInputElement>(id).value = String(params[key]);
-    $(`o${id[0].toUpperCase()}${id.slice(1)}`).textContent = fmt(params[key]);
+  for (const s of sliders) {
+    const v = params[s.key];
+    $<HTMLInputElement>(s.id).value = String(s.to ? s.to(v) : v);
+    $(`o${s.id[0].toUpperCase()}${s.id.slice(1)}`).textContent = s.fmt(v);
   }
+
+  // Closed cards show a dot when something inside them is active.
+  const eqOn =
+    params.eqLow || params.eqMid || params.eqHigh || params.eqAir || params.lowCut > 20 || params.highCut < 20000;
+  $('eqBadge').classList.toggle('on', !!eqOn);
+  $('fxBadge').classList.toggle('on', params.drive > 0 || params.delayMix > 0);
+  $('sync').hidden = !origBpm;
+
   renderTransport();
 }
 

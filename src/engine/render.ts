@@ -1,6 +1,6 @@
 // Export: high-quality resample → offline render through the same chain →
 // peak guard → WAV or MP3. Everything stays on the device.
-import { buildChain, CEILING_DB, dbToGain, FxParams } from './chain';
+import { buildChain, CEILING_DB, dbToGain, delayTail, FxParams } from './chain';
 import { makeImpulse } from './impulse';
 import { encodeMp3, resample } from './dsp';
 
@@ -27,9 +27,10 @@ export async function exportAudio(
     channels = await resample(copy(), p.ratio, outLength, (f) => onProgress('resample', f));
   }
 
-  // 2. Render effects offline in 32-bit float, adding room for the reverb tail.
+  // 2. Render effects offline in 32-bit float, adding room for the reverb and
+  //    echo tails so nothing gets cut off at the end.
   onProgress('render', null);
-  const tail = p.reverbMix > 0 ? p.decay + 0.1 : 0.05;
+  const tail = Math.max(p.reverbMix > 0 ? p.decay : 0, delayTail(p)) + 0.1;
   const total = channels[0].length + Math.ceil(tail * sr);
   const off = new OfflineAudioContext(2, total, sr);
   const src = off.createBufferSource();
