@@ -45,7 +45,7 @@ function spaceFor(r: number): Pick<FxParams, 'reverbMix' | 'decay' | 'tone'> {
   if (r < 1) {
     const k = 1 - r;
     return {
-      reverbMix: Math.min(0.7, 3 * k),
+      reverbMix: Math.min(0.55, 2.4 * k),
       decay: Math.min(6.5, 1.8 + 12 * k),
       tone: Math.max(0.25, 0.5 - 1.2 * k),
     };

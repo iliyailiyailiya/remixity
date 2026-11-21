@@ -1,7 +1,8 @@
 // Export: high-quality resample → offline render through the same chain →
-// peak guard → WAV or MP3. Everything stays on the device.
-import { buildChain, CEILING_DB, dbToGain, delayTail, FxParams } from './chain';
+// look-ahead limiter → WAV or MP3. Everything stays on the device.
+import { buildChain, CEILING_DB, delayTail, FxParams } from './chain';
 import { makeImpulse } from './impulse';
+import { limit } from './limiter';
 import { encodeMp3, resample } from './dsp';
 
 export type Format = 'mp3' | 'wav16' | 'wav24';
@@ -44,16 +45,10 @@ export async function exportAudio(
   src.start();
   const rendered = await off.startRendering();
 
-  // 3. Peak guard: the limiter catches almost everything; this makes sure no
-  //    sample ever goes past the ceiling.
+  // 3. Look-ahead limiter (the same algorithm live playback uses): keeps
+  //    peaks under the ceiling without bending the waveform.
   const out = [rendered.getChannelData(0), rendered.getChannelData(1)];
-  const ceiling = dbToGain(CEILING_DB);
-  let peak = 0;
-  for (const ch of out) for (let i = 0; i < ch.length; i++) peak = Math.max(peak, Math.abs(ch[i]));
-  if (peak > ceiling) {
-    const g = ceiling / peak;
-    for (const ch of out) for (let i = 0; i < ch.length; i++) ch[i] *= g;
-  }
+  limit(out, sr, CEILING_DB);
 
   // 4. Encode.
   if (format === 'mp3') {

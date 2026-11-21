@@ -5,7 +5,10 @@
 //   → bass shelf → 4-band EQ → saturation (4x oversampled)
 //   ├─ dry ─────────────────────────┐
 //   ├─ convolver → reverb wet ──────┤
-//   └─ delay ⟲ feedback → delay wet ┴→ master volume → limiter → output
+//   └─ delay ⟲ feedback → delay wet ┴→ master volume → output
+//
+// The limiter comes after this chain: an AudioWorklet for live playback
+// (player.ts) and the same algorithm offline for export (limiter.ts).
 
 export interface FxParams {
   ratio: number; // playback speed; repitch, so pitch follows speed
@@ -123,15 +126,6 @@ export function buildChain(ctx: BaseAudioContext, p: FxParams): Chain {
 
   const master = ctx.createGain();
 
-  // A fast, hard-knee compressor near 0 dBFS works as a limiter. The export
-  // path adds a final peak check on top of this (see render.ts).
-  const limiter = ctx.createDynamicsCompressor();
-  limiter.threshold.value = CEILING_DB - 1;
-  limiter.knee.value = 0;
-  limiter.ratio.value = 20;
-  limiter.attack.value = 0.002;
-  limiter.release.value = 0.12;
-
   input
     .connect(hp1)
     .connect(hp2)
@@ -150,7 +144,6 @@ export function buildChain(ctx: BaseAudioContext, p: FxParams): Chain {
   satOut.connect(delay);
   delay.connect(delayDamp).connect(feedback).connect(delay);
   delayDamp.connect(delayWet).connect(master);
-  master.connect(limiter);
 
   let lastDrive = -1;
   const setDrive = (d: number) => {
@@ -183,7 +176,7 @@ export function buildChain(ctx: BaseAudioContext, p: FxParams): Chain {
 
   return {
     input,
-    output: limiter,
+    output: master,
     set(q) {
       const t = ctx.currentTime;
       for (const [param, v] of values(q)) param.setTargetAtTime(v, t, 0.02);

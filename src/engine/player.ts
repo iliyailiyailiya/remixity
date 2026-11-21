@@ -1,7 +1,8 @@
 // Live preview. Uses the browser's playbackRate for instant response; the
 // export path uses a high-quality resampler instead (see render.ts).
-import { buildChain, Chain, FxParams } from './chain';
+import { buildChain, CEILING_DB, Chain, FxParams } from './chain';
 import { makeImpulse } from './impulse';
+import { LIMITER_WORKLET } from './limiter';
 
 export class Player {
   ctx: AudioContext;
@@ -18,9 +19,46 @@ export class Player {
   constructor(params: FxParams) {
     this.ctx = new AudioContext({ latencyHint: 'playback' });
     this.chain = buildChain(this.ctx, params);
-    this.chain.output.connect(this.ctx.destination);
+
+    // Until the look-ahead limiter worklet has loaded (or if the browser
+    // can't run it), a gentle compressor keeps playback from clipping.
+    const fallback = this.ctx.createDynamicsCompressor();
+    fallback.threshold.value = CEILING_DB - 2;
+    fallback.knee.value = 6;
+    fallback.ratio.value = 12;
+    fallback.attack.value = 0.005;
+    fallback.release.value = 0.25;
+    this.chain.output.connect(fallback).connect(this.ctx.destination);
+    void this.useWorkletLimiter(fallback);
+
     this.setParams(params);
   }
+
+  private async useWorkletLimiter(fallback: AudioNode) {
+    try {
+      const url = URL.createObjectURL(new Blob([LIMITER_WORKLET], { type: 'text/javascript' }));
+      await this.ctx.audioWorklet.addModule(url);
+      URL.revokeObjectURL(url);
+      const node = new AudioWorkletNode(this.ctx, 'remixity-limiter', {
+        numberOfInputs: 1,
+        numberOfOutputs: 1,
+        outputChannelCount: [2],
+        channelCount: 2,
+        channelCountMode: 'explicit',
+        processorOptions: { ceilingDb: CEILING_DB },
+      });
+      node.connect(this.ctx.destination);
+      this.chain.output.connect(node);
+      this.chain.output.disconnect(fallback);
+      fallback.disconnect();
+      this.limiter = 'worklet';
+    } catch (err) {
+      console.warn('limiter worklet unavailable, using compressor', err);
+    }
+  }
+
+  /** Which limiter live playback uses (for diagnostics). */
+  limiter: 'compressor' | 'worklet' = 'compressor';
 
   /** Swap in a new buffer. keepAt keeps (and clamps) the given position. */
   load(buffer: AudioBuffer, keepAt?: number) {
