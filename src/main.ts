@@ -1,0 +1,295 @@
+import './style.css';
+import { applyI18n, getLang, Lang, setLang, t } from './i18n';
+import { DEFAULT_PARAMS, FxParams } from './engine/chain';
+import { decodeFile, niceName, safeFileName } from './engine/decode';
+import { Player } from './engine/player';
+import { exportAudio, Format, Stage } from './engine/render';
+import { Waveform } from './ui/waveform';
+
+const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
+
+// ---------- state ----------
+
+const params: FxParams = { ...DEFAULT_PARAMS };
+let origBpm: number | null = null;
+let buffer: AudioBuffer | null = null;
+let trackName = '';
+let player: Player | null = null;
+let exporting = false;
+
+const PRESETS: Record<string, Partial<FxParams>> = {
+  original: { ...DEFAULT_PARAMS },
+  slowed: { ratio: 0.85, reverbMix: 0.45, decay: 3.6, tone: 0.4, bass: 3, volume: 0 },
+  ultra: { ratio: 0.75, reverbMix: 0.6, decay: 5.5, tone: 0.3, bass: 4, volume: 0 },
+  nightcore: { ratio: 1.25, reverbMix: 0.12, decay: 1.4, tone: 0.65, bass: 0, volume: 0 },
+};
+
+// ---------- language ----------
+
+const langSel = $<HTMLSelectElement>('lang');
+langSel.value = getLang();
+langSel.addEventListener('change', () => {
+  setLang(langSel.value as Lang);
+  render();
+});
+applyI18n();
+
+// ---------- file loading ----------
+
+const fileInput = $<HTMLInputElement>('file');
+const drop = $('drop');
+const status = $('status');
+
+fileInput.addEventListener('change', () => {
+  const f = fileInput.files?.[0];
+  if (f) void load(f);
+  fileInput.value = '';
+});
+drop.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  drop.classList.add('over');
+});
+drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+drop.addEventListener('drop', (e) => {
+  e.preventDefault();
+  drop.classList.remove('over');
+  const f = e.dataTransfer?.files?.[0];
+  if (f) void load(f);
+});
+
+async function load(file: File) {
+  status.textContent = t('loading');
+  try {
+    // Create the AudioContext inside the user gesture so iOS lets it play.
+    player ??= new Player(params);
+    player.onEnded = render;
+    void player.ctx.resume();
+    const decoded = await decodeFile(file);
+    buffer = decoded;
+    trackName = niceName(file.name);
+    player.load(decoded);
+    wave.setBuffer(decoded);
+    $('trackName').textContent = trackName;
+    $('trackName').title = `${trackName} · ${decoded.sampleRate} Hz · ${decoded.numberOfChannels} ch`;
+    $('editor').hidden = false;
+    drop.classList.add('compact');
+    status.textContent = '';
+    $('downloadLink').hidden = true;
+    render();
+  } catch (err) {
+    console.error(err);
+    status.textContent = t('loadError');
+  }
+}
+
+// ---------- waveform & transport ----------
+
+const wave = new Waveform($<HTMLCanvasElement>('wave'), (f) => {
+  if (!player) return;
+  player.seek(f * player.duration);
+  render();
+});
+
+const playBtn = $('play');
+playBtn.addEventListener('click', togglePlay);
+document.addEventListener('keydown', (e) => {
+  const tag = (e.target as HTMLElement).tagName;
+  if (e.code === 'Space' && tag !== 'INPUT' && tag !== 'SELECT' && tag !== 'BUTTON') {
+    e.preventDefault();
+    togglePlay();
+  }
+});
+
+function togglePlay() {
+  if (!player || !buffer) return;
+  if (player.playing) player.pause();
+  else void player.play().then(tick);
+  render();
+}
+
+function tick() {
+  if (!player) return;
+  renderTransport();
+  if (player.playing) requestAnimationFrame(tick);
+}
+
+const fmtTime = (s: number) => {
+  s = Math.max(0, s);
+  const m = Math.floor(s / 60);
+  return `${m}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+};
+
+function renderTransport() {
+  if (!player) return;
+  const pos = player.position;
+  const dur = player.duration || 1;
+  wave.setProgress(pos / dur);
+  $('time').textContent = `${fmtTime(pos / params.ratio)} / ${fmtTime(dur / params.ratio)}`;
+  playBtn.classList.toggle('playing', player.playing);
+  playBtn.setAttribute('aria-label', t(player.playing ? 'pause' : 'play'));
+}
+
+// ---------- tempo ----------
+
+const speed = $<HTMLInputElement>('speed');
+const origInput = $<HTMLInputElement>('origBpm');
+const targetInput = $<HTMLInputElement>('targetBpm');
+
+const clampRatio = (r: number) => Math.min(1.5, Math.max(0.5, r));
+
+function setRatio(r: number) {
+  params.ratio = Math.round(clampRatio(r) * 100000) / 100000;
+  apply();
+}
+
+speed.addEventListener('input', () => setRatio(+speed.value));
+
+document.querySelectorAll<HTMLButtonElement>('[data-nudge]').forEach((b) =>
+  b.addEventListener('click', () => {
+    const n = +b.dataset.nudge!;
+    // With a known BPM, nudge in BPM; otherwise nudge in percent.
+    if (origBpm) setRatio((origBpm * params.ratio + n) / origBpm);
+    else setRatio(params.ratio + n / 100);
+  }),
+);
+
+origInput.addEventListener('change', () => {
+  const v = parseFloat(origInput.value.replace(',', '.'));
+  origBpm = v >= 30 && v <= 300 ? v : null;
+  render();
+});
+
+targetInput.addEventListener('change', () => {
+  const v = parseFloat(targetInput.value.replace(',', '.'));
+  if (origBpm && v > 0) setRatio(v / origBpm);
+  else render();
+});
+
+let taps: number[] = [];
+$('tap').addEventListener('click', () => {
+  const now = performance.now();
+  if (taps.length && now - taps[taps.length - 1] > 2000) taps = [];
+  taps.push(now);
+  if (taps.length > 9) taps.shift();
+  if (taps.length < 3) return;
+  const heard = 60000 / ((taps[taps.length - 1] - taps[0]) / (taps.length - 1));
+  // While playing you hear the sped-up/slowed track, so convert back.
+  const bpm = player?.playing ? heard / params.ratio : heard;
+  origBpm = Math.round(bpm * 10) / 10;
+  render();
+});
+
+function pitchText(r: number) {
+  const cents = Math.round(1200 * Math.log2(r));
+  if (cents === 0) return `0 ${t('st')}`;
+  const sign = cents < 0 ? '−' : '+';
+  const a = Math.abs(cents);
+  const st = Math.floor(a / 100);
+  const ct = a % 100;
+  return `${sign}${st} ${t('st')}${ct ? ` ${ct} ${t('ct')}` : ''}`;
+}
+
+// ---------- effects ----------
+
+type SliderKey = 'reverbMix' | 'decay' | 'tone' | 'bass' | 'volume';
+const sliders: [string, SliderKey, (v: number) => string][] = [
+  ['mix', 'reverbMix', (v) => `${Math.round(v * 100)}%`],
+  ['decay', 'decay', (v) => `${v.toFixed(1)} s`],
+  ['tone', 'tone', (v) => (v < 0.34 ? t('dark') : v > 0.66 ? t('bright') : `${Math.round(v * 100)}%`)],
+  ['bass', 'bass', (v) => `${v > 0 ? '+' : ''}${v.toFixed(1)} dB`],
+  ['volume', 'volume', (v) => `${v > 0 ? '+' : ''}${v.toFixed(1)} dB`],
+];
+
+for (const [id, key] of sliders) {
+  const el = $<HTMLInputElement>(id);
+  el.addEventListener('input', () => {
+    params[key] = +el.value;
+    apply();
+  });
+}
+
+document.querySelectorAll<HTMLButtonElement>('[data-preset]').forEach((b) =>
+  b.addEventListener('click', () => {
+    Object.assign(params, PRESETS[b.dataset.preset!]);
+    apply();
+  }),
+);
+
+function apply() {
+  player?.setParams({ ...params });
+  render();
+}
+
+// ---------- export ----------
+
+const exportBtn = $<HTMLButtonElement>('export');
+const progress = $('progress');
+const bar = progress.firstElementChild as HTMLElement;
+const exportStatus = $('exportStatus');
+const link = $<HTMLAnchorElement>('downloadLink');
+
+function outputName(fmt: Format) {
+  const r = params.ratio;
+  let tag = 'remix';
+  if (r < 0.999) tag = params.reverbMix > 0.05 ? 'slowed + reverb' : 'slowed';
+  else if (r > 1.001) tag = r >= 1.15 ? 'nightcore' : 'sped up';
+  else if (params.reverbMix > 0.05) tag = 'reverb';
+  return safeFileName(`${trackName} (${tag})`) + (fmt === 'mp3' ? '.mp3' : '.wav');
+}
+
+exportBtn.addEventListener('click', async () => {
+  if (!buffer || exporting) return;
+  exporting = true;
+  exportBtn.disabled = true;
+  link.hidden = true;
+  progress.hidden = false;
+  const fmt = (document.querySelector('input[name="fmt"]:checked') as HTMLInputElement).value as Format;
+  const label: Record<Stage, () => string> = {
+    resample: () => t('stageResample'),
+    render: () => t('stageRender'),
+    encode: () => t('stageEncode'),
+  };
+  try {
+    const blob = await exportAudio(buffer, { ...params }, fmt, (stage, f) => {
+      exportStatus.textContent = `${label[stage]()}${f === null ? '…' : ` ${Math.round(f * 100)}%`}`;
+      progress.classList.toggle('indeterminate', f === null);
+      bar.style.width = `${Math.round((f ?? 0) * 100)}%`;
+    });
+    if (link.href) URL.revokeObjectURL(link.href);
+    link.href = URL.createObjectURL(blob);
+    link.download = outputName(fmt);
+    link.hidden = false;
+    link.textContent = `${t('download')} · ${(blob.size / 1048576).toFixed(1)} MB`;
+    exportStatus.textContent = link.download;
+    link.click();
+  } catch (err) {
+    console.error(err);
+    exportStatus.textContent = `${t('exportError')}: ${(err as Error).message}`;
+  } finally {
+    exporting = false;
+    exportBtn.disabled = false;
+    progress.hidden = true;
+  }
+});
+
+// ---------- render ----------
+
+function render() {
+  speed.value = String(params.ratio);
+  $('rRatio').textContent = `×${params.ratio.toFixed(3)}`;
+  $('rPitch').textContent = pitchText(params.ratio);
+  const target = origBpm ? origBpm * params.ratio : null;
+  $('rBpm').textContent = target ? target.toFixed(1) : '—';
+  if (document.activeElement !== origInput) origInput.value = origBpm ? String(origBpm) : '';
+  if (document.activeElement !== targetInput) targetInput.value = target ? target.toFixed(1) : '';
+  targetInput.disabled = !origBpm;
+  $('nudgeUnit').textContent = origBpm ? 'BPM' : '%';
+
+  for (const [id, key, fmt] of sliders) {
+    $<HTMLInputElement>(id).value = String(params[key]);
+    $(`o${id[0].toUpperCase()}${id.slice(1)}`).textContent = fmt(params[key]);
+  }
+  renderTransport();
+}
+
+render();

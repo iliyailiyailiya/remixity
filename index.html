@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0e0b14" />
+    <meta
+      name="description"
+      content="Free slowed + reverb and nightcore maker that runs in your browser. Export MP3 320 kbps or WAV. Nothing is uploaded."
+    />
+    <title>Remixity · Slowed + Reverb & Nightcore Maker</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  </head>
+  <body>
+    <header class="top">
+      <a class="logo" href="/">Remix<span>ity</span></a>
+      <select id="lang" aria-label="Language">
+        <option value="en">EN</option>
+        <option value="ro">RO</option>
+        <option value="ru">RU</option>
+      </select>
+    </header>
+
+    <main>
+      <p class="tagline" data-i18n="tagline"></p>
+
+      <label id="drop" class="drop">
+        <input id="file" type="file" accept="audio/*,.mp3,.wav,.flac,.m4a,.aac,.ogg,.opus,.aif,.aiff" />
+        <span class="drop-icon" aria-hidden="true">♪</span>
+        <strong data-i18n="pick"></strong>
+        <small data-i18n="pickHint"></small>
+      </label>
+      <p id="status" class="status" role="status" aria-live="polite"></p>
+
+      <section id="editor" hidden>
+        <div class="card player">
+          <div class="track" id="trackName"></div>
+          <canvas id="wave" class="wave"></canvas>
+          <div class="transport">
+            <button id="play" class="play" data-i18n-aria="play" aria-label="Play">
+              <svg viewBox="0 0 24 24" class="i-play"><path d="M8 5v14l11-7z" /></svg>
+              <svg viewBox="0 0 24 24" class="i-pause"><path d="M7 5h4v14H7zM13 5h4v14h-4z" /></svg>
+            </button>
+            <span id="time" class="time">0:00 / 0:00</span>
+          </div>
+        </div>
+
+        <div class="presets" role="group">
+          <button data-preset="original" data-i18n="presetOriginal"></button>
+          <button data-preset="slowed" data-i18n="presetSlowed"></button>
+          <button data-preset="ultra" data-i18n="presetUltra"></button>
+          <button data-preset="nightcore" data-i18n="presetNightcore"></button>
+        </div>
+
+        <div class="card">
+          <h2 data-i18n="tempo"></h2>
+          <div class="readouts">
+            <div><small>BPM</small><b id="rBpm">—</b></div>
+            <div><small data-i18n="speed"></small><b id="rRatio">×1.000</b></div>
+            <div><small data-i18n="pitch"></small><b id="rPitch">0</b></div>
+          </div>
+          <input id="speed" type="range" min="0.5" max="1.5" step="0.001" value="1" />
+          <div class="nudges">
+            <button data-nudge="-1">−1</button>
+            <button data-nudge="-0.1">−0.1</button>
+            <span id="nudgeUnit" class="unit">%</span>
+            <button data-nudge="0.1">+0.1</button>
+            <button data-nudge="1">+1</button>
+          </div>
+          <div class="bpm-row">
+            <label>
+              <small data-i18n="originalBpm"></small>
+              <input id="origBpm" type="number" inputmode="decimal" min="30" max="300" step="0.1" placeholder="—" />
+            </label>
+            <button id="tap" class="tap" data-i18n="tap"></button>
+            <label>
+              <small data-i18n="targetBpm"></small>
+              <input id="targetBpm" type="number" inputmode="decimal" min="15" max="450" step="0.1" placeholder="—" />
+            </label>
+          </div>
+          <p class="hint" data-i18n="tapHint"></p>
+        </div>
+
+        <div class="card">
+          <h2 data-i18n="reverb"></h2>
+          <div class="slider"><span data-i18n="mix"></span><output id="oMix"></output>
+            <input id="mix" type="range" min="0" max="1" step="0.01" value="0" /></div>
+          <div class="slider"><span data-i18n="size"></span><output id="oDecay"></output>
+            <input id="decay" type="range" min="0.6" max="8" step="0.1" value="2.5" /></div>
+          <div class="slider"><span data-i18n="tone"></span><output id="oTone"></output>
+            <input id="tone" type="range" min="0" max="1" step="0.01" value="0.5" /></div>
+        </div>
+
+        <div class="card">
+          <h2 data-i18n="sound"></h2>
+          <div class="slider"><span data-i18n="bass"></span><output id="oBass"></output>
+            <input id="bass" type="range" min="-6" max="12" step="0.5" value="0" /></div>
+          <div class="slider"><span data-i18n="volume"></span><output id="oVolume"></output>
+            <input id="volume" type="range" min="-18" max="6" step="0.5" value="0" /></div>
+        </div>
+
+        <div class="card">
+          <h2 data-i18n="export"></h2>
+          <div class="formats" role="radiogroup">
+            <label><input type="radio" name="fmt" value="mp3" checked /><span>MP3 320</span></label>
+            <label><input type="radio" name="fmt" value="wav16" /><span>WAV 16-bit</span></label>
+            <label><input type="radio" name="fmt" value="wav24" /><span>WAV 24-bit</span></label>
+          </div>
+          <button id="export" class="primary" data-i18n="export"></button>
+          <div id="progress" class="progress" hidden><div></div></div>
+          <p id="exportStatus" class="status" aria-live="polite"></p>
+          <a id="downloadLink" class="download" hidden data-i18n="download"></a>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <p data-i18n="privacy"></p>
+    </footer>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
