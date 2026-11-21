@@ -1,11 +1,12 @@
 // The living background.
 //
-// With a track loaded, it paints the cover art itself: shrunk to a 12×12
-// thumbnail, then stretched over the screen in a few slowly drifting,
-// rotating layers, which blurs it into a soft colour field. This only ever
-// *draws* the image and never reads pixels back, which matters because
-// Safari blocks or scrambles canvas readback as an anti-fingerprinting
-// measure. Before a track is loaded it shows soft blobs in the house colours.
+// With a track loaded, the cover art itself is the background: a few copies
+// of the image, heavily blurred with CSS, slowly drifting and turning over
+// each other (the way Apple Music does it). It never copies the image through
+// a canvas: Safari sometimes hands back an empty canvas there, and it blocks
+// or scrambles pixel readback as an anti-fingerprinting measure.
+// Before a track is loaded, a small canvas shows soft blobs in the house
+// colours.
 //
 // The drift runs on its own clock that advances faster or slower with the
 // playback speed, so slowed tracks literally drift slower.
@@ -35,11 +36,12 @@ const HOMES = [
   [0.72, 0.8],
 ];
 
-// Drifting cover layers: home position, size (× screen diagonal), spin speed.
+// Drifting cover layers: home position (fraction of the screen), size
+// (× the longer screen side), spin speed and phase.
 const LAYERS = [
-  { hx: 0.3, hy: 0.28, s: 1.05, spin: 0.05, ph: 0 },
-  { hx: 0.72, hy: 0.4, s: 0.95, spin: -0.04, ph: 2.1 },
-  { hx: 0.4, hy: 0.78, s: 1.0, spin: 0.035, ph: 4.2 },
+  { hx: 0.25, hy: 0.25, s: 1.1, spin: 0.05, ph: 0 },
+  { hx: 0.78, hy: 0.4, s: 1.0, spin: -0.04, ph: 2.1 },
+  { hx: 0.4, hy: 0.8, s: 1.05, spin: 0.035, ph: 4.2 },
 ];
 
 /** Lift a colour to a minimum brightness, keeping its hue. */
@@ -52,63 +54,16 @@ function lift(c: RGB): RGB {
   return c.map((v) => Math.round(v * k)) as RGB;
 }
 
-/** Shrink an image to a tiny canvas: a colour map of the cover. */
-function thumbnail(img: CanvasImageSource): HTMLCanvasElement {
-  // Two steps (→64 → 12) average colours better than one big jump.
-  const mid = document.createElement('canvas');
-  mid.width = mid.height = 64;
-  const m = mid.getContext('2d')!;
-  m.imageSmoothingEnabled = true;
-  m.imageSmoothingQuality = 'high';
-  m.drawImage(img, 0, 0, 64, 64);
-  const tiny = document.createElement('canvas');
-  tiny.width = tiny.height = 12;
-  const t = tiny.getContext('2d')!;
-  t.imageSmoothingEnabled = true;
-  t.imageSmoothingQuality = 'high';
-  t.drawImage(mid, 0, 0, 12, 12);
-  return soften(tiny);
-}
-
-/**
- * Blow the tiny colour map up to 128px and blur it, so later upscaling is
- * smooth (a bare 12px image stretched over a screen shows blocky creases).
- * The blur is a running average of offset copies, which needs no ctx.filter
- * and no pixel readback, so it behaves the same in every browser.
- */
-function soften(tiny: HTMLCanvasElement): HTMLCanvasElement {
-  const S = 128;
-  const out = document.createElement('canvas');
-  out.width = out.height = S;
-  const o = out.getContext('2d')!;
-  o.imageSmoothingEnabled = true;
-  o.imageSmoothingQuality = 'high';
-  o.drawImage(tiny, 0, 0, S, S);
-
-  const tmp = document.createElement('canvas');
-  tmp.width = tmp.height = S;
-  const tc = tmp.getContext('2d')!;
-  const dirs: [number, number][] = [];
-  for (let a = 0; a < 8; a++) dirs.push([Math.cos((a * Math.PI) / 4), Math.sin((a * Math.PI) / 4)]);
-  for (const r of [14, 9, 6, 4, 2]) {
-    tc.clearRect(0, 0, S, S);
-    tc.drawImage(out, 0, 0);
-    // Each tap blended at 1/(k+1) keeps an exact running average.
-    dirs.forEach(([dx, dy], k) => {
-      o.globalAlpha = 1 / (k + 2);
-      o.drawImage(tmp, dx * r, dy * r);
-    });
-    o.globalAlpha = 1;
-  }
-  return out;
+interface ArtGroup {
+  el: HTMLDivElement;
+  layers: HTMLImageElement[];
 }
 
 export class Backdrop {
   private ctx: CanvasRenderingContext2D;
   private palette: RGB[];
-  private img: HTMLCanvasElement | null = null;
-  private prevImg: HTMLCanvasElement | null = null;
-  private fade = 1; // 0..1 cross-fade to the newest cover
+  private art: HTMLDivElement;
+  private group: ArtGroup | null = null;
   private t = Math.random() * 100;
   private last = performance.now();
   private reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -121,26 +76,46 @@ export class Backdrop {
   ) {
     this.ctx = canvas.getContext('2d')!;
     this.palette = palette.map(lift);
-    // Small canvas, stretched by CSS: the content is soft anyway, and no CSS
-    // blur is needed (iOS Safari is unreliable with filters on a canvas).
-    canvas.width = 180;
-    canvas.height = 320;
+    canvas.width = 90;
+    canvas.height = 160;
+    this.art = document.createElement('div');
+    this.art.className = 'bg-art';
+    this.art.setAttribute('aria-hidden', 'true');
+    canvas.after(this.art);
     this.setCssFallback(this.palette);
     requestAnimationFrame(this.frame);
   }
 
   /** Paint this cover as the background (cross-fades from the previous one). */
-  setImage(img: CanvasImageSource) {
-    try {
-      this.prevImg = this.img;
-      this.img = thumbnail(img);
-      this.fade = 0;
-    } catch (err) {
-      console.warn('backdrop', err);
+  setImage(src: string) {
+    const el = document.createElement('div');
+    el.className = 'bg-art-group';
+    const base = document.createElement('img');
+    base.className = 'bg-art-base';
+    const layers = LAYERS.map(() => {
+      const img = document.createElement('img');
+      img.className = 'bg-art-layer';
+      return img;
+    });
+    for (const img of [base, ...layers]) {
+      img.alt = '';
+      img.decoding = 'async';
+      img.src = src;
+      el.append(img);
     }
+    this.art.append(el);
+    const prev = this.group;
+    this.group = { el, layers };
+    this.place();
+    // Fade the new cover in over the old one once it has decoded.
+    const show = () => {
+      el.classList.add('in');
+      if (prev) setTimeout(() => prev.el.remove(), 1400);
+    };
+    base.decode().then(show, show);
   }
 
-  /** Colours for the CSS fallback gradient under the canvas (best effort). */
+  /** Colours for the CSS fallback gradient under everything (best effort). */
   setPalette(p: RGB[]) {
     this.setCssFallback(p.map(lift));
   }
@@ -154,22 +129,28 @@ export class Backdrop {
     const dt = Math.min(0.1, (now - this.last) / 1000);
     this.last = now;
     if (!this.reduced) this.t += dt * this.speed;
-    if (this.fade < 1) this.fade = Math.min(1, this.fade + dt / 1.2);
-    if (!document.hidden) this.draw();
+    if (!document.hidden) {
+      if (this.group) this.place();
+      else this.drawBlobs();
+    }
     requestAnimationFrame(this.frame);
   };
 
-  private draw() {
-    const { ctx } = this;
-    ctx.globalAlpha = 1;
-    ctx.globalCompositeOperation = 'source-over';
-
-    // Underneath: the house-colour blobs (all you see before a track loads).
-    if (!this.img || this.fade < 1 || this.prevImg) {
-      if (this.prevImg) this.drawCover(this.prevImg, 1);
-      else this.drawBlobs();
-    }
-    if (this.img) this.drawCover(this.img, this.fade);
+  /** Move the drifting cover layers. */
+  private place() {
+    if (!this.group) return;
+    const w = innerWidth;
+    const h = innerHeight;
+    const side = Math.max(w, h);
+    const { t } = this;
+    this.group.layers.forEach((img, i) => {
+      const l = LAYERS[i];
+      const size = l.s * side;
+      const x = (l.hx + 0.18 * Math.sin(t * 0.5 + l.ph)) * w - size / 2;
+      const y = (l.hy + 0.14 * Math.cos(t * 0.37 + l.ph)) * h - size / 2;
+      img.style.width = img.style.height = `${size}px`;
+      img.style.transform = `translate3d(${x.toFixed(1)}px,${y.toFixed(1)}px,0) rotate(${(t * l.spin * 6 + l.ph).toFixed(3)}rad)`;
+    });
   }
 
   private drawBlobs() {
@@ -191,40 +172,5 @@ export class Backdrop {
       ctx.fillStyle = g;
       ctx.fillRect(0, 0, w, h);
     });
-  }
-
-  private drawCover(src: HTMLCanvasElement, alpha: number) {
-    if (alpha <= 0) return;
-    const { ctx, canvas, t } = this;
-    const w = canvas.width;
-    const h = canvas.height;
-    const diag = Math.hypot(w, h);
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
-
-    // The whole cover stretched over the screen keeps its layout: colours
-    // from the top-left of the artwork end up top-left on screen.
-    ctx.globalAlpha = alpha;
-    ctx.drawImage(src, -w * 0.1, -h * 0.05, w * 1.2, h * 1.1);
-
-    // Drifting, slowly turning copies add the living motion.
-    for (const l of LAYERS) {
-      const x = (l.hx + 0.18 * Math.sin(t * 0.5 + l.ph)) * w;
-      const y = (l.hy + 0.14 * Math.cos(t * 0.37 + l.ph)) * h;
-      const size = l.s * diag;
-      ctx.save();
-      ctx.translate(x, y);
-      ctx.rotate(t * l.spin * 6 + l.ph);
-      ctx.globalAlpha = alpha * 0.5;
-      ctx.drawImage(src, -size / 2, -size / 2, size, size);
-      ctx.restore();
-    }
-
-    // Brighten dark covers a little ('screen' only ever lightens).
-    ctx.globalCompositeOperation = 'screen';
-    ctx.globalAlpha = alpha * 0.3;
-    ctx.drawImage(src, 0, 0, w, h);
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.globalAlpha = 1;
   }
 }

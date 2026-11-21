@@ -144,7 +144,7 @@ async function load(file: File) {
     cover.onload = async () => {
       // Paint the cover itself as the background (no pixel readback, so it
       // works even where Safari blocks reading canvas pixels).
-      backdrop.setImage(cover);
+      backdrop.setImage(cover.src);
       backdrop.setPalette(await paletteFrom(cover)); // CSS fallback, best effort
     };
     cover.src = coverUrl;
@@ -157,6 +157,7 @@ async function load(file: File) {
     origBpm = null;
     detectingBpm = true;
     render();
+    setTimeout(showSwipeHint, 700);
     detectBpm(decoded)
       .then((bpm) => {
         if (token === loadToken) origBpm = bpm;
@@ -246,6 +247,8 @@ document.addEventListener('keydown', (e) => {
   else if (mod || e.altKey) return;
   else if (e.code === 'ArrowUp') setRatio(params.ratio + 0.01);
   else if (e.code === 'ArrowDown') setRatio(params.ratio - 0.01);
+  else if (e.code === 'ArrowLeft') skip(-10);
+  else if (e.code === 'ArrowRight') skip(10);
   else if (e.code === 'KeyM') markerAtPlayhead();
   else if (e.code === 'KeyL') toggleLoop();
   else if (e.code === 'Delete' || e.code === 'Backspace') cutSelection();
@@ -305,25 +308,66 @@ const wave = new Waveform($<HTMLCanvasElement>('wave'), {
 
 // ---------- dashboard pages: swipe like a widget stack ----------
 
-const PAGES = ['drive', 'space', 'eq', 'chop'] as const;
+const PAGES = ['play', 'drive', 'space', 'eq', 'chop'] as const;
 const pagesEl = $('pages');
 const dots = [...document.querySelectorAll<HTMLButtonElement>('#dots button')];
-let page: (typeof PAGES)[number] = 'drive';
+let page: (typeof PAGES)[number] = 'play';
 
 function syncPage() {
   const i = Math.round(pagesEl.scrollLeft / Math.max(1, pagesEl.clientWidth));
   const next = PAGES[Math.min(PAGES.length - 1, Math.max(0, i))];
   dots.forEach((d, k) => d.setAttribute('aria-current', String(k === i)));
+  $<HTMLButtonElement>('pagePrev').disabled = i <= 0;
+  $<HTMLButtonElement>('pageNext').disabled = i >= PAGES.length - 1;
   if (next === page) return;
   page = next;
+  if (i > 0) dismissSwipeHint();
   eq.active = page === 'eq';
   if (page === 'eq') eq.draw();
   if (page === 'chop') renderEdit();
 }
 pagesEl.addEventListener('scroll', syncPage, { passive: true });
-dots.forEach((d) =>
-  d.addEventListener('click', () => pagesEl.scrollTo({ left: +d.dataset.go! * pagesEl.clientWidth, behavior: 'smooth' })),
-);
+
+// First time: point out that the box swipes, with a little peek.
+const swipeHint = $('swipeHint');
+function showSwipeHint() {
+  try {
+    if (localStorage.getItem('swiped')) return;
+  } catch {
+    /* storage blocked: show it anyway */
+  }
+  if (pageIndex() > 0) return;
+  swipeHint.hidden = false;
+  pagesEl.classList.remove('peek');
+  void pagesEl.offsetWidth; // restart the animation
+  pagesEl.classList.add('peek');
+}
+swipeHint.addEventListener('click', () => goPage(1));
+function dismissSwipeHint() {
+  swipeHint.hidden = true;
+  try {
+    localStorage.setItem('swiped', '1');
+  } catch {
+    /* ignore */
+  }
+}
+
+// Skip 10 seconds as you hear them (the source moves faster when sped up).
+function skip(seconds: number) {
+  if (!player) return;
+  player.seek(Math.min(player.duration, Math.max(0, player.position + seconds * params.ratio)));
+  render();
+}
+$('back10').addEventListener('click', () => skip(-10));
+$('fwd10').addEventListener('click', () => skip(10));
+function goPage(i: number) {
+  i = Math.min(PAGES.length - 1, Math.max(0, i));
+  pagesEl.scrollTo({ left: i * pagesEl.clientWidth, behavior: 'smooth' });
+}
+const pageIndex = () => Math.round(pagesEl.scrollLeft / Math.max(1, pagesEl.clientWidth));
+dots.forEach((d) => d.addEventListener('click', () => goPage(+d.dataset.go!)));
+$('pagePrev').addEventListener('click', () => goPage(pageIndex() - 1));
+$('pageNext').addEventListener('click', () => goPage(pageIndex() + 1));
 
 const eq = new EqView($<HTMLCanvasElement>('eqCanvas'), {
   get: () => params,
@@ -820,3 +864,12 @@ function render() {
 }
 
 apply();
+
+// Dev only: ?autoload=/path.mp3 loads a test file without the picker.
+if (import.meta.env.DEV) {
+  const url = new URLSearchParams(location.search).get('autoload');
+  if (url)
+    void fetch(url)
+      .then((r) => r.blob())
+      .then((b) => load(new File([b], url.split('/').pop()!, { type: b.type })));
+}
