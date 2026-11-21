@@ -140,7 +140,12 @@ async function load(file: File) {
       coverUrl = URL.createObjectURL(await generatedCover(title));
       cover.src = coverUrl;
     };
-    cover.onload = async () => backdrop.setPalette(await paletteFrom(cover));
+    cover.onload = async () => {
+      // Paint the cover itself as the background (no pixel readback, so it
+      // works even where Safari blocks reading canvas pixels).
+      backdrop.setImage(cover);
+      backdrop.setPalette(await paletteFrom(cover)); // CSS fallback, best effort
+    };
     cover.src = coverUrl;
 
     home.hidden = true;
