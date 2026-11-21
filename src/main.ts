@@ -9,6 +9,7 @@ import { readMeta, metaFromFileName } from './engine/meta';
 import { detectBpm } from './engine/bpm';
 import { readbackIsNoisy } from './engine/noisecheck';
 import { Waveform } from './ui/waveform';
+import { EqView } from './ui/eqview';
 import { Backdrop } from './ui/backdrop';
 import { defaultPalette, generatedCover, paletteFrom } from './ui/palette';
 import { Pedal, MAX_RATIO, MIN_RATIO } from './ui/pedal';
@@ -185,8 +186,8 @@ function setRatio(r: number) {
 
 // ---------- transport ----------
 
-const playBtn = $('play');
-playBtn.addEventListener('click', togglePlay);
+const playToggles = document.querySelectorAll<HTMLButtonElement>('.play-toggle');
+playToggles.forEach((b) => b.addEventListener('click', togglePlay));
 $('cover').addEventListener('click', togglePlay);
 
 function togglePlay() {
@@ -301,8 +302,38 @@ const wave = new Waveform($<HTMLCanvasElement>('wave'), {
     renderEdit();
   },
 });
-const chopCard = $<HTMLDetailsElement>('chopCard');
-chopCard.addEventListener('toggle', () => renderEdit());
+
+// ---------- dashboard pages: swipe like a widget stack ----------
+
+const PAGES = ['drive', 'space', 'eq', 'chop'] as const;
+const pagesEl = $('pages');
+const dots = [...document.querySelectorAll<HTMLButtonElement>('#dots button')];
+let page: (typeof PAGES)[number] = 'drive';
+
+function syncPage() {
+  const i = Math.round(pagesEl.scrollLeft / Math.max(1, pagesEl.clientWidth));
+  const next = PAGES[Math.min(PAGES.length - 1, Math.max(0, i))];
+  dots.forEach((d, k) => d.setAttribute('aria-current', String(k === i)));
+  if (next === page) return;
+  page = next;
+  eq.active = page === 'eq';
+  if (page === 'eq') eq.draw();
+  if (page === 'chop') renderEdit();
+}
+pagesEl.addEventListener('scroll', syncPage, { passive: true });
+dots.forEach((d) =>
+  d.addEventListener('click', () => pagesEl.scrollTo({ left: +d.dataset.go! * pagesEl.clientWidth, behavior: 'smooth' })),
+);
+
+const eq = new EqView($<HTMLCanvasElement>('eqCanvas'), {
+  get: () => params,
+  set(key, v) {
+    params[key] = v;
+    apply();
+  },
+  analyser: () => (player?.playing ? player.analyser : null),
+  onReadout: (text) => ($('eqReadout').textContent = text),
+});
 
 /** Apply an edit, keeping it undoable, and rebuild the buffer if needed. */
 function commit(next: EditState, keepAt?: number) {
@@ -403,7 +434,6 @@ function renderEdit() {
   $<HTMLButtonElement>('tTrim').disabled = !sel;
   $<HTMLButtonElement>('tCut').disabled = !sel;
   $<HTMLButtonElement>('tUndo').disabled = history.length === 0;
-  $('chopBadge').classList.toggle('on', edit.segments.length > 1 || edit.markers.length > 0 || buffer !== original);
 
   const info = $('selInfo');
   info.replaceChildren();
@@ -731,9 +761,9 @@ function renderTransport() {
   $('tNow').textContent = fmtTime(pos / r);
   $('tLeft').textContent = `−${fmtTime((dur - pos) / r)}`;
   playerView.classList.toggle('playing', player.playing);
-  playBtn.setAttribute('aria-label', t(player.playing ? 'pause' : 'play'));
+  playToggles.forEach((b) => b.setAttribute('aria-label', t(player!.playing ? 'pause' : 'play')));
   backdrop.speed = (player.playing ? 1 : 0.3) * r;
-  if (openSheet?.id === 'menu' && chopCard.open) wave.setProgress(pos / dur);
+  if (page === 'chop') wave.setProgress(pos / dur);
 }
 
 function render() {
@@ -745,7 +775,7 @@ function render() {
   bpmBig.textContent = origBpm ? String(Math.round(origBpm * r)) : detectingBpm ? '···' : '—';
   bpmBig.classList.toggle('detecting', detectingBpm && !origBpm);
   $('gaugeSub').textContent = `×${r.toFixed(2)} · ${pitchText(r)}`;
-  const dash = document.querySelector('.dash')!;
+  const dash = $('dash');
   dash.classList.toggle('up', r > 1);
   dash.classList.toggle('down', r < 1);
   $('badge').textContent =
@@ -782,6 +812,7 @@ function render() {
   $('eqBadge').classList.toggle('on', !!eqOn);
   $('fxBadge').classList.toggle('on', params.drive > 0 || params.delayMix > 0);
   $('sync').hidden = !origBpm;
+  if (page === 'eq' && !player?.playing) eq.draw();
   if (openSheet?.id === 'exportSheet') updateExportName();
 
   renderEdit();

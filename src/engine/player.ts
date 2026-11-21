@@ -14,11 +14,17 @@ export class Player {
   private ratio = 1;
   private irKey = '';
   playing = false;
+  /** What you hear, for the EQ's spectrum display. */
+  analyser: AnalyserNode;
   onEnded: () => void = () => {};
 
   constructor(params: FxParams) {
     this.ctx = new AudioContext({ latencyHint: 'playback' });
     this.chain = buildChain(this.ctx, params);
+    this.analyser = this.ctx.createAnalyser();
+    this.analyser.fftSize = 4096;
+    this.analyser.smoothingTimeConstant = 0.75;
+    this.chain.output.connect(this.analyser);
 
     // Until the look-ahead limiter worklet has loaded (or if the browser
     // can't run it), a gentle compressor keeps playback from clipping.

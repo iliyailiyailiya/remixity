@@ -73,18 +73,94 @@
         </div>
       </div>
 
-      <div class="dash glass">
-        <div class="gauge" aria-live="off">
-          <div id="bpmBig" class="bpm-big">—</div>
-          <div class="bpm-label">BPM</div>
-          <div id="gaugeSub" class="gauge-sub"></div>
-        </div>
-        <div id="pedal" class="pedal" data-i18n-aria="speed" aria-label="Speed"></div>
-        <div class="play-slot">
-          <button id="play" class="play-btn" data-i18n-aria="play" aria-label="Play">
+      <div class="dash glass" id="dash">
+        <div class="pages" id="pages">
+          <section class="page page-drive" data-page="drive">
+            <div class="gauge" aria-live="off">
+              <div id="bpmBig" class="bpm-big">—</div>
+              <div class="bpm-label">BPM</div>
+              <div id="gaugeSub" class="gauge-sub"></div>
+            </div>
+            <div id="pedal" class="pedal" data-i18n-aria="speed" aria-label="Speed"></div>
+            <div class="play-slot">
+              <button id="play" class="play-btn play-toggle" data-i18n-aria="play" aria-label="Play">
+                <svg viewBox="0 0 24 24" class="i-play"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.4-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z" /></svg>
+            <svg viewBox="0 0 24 24" class="i-pause"><rect x="6" y="5" width="4.2" height="14" rx="1.3" /><rect x="13.8" y="5" width="4.2" height="14" rx="1.3" /></svg>
+              </button>
+            </div>
+          </section>
+
+          <section class="page page-space" data-page="space">
+            <div class="page-head">
+              <label class="switch small">
+                <input id="autoSpace" type="checkbox" checked />
+                <span class="track"><i></i></span>
+                <span data-i18n="autoSpace"></span>
+              </label>
+              <button class="mini-play play-toggle" data-i18n-aria="play" aria-label="Play">
             <svg viewBox="0 0 24 24" class="i-play"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.4-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z" /></svg>
             <svg viewBox="0 0 24 24" class="i-pause"><rect x="6" y="5" width="4.2" height="14" rx="1.3" /><rect x="13.8" y="5" width="4.2" height="14" rx="1.3" /></svg>
           </button>
+            </div>
+            <div class="space-cols">
+              <div class="col">
+                <h4 data-i18n="reverb"></h4>
+                <div class="slider"><span data-i18n="mix"></span><output id="oMix"></output>
+                  <input id="mix" type="range" min="0" max="1" step="0.01" value="0" /></div>
+                <div class="slider"><span data-i18n="size"></span><output id="oDecay"></output>
+                  <input id="decay" type="range" min="0.6" max="8" step="0.1" value="2.5" /></div>
+                <div class="slider"><span data-i18n="tone"></span><output id="oTone"></output>
+                  <input id="tone" type="range" min="0" max="1" step="0.01" value="0.5" /></div>
+              </div>
+              <div class="col">
+                <h4 data-i18n="echo"></h4>
+                <div class="slider"><span data-i18n="mix"></span><output id="oDelayMix"></output>
+                  <input id="delayMix" type="range" min="0" max="1" step="0.01" value="0" /></div>
+                <div class="slider"><span data-i18n="echoTime"></span><output id="oDelayTime"></output>
+                  <input id="delayTime" type="range" min="0.05" max="1.5" step="0.005" value="0.375" /></div>
+                <div class="slider"><span data-i18n="feedback"></span><output id="oDelayFeedback"></output>
+                  <input id="delayFeedback" type="range" min="0" max="0.85" step="0.01" value="0.35" /></div>
+              </div>
+            </div>
+          </section>
+
+          <section class="page page-eq" data-page="eq">
+            <div class="page-head">
+              <h4 data-i18n="eq"></h4>
+              <span id="eqReadout" class="readout"></span>
+              <button class="mini-play play-toggle" data-i18n-aria="play" aria-label="Play">
+            <svg viewBox="0 0 24 24" class="i-play"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.4-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z" /></svg>
+            <svg viewBox="0 0 24 24" class="i-pause"><rect x="6" y="5" width="4.2" height="14" rx="1.3" /><rect x="13.8" y="5" width="4.2" height="14" rx="1.3" /></svg>
+          </button>
+            </div>
+            <canvas id="eqCanvas" class="eq-canvas" aria-label="Equalizer"></canvas>
+          </section>
+
+          <section class="page page-chop" data-page="chop">
+            <div class="page-head">
+              <h4 data-i18n="chop"></h4>
+              <p id="selInfo" class="sel-info"></p>
+              <button class="mini-play play-toggle" data-i18n-aria="play" aria-label="Play">
+            <svg viewBox="0 0 24 24" class="i-play"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.4-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z" /></svg>
+            <svg viewBox="0 0 24 24" class="i-pause"><rect x="6" y="5" width="4.2" height="14" rx="1.3" /><rect x="13.8" y="5" width="4.2" height="14" rx="1.3" /></svg>
+          </button>
+            </div>
+            <canvas id="wave" class="wave"></canvas>
+            <div class="tools">
+              <button id="tMarker"><b>＋</b><span data-i18n="marker"></span></button>
+              <button id="tLoop"><b>⟲</b><span data-i18n="loop"></span></button>
+              <button id="tTrim"><b>⇤⇥</b><span data-i18n="trim"></span></button>
+              <button id="tCut"><b>✂</b><span data-i18n="cut"></span></button>
+              <button id="tUndo"><b>↶</b><span data-i18n="undo"></span></button>
+            </div>
+            <div id="markerList" class="marker-list"></div>
+          </section>
+        </div>
+        <div class="page-dots" id="dots" role="tablist">
+          <button data-go="0" aria-label="Speed"></button>
+          <button data-go="1" aria-label="Reverb"></button>
+          <button data-go="2" aria-label="Equalizer"></button>
+          <button data-go="3" aria-label="Chop"></button>
         </div>
       </div>
     </main>
@@ -138,21 +214,6 @@
         </div>
 
         <div class="card">
-          <h3 data-i18n="reverb"></h3>
-          <label class="switch">
-            <input id="autoSpace" type="checkbox" checked />
-            <span class="track"><i></i></span>
-            <span data-i18n="autoSpace"></span>
-          </label>
-          <div class="slider"><span data-i18n="mix"></span><output id="oMix"></output>
-            <input id="mix" type="range" min="0" max="1" step="0.01" value="0" /></div>
-          <div class="slider"><span data-i18n="size"></span><output id="oDecay"></output>
-            <input id="decay" type="range" min="0.6" max="8" step="0.1" value="2.5" /></div>
-          <div class="slider"><span data-i18n="tone"></span><output id="oTone"></output>
-            <input id="tone" type="range" min="0" max="1" step="0.01" value="0.5" /></div>
-        </div>
-
-        <div class="card">
           <h3 data-i18n="sound"></h3>
           <div class="slider"><span data-i18n="bass"></span><output id="oBass"></output>
             <input id="bass" type="range" min="-6" max="12" step="0.5" value="0" /></div>
@@ -182,33 +243,15 @@
           <summary><h3 data-i18n="effects"></h3><span id="fxBadge" class="badge"></span></summary>
           <div class="slider"><span data-i18n="saturation"></span><output id="oDrive"></output>
             <input id="drive" type="range" min="0" max="1" step="0.01" value="0" /></div>
-          <h4 data-i18n="echo"></h4>
-          <div class="slider"><span data-i18n="mix"></span><output id="oDelayMix"></output>
-            <input id="delayMix" type="range" min="0" max="1" step="0.01" value="0" /></div>
-          <div class="slider"><span data-i18n="echoTime"></span><output id="oDelayTime"></output>
-            <input id="delayTime" type="range" min="0.05" max="1.5" step="0.005" value="0.375" /></div>
-          <div id="sync" class="chips" hidden>
-            <button data-div="1">1/4</button>
-            <button data-div="0.75">1/8.</button>
-            <button data-div="0.5">1/8</button>
-            <button data-div="0.25">1/16</button>
+          <div id="sync" hidden>
+            <h4 data-i18n="echoSync"></h4>
+            <div class="chips">
+              <button data-div="1">1/4</button>
+              <button data-div="0.75">1/8.</button>
+              <button data-div="0.5">1/8</button>
+              <button data-div="0.25">1/16</button>
+            </div>
           </div>
-          <div class="slider"><span data-i18n="feedback"></span><output id="oDelayFeedback"></output>
-            <input id="delayFeedback" type="range" min="0" max="0.85" step="0.01" value="0.35" /></div>
-        </details>
-
-        <details class="card fold" id="chopCard">
-          <summary><h3 data-i18n="chop"></h3><span id="chopBadge" class="badge"></span></summary>
-          <canvas id="wave" class="wave"></canvas>
-          <div class="tools">
-            <button id="tMarker"><b>＋</b><span data-i18n="marker"></span></button>
-            <button id="tLoop"><b>⟲</b><span data-i18n="loop"></span></button>
-            <button id="tTrim"><b>⇤⇥</b><span data-i18n="trim"></span></button>
-            <button id="tCut"><b>✂</b><span data-i18n="cut"></span></button>
-            <button id="tUndo"><b>↶</b><span data-i18n="undo"></span></button>
-          </div>
-          <p id="selInfo" class="sel-info"></p>
-          <div id="markerList" class="marker-list"></div>
         </details>
 
         <div class="card row-card">
