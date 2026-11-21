@@ -1,0 +1,9 @@
+# Upload only what the build needs; anything else in the folder stays local.
+/*
+!/src
+!/public
+!/index.html
+!/package.json
+!/package-lock.json
+!/tsconfig.json
+!/vercel.json
