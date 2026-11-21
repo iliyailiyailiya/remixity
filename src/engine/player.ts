@@ -22,21 +22,41 @@ export class Player {
     this.setParams(params);
   }
 
-  load(buffer: AudioBuffer) {
+  /** Swap in a new buffer. keepAt keeps (and clamps) the given position. */
+  load(buffer: AudioBuffer, keepAt?: number) {
+    const wasPlaying = this.playing && keepAt !== undefined;
     this.stopSource();
     this.buffer = buffer;
-    this.offset = 0;
     this.playing = false;
+    this.offset = keepAt !== undefined ? Math.min(Math.max(0, keepAt), buffer.duration) : 0;
+    if (this.loop && this.loop[1] > buffer.duration) this.loop = null;
+    if (wasPlaying) void this.play();
   }
 
   get duration() {
     return this.buffer?.duration ?? 0;
   }
 
+  private loop: [number, number] | null = null;
+
+  get looping() {
+    return this.loop !== null;
+  }
+
+  /** Loop a region (buffer seconds) during playback, or pass null to stop looping. */
+  setLoop(region: [number, number] | null) {
+    this.loop = region && region[1] - region[0] > 0.02 ? region : null;
+    if (this.playing) this.seek(this.position);
+  }
+
   /** Current position in source seconds. */
   get position() {
     if (!this.playing) return this.offset;
-    const p = this.offset + (this.ctx.currentTime - this.startedAt) * this.ratio;
+    let p = this.offset + (this.ctx.currentTime - this.startedAt) * this.ratio;
+    if (this.loop) {
+      const [a, b] = this.loop;
+      if (p >= b) p = a + ((p - a) % (b - a));
+    }
     return Math.min(p, this.duration);
   }
 
@@ -46,6 +66,13 @@ export class Player {
     if (this.offset >= this.duration - 0.01) this.offset = 0;
     const src = this.ctx.createBufferSource();
     src.buffer = this.buffer;
+    if (this.loop) {
+      const [a, b] = this.loop;
+      if (this.offset < a || this.offset >= b) this.offset = a;
+      src.loop = true;
+      src.loopStart = a;
+      src.loopEnd = b;
+    }
     src.playbackRate.value = this.ratio;
     src.connect(this.chain.input);
     src.onended = () => {

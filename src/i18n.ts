@@ -52,6 +52,13 @@ const en = {
   save: '+ Save',
   savePrompt: 'Name this preset',
   deletePreset: 'Delete preset',
+  marker: 'Marker',
+  loop: 'Loop',
+  trim: 'Trim',
+  cut: 'Cut',
+  undo: 'Undo',
+  editHint: 'Drag on the waveform to select a part. Trim keeps it, Cut removes it.',
+  clearSel: 'Clear selection',
 };
 
 type Dict = typeof en;
@@ -108,6 +115,13 @@ const ro: Dict = {
   save: '+ Salvează',
   savePrompt: 'Numele presetării',
   deletePreset: 'Șterge presetarea',
+  marker: 'Marcaj',
+  loop: 'Buclă',
+  trim: 'Decupaj',
+  cut: 'Șterge',
+  undo: 'Înapoi',
+  editHint: 'Trage pe forma de undă ca să selectezi o parte. „Decupaj” păstrează doar selecția, „Șterge” o elimină.',
+  clearSel: 'Șterge selecția',
 };
 
 const ru: Dict = {
@@ -162,6 +176,13 @@ const ru: Dict = {
   save: '+ Сохранить',
   savePrompt: 'Название пресета',
   deletePreset: 'Удалить пресет',
+  marker: 'Метка',
+  loop: 'Петля',
+  trim: 'Обрезать',
+  cut: 'Удалить',
+  undo: 'Отмена',
+  editHint: 'Проведите по волне, чтобы выделить часть. «Обрезать» оставит только её, «Удалить» уберёт.',
+  clearSel: 'Снять выделение',
 };
 
 const dicts: Record<Lang, Dict> = { en, ro, ru };

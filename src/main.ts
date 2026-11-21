@@ -5,6 +5,7 @@ import { decodeFile, niceName, safeFileName } from './engine/decode';
 import { Player } from './engine/player';
 import { exportAudio, Format, Stage } from './engine/render';
 import { Waveform } from './ui/waveform';
+import { addMarker, assemble, cut, EditState, initialEdit, keepOnly, removeMarker } from './engine/edit';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -12,7 +13,11 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getEleme
 
 const params: FxParams = { ...DEFAULT_PARAMS };
 let origBpm: number | null = null;
-let buffer: AudioBuffer | null = null;
+let original: AudioBuffer | null = null; // as decoded, never modified
+let buffer: AudioBuffer | null = null; // after trims and cuts; what plays and exports
+let edit: EditState = initialEdit(0);
+let history: EditState[] = [];
+let sel: [number, number] | null = null; // selection in buffer seconds
 let trackName = '';
 let player: Player | null = null;
 let exporting = false;
@@ -65,8 +70,12 @@ async function load(file: File) {
     player.onEnded = render;
     void player.ctx.resume();
     const decoded = await decodeFile(file);
-    buffer = decoded;
+    original = buffer = decoded;
+    edit = initialEdit(decoded.duration);
+    history = [];
+    sel = null;
     trackName = niceName(file.name);
+    player.setLoop(null);
     player.load(decoded);
     wave.setBuffer(decoded);
     $('trackName').textContent = trackName;
@@ -84,21 +93,169 @@ async function load(file: File) {
 
 // ---------- waveform & transport ----------
 
-const wave = new Waveform($<HTMLCanvasElement>('wave'), (f) => {
-  if (!player) return;
-  player.seek(f * player.duration);
-  render();
+const wave = new Waveform($<HTMLCanvasElement>('wave'), {
+  onSeek(f) {
+    if (!player) return;
+    player.seek(f * player.duration);
+    render();
+  },
+  onSelect(a, b) {
+    if (!player) return;
+    sel = [a * player.duration, b * player.duration];
+    if (player.looping) player.setLoop(sel);
+    renderEdit();
+  },
 });
 
 const playBtn = $('play');
 playBtn.addEventListener('click', togglePlay);
 document.addEventListener('keydown', (e) => {
   const tag = (e.target as HTMLElement).tagName;
-  if (e.code === 'Space' && tag !== 'INPUT' && tag !== 'SELECT' && tag !== 'BUTTON') {
-    e.preventDefault();
-    togglePlay();
-  }
+  if (tag === 'INPUT' || tag === 'SELECT' || !buffer) return;
+  const mod = e.metaKey || e.ctrlKey;
+  if (e.code === 'Space' && tag !== 'BUTTON') togglePlay();
+  else if (mod && e.code === 'KeyZ') undo();
+  else if (mod || e.altKey) return;
+  else if (e.code === 'KeyM') markerAtPlayhead();
+  else if (e.code === 'KeyL') toggleLoop();
+  else if (e.code === 'Delete' || e.code === 'Backspace') cutSelection();
+  else if (e.code === 'Escape') clearSelection();
+  else return;
+  e.preventDefault();
 });
+
+// ---------- editing: trim, cut, loop, markers ----------
+
+/** Apply an edit, keeping it undoable, and rebuild the buffer if needed. */
+function commit(next: EditState, keepAt?: number) {
+  if (!original || !player) return;
+  history.push(edit);
+  if (history.length > 50) history.shift();
+  const rebuild = next.segments !== edit.segments;
+  edit = next;
+  if (rebuild) {
+    buffer = assemble(original, edit.segments);
+    player.load(buffer, keepAt ?? player.position);
+    wave.setBuffer(buffer);
+  }
+  render();
+}
+
+function clearSelection() {
+  sel = null;
+  player?.setLoop(null);
+  renderEdit();
+}
+
+function cutSelection() {
+  if (!sel || !player) return;
+  const [a, b] = sel;
+  const pos = player.position;
+  const keepAt = pos < a ? pos : pos >= b ? pos - (b - a) : a;
+  sel = null;
+  player.setLoop(null);
+  commit(cut(edit, a, b), keepAt);
+}
+
+function trimToSelection() {
+  if (!sel || !player) return;
+  const [a, b] = sel;
+  const keepAt = Math.min(Math.max(0, player.position - a), b - a);
+  sel = null;
+  player.setLoop(null);
+  commit(keepOnly(edit, a, b), keepAt);
+}
+
+function undo() {
+  const prev = history.pop();
+  if (!prev || !original || !player) return;
+  const rebuild = prev.segments !== edit.segments;
+  edit = prev;
+  if (rebuild) {
+    sel = null;
+    player.setLoop(null);
+    buffer = assemble(original, edit.segments);
+    player.load(buffer, player.position);
+    wave.setBuffer(buffer);
+  }
+  render();
+}
+
+function toggleLoop() {
+  if (!player) return;
+  if (player.looping) player.setLoop(null);
+  else if (sel) player.setLoop(sel);
+  renderEdit();
+}
+
+function markerAtPlayhead() {
+  if (!player) return;
+  const next = addMarker(edit, player.position);
+  if (next !== edit) commit(next);
+}
+
+$('tMarker').addEventListener('click', markerAtPlayhead);
+$('tLoop').addEventListener('click', toggleLoop);
+$('tTrim').addEventListener('click', trimToSelection);
+$('tCut').addEventListener('click', cutSelection);
+$('tUndo').addEventListener('click', undo);
+
+const fmtPrecise = (s: number) => {
+  s = Math.max(0, s);
+  return `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, '0')}`;
+};
+
+function renderEdit() {
+  if (!player || !buffer) return;
+  const dur = buffer.duration;
+  const r = params.ratio; // times are shown as you hear them (after speed change)
+  wave.setOverlay(
+    sel ? [sel[0] / dur, sel[1] / dur] : null,
+    edit.markers.map((m) => m / dur),
+    player.looping,
+  );
+
+  $<HTMLButtonElement>('tLoop').disabled = !sel && !player.looping;
+  $('tLoop').classList.toggle('active', player.looping);
+  $<HTMLButtonElement>('tTrim').disabled = !sel;
+  $<HTMLButtonElement>('tCut').disabled = !sel;
+  $<HTMLButtonElement>('tUndo').disabled = history.length === 0;
+
+  const info = $('selInfo');
+  info.replaceChildren();
+  if (sel) {
+    const [a, b] = sel;
+    info.append(`${fmtPrecise(a / r)} – ${fmtPrecise(b / r)} · ${((b - a) / r).toFixed(1)} s `);
+    const x = document.createElement('button');
+    x.className = 'x';
+    x.textContent = '×';
+    x.setAttribute('aria-label', t('clearSel'));
+    x.addEventListener('click', clearSelection);
+    info.append(x);
+  } else {
+    info.textContent = t('editHint');
+  }
+
+  const list = $('markerList');
+  list.replaceChildren();
+  edit.markers.forEach((m, i) => {
+    const chip = document.createElement('span');
+    chip.className = 'user-chip';
+    const go = document.createElement('button');
+    go.textContent = `${i + 1} · ${fmtTime(m / r)}`;
+    go.addEventListener('click', () => {
+      player!.seek(m);
+      render();
+    });
+    const del = document.createElement('button');
+    del.className = 'del';
+    del.textContent = '×';
+    del.setAttribute('aria-label', `${t('marker')} ${i + 1}`);
+    del.addEventListener('click', () => commit(removeMarker(edit, i)));
+    chip.append(go, del);
+    list.append(chip);
+  });
+}
 
 function togglePlay() {
   if (!player || !buffer) return;
@@ -412,6 +569,7 @@ function render() {
   $('fxBadge').classList.toggle('on', params.drive > 0 || params.delayMix > 0);
   $('sync').hidden = !origBpm;
 
+  renderEdit();
   renderTransport();
 }
 

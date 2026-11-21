@@ -543,3 +543,91 @@ footer {
   border-style: dashed;
   color: var(--muted);
 }
+
+/* ---------- Phase 3: edit toolbar, selection, markers ---------- */
+
+.wave {
+  --wave-sel: #c084fc2e;
+  --wave-marker: #f472b6;
+}
+
+.tools {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+  margin-top: 14px;
+}
+.tools button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px 1px 7px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--card-2);
+  font-size: 0.68rem;
+  line-height: 1.15;
+}
+.tools button b {
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.1;
+}
+.tools button span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tools button:disabled {
+  opacity: 0.38;
+  cursor: default;
+}
+.tools button.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: #c084fc1a;
+}
+
+.sel-info {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+  margin: 10px 2px 0;
+  min-height: 1.3em;
+}
+.sel-info .x {
+  border: 0;
+  background: var(--card-2);
+  border-radius: 999px;
+  width: 22px;
+  height: 22px;
+  line-height: 1;
+  color: var(--text);
+}
+
+.marker-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.marker-list:empty {
+  display: none;
+}
+.marker-list .user-chip {
+  border-color: #f472b688;
+}
+.marker-list .user-chip button {
+  border: 0;
+  background: transparent;
+  padding: 5px 4px 5px 11px;
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+}
+.marker-list .user-chip .del {
+  padding: 5px 10px 5px 6px;
+  color: var(--muted);
+}
