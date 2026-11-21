@@ -95,7 +95,11 @@ export function sniffSampleRate(buf: ArrayBuffer): number | null {
 }
 
 export async function decodeFile(file: File): Promise<AudioBuffer> {
-  const data = await file.arrayBuffer();
+  return decodeData(await file.arrayBuffer());
+}
+
+/** Decode at the file's own sample rate. The passed buffer may be detached afterwards. */
+export async function decodeData(data: ArrayBuffer): Promise<AudioBuffer> {
   let rate = sniffSampleRate(data);
   if (!rate || rate < 8000 || rate > 384000) rate = 44100;
   try {

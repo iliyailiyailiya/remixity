@@ -59,6 +59,20 @@ const en = {
   undo: 'Undo',
   editHint: 'Drag on the waveform to select a part. Trim keeps it, Cut removes it.',
   clearSel: 'Clear selection',
+  dropTrack: 'Drop a track. Make it yours.',
+  chooseSong: 'Choose a song',
+  newTrack: 'New track',
+  more: 'More',
+  speedBpm: 'Speed & BPM',
+  bpmHint: 'BPM is detected automatically. If it looks off, try ½× or 2×, or tap along.',
+  autoSpace: 'Follows the pedal',
+  boost: 'Boost',
+  boostHint: 'Your device volume controls loudness. Boost adds extra on top, and the limiter stops clipping.',
+  chop: 'Chop',
+  language: 'Language',
+  yourTrack: 'Your track',
+  slowed: 'Slowed',
+  spedUp: 'Sped up',
 };
 
 type Dict = typeof en;
@@ -122,6 +136,20 @@ const ro: Dict = {
   undo: 'Înapoi',
   editHint: 'Trage pe forma de undă ca să selectezi o parte. „Decupaj” păstrează doar selecția, „Șterge” o elimină.',
   clearSel: 'Șterge selecția',
+  dropTrack: 'Pune o piesă. Fă-o a ta.',
+  chooseSong: 'Alege o piesă',
+  newTrack: 'Piesă nouă',
+  more: 'Mai mult',
+  speedBpm: 'Viteză și BPM',
+  bpmHint: 'BPM-ul se detectează automat. Dacă pare greșit, încearcă ½× sau 2×, ori bate în ritm.',
+  autoSpace: 'Urmează pedala',
+  boost: 'Amplificare',
+  boostHint: 'Volumul dispozitivului controlează tăria. Amplificarea adaugă în plus, iar limitatorul previne distorsiunea.',
+  chop: 'Tăiere',
+  language: 'Limbă',
+  yourTrack: 'Piesa ta',
+  slowed: 'Încetinit',
+  spedUp: 'Accelerat',
 };
 
 const ru: Dict = {
@@ -183,6 +211,20 @@ const ru: Dict = {
   undo: 'Отмена',
   editHint: 'Проведите по волне, чтобы выделить часть. «Обрезать» оставит только её, «Удалить» уберёт.',
   clearSel: 'Снять выделение',
+  dropTrack: 'Закинь трек. Сделай его своим.',
+  chooseSong: 'Выбрать трек',
+  newTrack: 'Новый трек',
+  more: 'Ещё',
+  speedBpm: 'Скорость и BPM',
+  bpmHint: 'BPM определяется автоматически. Если не похоже, попробуйте ½× или 2× либо отстучите ритм.',
+  autoSpace: 'Следует за педалью',
+  boost: 'Усиление',
+  boostHint: 'Громкость задаёт ваше устройство. Усиление добавляет сверху, а лимитер не даёт звуку искажаться.',
+  chop: 'Нарезка',
+  language: 'Язык',
+  yourTrack: 'Ваш трек',
+  slowed: 'Замедлено',
+  spedUp: 'Ускорено',
 };
 
 const dicts: Record<Lang, Dict> = { en, ro, ru };

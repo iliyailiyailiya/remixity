@@ -1,11 +1,16 @@
 import './style.css';
 import { applyI18n, getLang, Lang, setLang, t } from './i18n';
 import { DEFAULT_PARAMS, FxParams } from './engine/chain';
-import { decodeFile, niceName, safeFileName } from './engine/decode';
+import { decodeData, niceName, safeFileName } from './engine/decode';
 import { Player } from './engine/player';
 import { exportAudio, Format, Stage } from './engine/render';
-import { Waveform } from './ui/waveform';
 import { addMarker, assemble, cut, EditState, initialEdit, keepOnly, removeMarker } from './engine/edit';
+import { readMeta, metaFromFileName } from './engine/meta';
+import { detectBpm } from './engine/bpm';
+import { Waveform } from './ui/waveform';
+import { Backdrop } from './ui/backdrop';
+import { defaultPalette, generatedCover, paletteFrom } from './ui/palette';
+import { Pedal, MAX_RATIO, MIN_RATIO } from './ui/pedal';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -13,36 +18,65 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getEleme
 
 const params: FxParams = { ...DEFAULT_PARAMS };
 let origBpm: number | null = null;
+let detectingBpm = false;
+let autoSpace = true; // reverb follows the pedal
 let original: AudioBuffer | null = null; // as decoded, never modified
 let buffer: AudioBuffer | null = null; // after trims and cuts; what plays and exports
 let edit: EditState = initialEdit(0);
 let history: EditState[] = [];
 let sel: [number, number] | null = null; // selection in buffer seconds
 let trackName = '';
+let coverUrl = '';
+let loadToken = 0;
 let player: Player | null = null;
 let exporting = false;
 
+// Built-in presets set speed and tone; with "follows the pedal" on, the
+// reverb comes from the speed (see spaceFor).
 const PRESETS: Record<string, Partial<FxParams>> = {
-  original: { ...DEFAULT_PARAMS },
-  slowed: { ratio: 0.85, reverbMix: 0.45, decay: 3.6, tone: 0.4, bass: 3, volume: 0 },
-  ultra: { ratio: 0.75, reverbMix: 0.6, decay: 5.5, tone: 0.3, bass: 4, volume: 0 },
-  nightcore: { ratio: 1.25, reverbMix: 0.12, decay: 1.4, tone: 0.65, bass: 0, volume: 0 },
+  original: {},
+  slowed: { ratio: 0.85, bass: 3 },
+  ultra: { ratio: 0.75, bass: 4 },
+  nightcore: { ratio: 1.25 },
 };
+
+/** The pedal's reverb: slower = bigger, darker space; faster = a touch of air. */
+function spaceFor(r: number): Pick<FxParams, 'reverbMix' | 'decay' | 'tone'> {
+  if (r < 1) {
+    const k = 1 - r;
+    return {
+      reverbMix: Math.min(0.7, 3 * k),
+      decay: Math.min(6.5, 1.8 + 12 * k),
+      tone: Math.max(0.25, 0.5 - 1.2 * k),
+    };
+  }
+  return { reverbMix: 0.1 * Math.min(1, (r - 1) / 0.25), decay: 1.4, tone: 0.65 };
+}
+
+// ---------- background ----------
+
+const backdrop = new Backdrop($<HTMLCanvasElement>('bg'), defaultPalette());
+const glowRed = $('glowRed');
+const glowBlue = $('glowBlue');
 
 // ---------- language ----------
 
-const langSel = $<HTMLSelectElement>('lang');
-langSel.value = getLang();
-langSel.addEventListener('change', () => {
-  setLang(langSel.value as Lang);
-  render();
-});
+const langSels = [$<HTMLSelectElement>('lang'), $<HTMLSelectElement>('lang2')];
+for (const s of langSels) {
+  s.value = getLang();
+  s.addEventListener('change', () => {
+    setLang(s.value as Lang);
+    langSels.forEach((o) => (o.value = s.value));
+    render();
+  });
+}
 applyI18n();
 
 // ---------- file loading ----------
 
 const fileInput = $<HTMLInputElement>('file');
-const drop = $('drop');
+const home = $('home');
+const playerView = $('player');
 const status = $('status');
 
 fileInput.addEventListener('change', () => {
@@ -50,48 +84,200 @@ fileInput.addEventListener('change', () => {
   if (f) void load(f);
   fileInput.value = '';
 });
-drop.addEventListener('dragover', (e) => {
+document.addEventListener('dragover', (e) => {
   e.preventDefault();
-  drop.classList.add('over');
+  home.classList.add('dragover');
 });
-drop.addEventListener('dragleave', () => drop.classList.remove('over'));
-drop.addEventListener('drop', (e) => {
+document.addEventListener('dragleave', (e) => {
+  if (!e.relatedTarget) home.classList.remove('dragover');
+});
+document.addEventListener('drop', (e) => {
   e.preventDefault();
-  drop.classList.remove('over');
+  home.classList.remove('dragover');
   const f = e.dataTransfer?.files?.[0];
   if (f) void load(f);
 });
 
 async function load(file: File) {
+  const token = ++loadToken;
   status.textContent = t('loading');
   try {
     // Create the AudioContext inside the user gesture so iOS lets it play.
     player ??= new Player(params);
     player.onEnded = render;
     void player.ctx.resume();
-    const decoded = await decodeFile(file);
+
+    const data = await file.arrayBuffer();
+    const name = niceName(file.name);
+    const fromName = metaFromFileName(name);
+    const meta = readMeta(data);
+    const decoded = await decodeData(data);
+    if (token !== loadToken) return;
+
     original = buffer = decoded;
     edit = initialEdit(decoded.duration);
     history = [];
     sel = null;
-    trackName = niceName(file.name);
+    trackName = name;
     player.setLoop(null);
     player.load(decoded);
     wave.setBuffer(decoded);
-    $('trackName').textContent = trackName;
-    $('trackName').title = `${trackName} · ${decoded.sampleRate} Hz · ${decoded.numberOfChannels} ch`;
-    $('editor').hidden = false;
-    drop.classList.add('compact');
+
+    const title = meta.title || fromName.title || name;
+    $('title').textContent = title;
+    $('artist').textContent = meta.artist || fromName.artist || t('yourTrack');
+    document.title = `${title} · THE REMIXITY`;
+
+    // Cover art (or a generated one) drives the background colours.
+    const cover = $<HTMLImageElement>('cover');
+    if (coverUrl) URL.revokeObjectURL(coverUrl);
+    coverUrl = URL.createObjectURL(meta.cover ?? (await generatedCover(title)));
+    cover.onerror = async () => {
+      // Embedded art the browser can't show: fall back to a generated cover.
+      cover.onerror = null;
+      URL.revokeObjectURL(coverUrl);
+      coverUrl = URL.createObjectURL(await generatedCover(title));
+      cover.src = coverUrl;
+    };
+    cover.onload = async () => backdrop.setPalette(await paletteFrom(cover));
+    cover.src = coverUrl;
+
+    home.hidden = true;
+    playerView.hidden = false;
     status.textContent = '';
     $('downloadLink').hidden = true;
+
+    origBpm = null;
+    detectingBpm = true;
     render();
+    detectBpm(decoded)
+      .then((bpm) => {
+        if (token === loadToken) origBpm = bpm;
+      })
+      .catch((err) => console.warn('bpm', err))
+      .finally(() => {
+        if (token !== loadToken) return;
+        detectingBpm = false;
+        render();
+      });
   } catch (err) {
     console.error(err);
     status.textContent = t('loadError');
+    home.hidden = false;
+    playerView.hidden = true;
   }
 }
 
-// ---------- waveform & transport ----------
+// ---------- pedal ----------
+
+const pedal = new Pedal($('pedal'), (r) => setRatio(r));
+
+function setRatio(r: number) {
+  params.ratio = Math.round(Math.min(MAX_RATIO, Math.max(MIN_RATIO, r)) * 100000) / 100000;
+  apply();
+}
+
+// ---------- transport ----------
+
+const playBtn = $('play');
+playBtn.addEventListener('click', togglePlay);
+$('cover').addEventListener('click', togglePlay);
+
+function togglePlay() {
+  if (!player || !buffer) return;
+  if (player.playing) player.pause();
+  else void player.play().then(tick);
+  render();
+}
+
+function tick() {
+  if (!player) return;
+  renderTransport();
+  if (player.playing) requestAnimationFrame(tick);
+}
+
+// Progress bar: drag to scrub, seek on release.
+const barEl = $('bar');
+let scrubbing: number | null = null;
+const barFrac = (x: number) => {
+  const r = barEl.getBoundingClientRect();
+  return Math.max(0, Math.min(1, (x - r.left) / r.width));
+};
+barEl.addEventListener('pointerdown', (e) => {
+  if (!player) return;
+  barEl.setPointerCapture(e.pointerId);
+  barEl.classList.add('active');
+  scrubbing = barFrac(e.clientX);
+  renderTransport();
+});
+barEl.addEventListener('pointermove', (e) => {
+  if (scrubbing === null) return;
+  scrubbing = barFrac(e.clientX);
+  renderTransport();
+});
+const endScrub = () => {
+  if (scrubbing === null || !player) return;
+  player.seek(scrubbing * player.duration);
+  scrubbing = null;
+  barEl.classList.remove('active');
+  render();
+};
+barEl.addEventListener('pointerup', endScrub);
+barEl.addEventListener('pointercancel', endScrub);
+
+document.addEventListener('keydown', (e) => {
+  const tag = (e.target as HTMLElement).tagName;
+  if (e.key === 'Escape' && openSheet) {
+    closeSheets();
+    return;
+  }
+  if (tag === 'INPUT' || tag === 'SELECT' || !buffer) return;
+  if ((e.target as HTMLElement).closest('.pedal')) return; // the pedal handles its own keys
+  const mod = e.metaKey || e.ctrlKey;
+  if (e.code === 'Space' && tag !== 'BUTTON') togglePlay();
+  else if (mod && e.code === 'KeyZ') undo();
+  else if (mod || e.altKey) return;
+  else if (e.code === 'ArrowUp') setRatio(params.ratio + 0.01);
+  else if (e.code === 'ArrowDown') setRatio(params.ratio - 0.01);
+  else if (e.code === 'KeyM') markerAtPlayhead();
+  else if (e.code === 'KeyL') toggleLoop();
+  else if (e.code === 'Delete' || e.code === 'Backspace') cutSelection();
+  else if (e.code === 'Escape') clearSelection();
+  else return;
+  e.preventDefault();
+});
+
+// ---------- sheets ----------
+
+const scrim = $('sheetScrim');
+let openSheet: HTMLElement | null = null;
+
+function showSheet(sheet: HTMLElement) {
+  closeSheets();
+  openSheet = sheet;
+  sheet.classList.add('open');
+  sheet.setAttribute('aria-hidden', 'false');
+  scrim.classList.add('open');
+  renderEdit();
+}
+function closeSheets() {
+  for (const s of document.querySelectorAll<HTMLElement>('.sheet')) {
+    s.classList.remove('open');
+    s.setAttribute('aria-hidden', 'true');
+  }
+  scrim.classList.remove('open');
+  openSheet = null;
+}
+scrim.addEventListener('click', closeSheets);
+document.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', closeSheets));
+$('openMenu').addEventListener('click', () => showSheet($('menu')));
+$('openExport').addEventListener('click', () => {
+  updateExportName();
+  showSheet($('exportSheet'));
+});
+document.querySelectorAll('input[name="fmt"]').forEach((r) => r.addEventListener('change', updateExportName));
+
+// ---------- chop: trim, cut, loop, markers ----------
 
 const wave = new Waveform($<HTMLCanvasElement>('wave'), {
   onSeek(f) {
@@ -106,25 +292,8 @@ const wave = new Waveform($<HTMLCanvasElement>('wave'), {
     renderEdit();
   },
 });
-
-const playBtn = $('play');
-playBtn.addEventListener('click', togglePlay);
-document.addEventListener('keydown', (e) => {
-  const tag = (e.target as HTMLElement).tagName;
-  if (tag === 'INPUT' || tag === 'SELECT' || !buffer) return;
-  const mod = e.metaKey || e.ctrlKey;
-  if (e.code === 'Space' && tag !== 'BUTTON') togglePlay();
-  else if (mod && e.code === 'KeyZ') undo();
-  else if (mod || e.altKey) return;
-  else if (e.code === 'KeyM') markerAtPlayhead();
-  else if (e.code === 'KeyL') toggleLoop();
-  else if (e.code === 'Delete' || e.code === 'Backspace') cutSelection();
-  else if (e.code === 'Escape') clearSelection();
-  else return;
-  e.preventDefault();
-});
-
-// ---------- editing: trim, cut, loop, markers ----------
+const chopCard = $<HTMLDetailsElement>('chopCard');
+chopCard.addEventListener('toggle', () => renderEdit());
 
 /** Apply an edit, keeping it undoable, and rebuild the buffer if needed. */
 function commit(next: EditState, keepAt?: number) {
@@ -200,6 +369,11 @@ $('tTrim').addEventListener('click', trimToSelection);
 $('tCut').addEventListener('click', cutSelection);
 $('tUndo').addEventListener('click', undo);
 
+const fmtTime = (s: number) => {
+  s = Math.max(0, s);
+  const m = Math.floor(s / 60);
+  return `${m}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+};
 const fmtPrecise = (s: number) => {
   s = Math.max(0, s);
   return `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, '0')}`;
@@ -220,6 +394,7 @@ function renderEdit() {
   $<HTMLButtonElement>('tTrim').disabled = !sel;
   $<HTMLButtonElement>('tCut').disabled = !sel;
   $<HTMLButtonElement>('tUndo').disabled = history.length === 0;
+  $('chopBadge').classList.toggle('on', edit.segments.length > 1 || edit.markers.length > 0 || buffer !== original);
 
   const info = $('selInfo');
   info.replaceChildren();
@@ -257,49 +432,10 @@ function renderEdit() {
   });
 }
 
-function togglePlay() {
-  if (!player || !buffer) return;
-  if (player.playing) player.pause();
-  else void player.play().then(tick);
-  render();
-}
+// ---------- speed & BPM (menu) ----------
 
-function tick() {
-  if (!player) return;
-  renderTransport();
-  if (player.playing) requestAnimationFrame(tick);
-}
-
-const fmtTime = (s: number) => {
-  s = Math.max(0, s);
-  const m = Math.floor(s / 60);
-  return `${m}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
-};
-
-function renderTransport() {
-  if (!player) return;
-  const pos = player.position;
-  const dur = player.duration || 1;
-  wave.setProgress(pos / dur);
-  $('time').textContent = `${fmtTime(pos / params.ratio)} / ${fmtTime(dur / params.ratio)}`;
-  playBtn.classList.toggle('playing', player.playing);
-  playBtn.setAttribute('aria-label', t(player.playing ? 'pause' : 'play'));
-}
-
-// ---------- tempo ----------
-
-const speed = $<HTMLInputElement>('speed');
 const origInput = $<HTMLInputElement>('origBpm');
 const targetInput = $<HTMLInputElement>('targetBpm');
-
-const clampRatio = (r: number) => Math.min(1.5, Math.max(0.5, r));
-
-function setRatio(r: number) {
-  params.ratio = Math.round(clampRatio(r) * 100000) / 100000;
-  apply();
-}
-
-speed.addEventListener('input', () => setRatio(+speed.value));
 
 document.querySelectorAll<HTMLButtonElement>('[data-nudge]').forEach((b) =>
   b.addEventListener('click', () => {
@@ -320,6 +456,16 @@ targetInput.addEventListener('change', () => {
   const v = parseFloat(targetInput.value.replace(',', '.'));
   if (origBpm && v > 0) setRatio(v / origBpm);
   else render();
+});
+
+// Tempo detectors often land on half or double the felt tempo.
+$('bpmHalf').addEventListener('click', () => {
+  if (origBpm) origBpm = Math.round((origBpm / 2) * 10) / 10;
+  render();
+});
+$('bpmDouble').addEventListener('click', () => {
+  if (origBpm) origBpm = Math.round(origBpm * 20) / 10;
+  render();
 });
 
 let taps: number[] = [];
@@ -343,10 +489,11 @@ function pitchText(r: number) {
   const a = Math.abs(cents);
   const st = Math.floor(a / 100);
   const ct = a % 100;
+  if (st === 0) return `${sign}${ct} ${t('ct')}`;
   return `${sign}${st} ${t('st')}${ct ? ` ${ct} ${t('ct')}` : ''}`;
 }
 
-// ---------- effects ----------
+// ---------- sound & effects (menu) ----------
 
 type SliderKey = Exclude<keyof FxParams, 'ratio'>;
 interface SliderDef {
@@ -357,6 +504,8 @@ interface SliderDef {
   to?: (v: number) => number;
   /** slider position → param */
   from?: (s: number) => number;
+  /** moving it takes the reverb off autopilot */
+  space?: boolean;
 }
 
 const db = (v: number) => `${v > 0 ? '+' : ''}${v.toFixed(1)} dB`;
@@ -370,11 +519,11 @@ const logTo = ([a, b]: number[]) => (v: number) => Math.log(v / a) / Math.log(b 
 const logFrom = ([a, b]: number[]) => (s: number) => Math.round(a * Math.pow(b / a, s));
 
 const sliders: SliderDef[] = [
-  { id: 'mix', key: 'reverbMix', fmt: pct },
-  { id: 'decay', key: 'decay', fmt: (v) => `${v.toFixed(1)} s` },
-  { id: 'tone', key: 'tone', fmt: (v) => (v < 0.34 ? t('dark') : v > 0.66 ? t('bright') : pct(v)) },
+  { id: 'mix', key: 'reverbMix', fmt: pct, space: true },
+  { id: 'decay', key: 'decay', fmt: (v) => `${v.toFixed(1)} s`, space: true },
+  { id: 'tone', key: 'tone', fmt: (v) => (v < 0.34 ? t('dark') : v > 0.66 ? t('bright') : pct(v)), space: true },
   { id: 'bass', key: 'bass', fmt: db },
-  { id: 'volume', key: 'volume', fmt: db },
+  { id: 'volume', key: 'volume', fmt: (v) => (v <= 0 ? t('off') : db(v)) },
   { id: 'eqLow', key: 'eqLow', fmt: db },
   { id: 'eqMid', key: 'eqMid', fmt: db },
   { id: 'eqHigh', key: 'eqHigh', fmt: db },
@@ -391,9 +540,16 @@ for (const s of sliders) {
   const el = $<HTMLInputElement>(s.id);
   el.addEventListener('input', () => {
     params[s.key] = s.from ? s.from(+el.value) : +el.value;
+    if (s.space) autoSpace = false;
     apply();
   });
 }
+
+const autoBox = $<HTMLInputElement>('autoSpace');
+autoBox.addEventListener('change', () => {
+  autoSpace = autoBox.checked;
+  apply();
+});
 
 $('eqReset').addEventListener('click', () => {
   const { eqLow, eqMid, eqHigh, eqAir, lowCut, highCut } = DEFAULT_PARAMS;
@@ -411,10 +567,11 @@ document.querySelectorAll<HTMLButtonElement>('[data-div]').forEach((b) =>
   }),
 );
 
-// Built-in presets start from the defaults so they also clear EQ and effects.
+// Built-in presets reset everything and put the reverb back on the pedal.
 document.querySelectorAll<HTMLButtonElement>('[data-preset]').forEach((b) =>
   b.addEventListener('click', () => {
     Object.assign(params, DEFAULT_PARAMS, PRESETS[b.dataset.preset!]);
+    autoSpace = true;
     apply();
   }),
 );
@@ -458,6 +615,8 @@ function renderUserPresets() {
         if (typeof p.params[k] === 'number' && Number.isFinite(p.params[k])) clean[k] = p.params[k];
       }
       Object.assign(params, DEFAULT_PARAMS, clean);
+      params.volume = Math.max(0, params.volume); // older presets could cut volume
+      autoSpace = false; // a saved preset keeps its own reverb
       apply();
     });
     const del = document.createElement('button');
@@ -487,6 +646,7 @@ $('savePreset').addEventListener('click', () => {
 renderUserPresets();
 
 function apply() {
+  if (autoSpace) Object.assign(params, spaceFor(params.ratio));
   player?.setParams({ ...params });
   render();
 }
@@ -495,9 +655,11 @@ function apply() {
 
 const exportBtn = $<HTMLButtonElement>('export');
 const progress = $('progress');
-const bar = progress.firstElementChild as HTMLElement;
+const progressBar = progress.firstElementChild as HTMLElement;
 const exportStatus = $('exportStatus');
 const link = $<HTMLAnchorElement>('downloadLink');
+const currentFormat = () =>
+  (document.querySelector('input[name="fmt"]:checked') as HTMLInputElement).value as Format;
 
 function outputName(fmt: Format) {
   const r = params.ratio;
@@ -508,13 +670,17 @@ function outputName(fmt: Format) {
   return safeFileName(`${trackName} (${tag})`) + (fmt === 'mp3' ? '.mp3' : '.wav');
 }
 
+function updateExportName() {
+  $('exportName').textContent = outputName(currentFormat());
+}
+
 exportBtn.addEventListener('click', async () => {
   if (!buffer || exporting) return;
   exporting = true;
   exportBtn.disabled = true;
   link.hidden = true;
   progress.hidden = false;
-  const fmt = (document.querySelector('input[name="fmt"]:checked') as HTMLInputElement).value as Format;
+  const fmt = currentFormat();
   const label: Record<Stage, () => string> = {
     resample: () => t('stageResample'),
     render: () => t('stageRender'),
@@ -524,14 +690,14 @@ exportBtn.addEventListener('click', async () => {
     const blob = await exportAudio(buffer, { ...params }, fmt, (stage, f) => {
       exportStatus.textContent = `${label[stage]()}${f === null ? '…' : ` ${Math.round(f * 100)}%`}`;
       progress.classList.toggle('indeterminate', f === null);
-      bar.style.width = `${Math.round((f ?? 0) * 100)}%`;
+      progressBar.style.width = `${Math.round((f ?? 0) * 100)}%`;
     });
     if (link.href) URL.revokeObjectURL(link.href);
     link.href = URL.createObjectURL(blob);
     link.download = outputName(fmt);
     link.hidden = false;
     link.textContent = `${t('download')} · ${(blob.size / 1048576).toFixed(1)} MB`;
-    exportStatus.textContent = link.download;
+    exportStatus.textContent = '';
     link.click();
   } catch (err) {
     console.error(err);
@@ -545,16 +711,55 @@ exportBtn.addEventListener('click', async () => {
 
 // ---------- render ----------
 
+const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+
+function renderTransport() {
+  if (!player) return;
+  const dur = player.duration || 1;
+  const pos = scrubbing !== null ? scrubbing * dur : player.position;
+  const r = params.ratio;
+  $('barFill').style.width = `${(pos / dur) * 100}%`;
+  $('tNow').textContent = fmtTime(pos / r);
+  $('tLeft').textContent = `−${fmtTime((dur - pos) / r)}`;
+  playerView.classList.toggle('playing', player.playing);
+  playBtn.setAttribute('aria-label', t(player.playing ? 'pause' : 'play'));
+  backdrop.speed = (player.playing ? 1 : 0.3) * r;
+  if (openSheet?.id === 'menu' && chopCard.open) wave.setProgress(pos / dur);
+}
+
 function render() {
-  speed.value = String(params.ratio);
-  $('rRatio').textContent = `×${params.ratio.toFixed(3)}`;
-  $('rPitch').textContent = pitchText(params.ratio);
-  const target = origBpm ? origBpm * params.ratio : null;
+  const r = params.ratio;
+  pedal.set(r);
+
+  // Dashboard
+  const bpmBig = $('bpmBig');
+  bpmBig.textContent = origBpm ? String(Math.round(origBpm * r)) : detectingBpm ? '···' : '—';
+  bpmBig.classList.toggle('detecting', detectingBpm && !origBpm);
+  $('gaugeSub').textContent = `×${r.toFixed(2)} · ${pitchText(r)}`;
+  const dash = document.querySelector('.dash')!;
+  dash.classList.toggle('up', r > 1);
+  dash.classList.toggle('down', r < 1);
+  $('badge').textContent =
+    r < 0.995
+      ? `${t('slowed')} ×${r.toFixed(2)}`
+      : r > 1.005
+        ? `${r >= 1.2 ? t('presetNightcore') : t('spedUp')} ×${r.toFixed(2)}`
+        : t('presetOriginal');
+
+  // Red creeps in from the sides as you speed up, deep blue as you slow down.
+  glowRed.style.opacity = String(clamp01((r - 1) / 0.4) * 0.95);
+  glowBlue.style.opacity = String(clamp01((1 - r) / 0.4) * 0.95);
+
+  // Menu
+  $('rRatio').textContent = `×${r.toFixed(3)}`;
+  $('rPitch').textContent = pitchText(r);
+  const target = origBpm ? origBpm * r : null;
   $('rBpm').textContent = target ? target.toFixed(1) : '—';
   if (document.activeElement !== origInput) origInput.value = origBpm ? String(origBpm) : '';
   if (document.activeElement !== targetInput) targetInput.value = target ? target.toFixed(1) : '';
   targetInput.disabled = !origBpm;
   $('nudgeUnit').textContent = origBpm ? 'BPM' : '%';
+  autoBox.checked = autoSpace;
 
   for (const s of sliders) {
     const v = params[s.key];
@@ -568,9 +773,10 @@ function render() {
   $('eqBadge').classList.toggle('on', !!eqOn);
   $('fxBadge').classList.toggle('on', params.drive > 0 || params.delayMix > 0);
   $('sync').hidden = !origBpm;
+  if (openSheet?.id === 'exportSheet') updateExportName();
 
   renderEdit();
   renderTransport();
 }
 
-render();
+apply();
