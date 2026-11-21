@@ -31,7 +31,7 @@ html {
 body {
   margin: 0;
   min-height: 100dvh;
-  background: #120c1f;
+  background: transparent;
   color: var(--text);
   font: 16px/1.4 -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -68,11 +68,21 @@ svg {
 
 .bg {
   position: fixed;
-  inset: -12%;
-  width: 124%;
-  height: 124%;
-  filter: blur(42px) saturate(1.35);
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
   z-index: -3;
+}
+/* Backup in the cover's colours (set by backdrop.ts), under the canvas. */
+html {
+  background:
+    radial-gradient(60% 45% at 20% 20%, var(--c1, #7c3ad2), transparent 75%),
+    radial-gradient(60% 45% at 80% 30%, var(--c2, #285ce1), transparent 75%),
+    radial-gradient(60% 45% at 25% 80%, var(--c3, #d63e96), transparent 75%),
+    radial-gradient(60% 45% at 75% 85%, var(--c4, #40248c), transparent 75%),
+    #120c1f;
+  background-attachment: fixed;
 }
 .glow {
   position: fixed;
@@ -399,39 +409,33 @@ svg {
 
 .pedal {
   height: 100%;
-  min-height: 170px;
+  min-height: 180px;
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
+  justify-content: center;
   outline: none;
 }
-.pedal-cap {
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: var(--faint);
-  line-height: 1;
-  transition: color 0.2s;
-}
-.pedal.up .pedal-cap.up {
-  color: #ff9d8a;
-}
-.pedal.down .pedal-cap.down {
-  color: #8ab4ff;
-}
+/* Frosted pill, Control Center style: the fill is the indicator. */
 .pedal-track {
   position: relative;
-  flex: 1;
-  width: 76px;
-  border-radius: 24px;
-  background: rgba(0, 0, 0, 0.22);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  height: 100%;
+  width: 84px;
+  border-radius: 30px;
+  background: rgba(255, 255, 255, 0.13);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 10px 30px rgba(0, 0, 0, 0.18);
   touch-action: none;
   cursor: ns-resize;
   overflow: hidden;
+  transform: translateZ(0); /* keeps the rounded clip crisp on Safari */
+  transition: transform 0.25s var(--spring), width 0.25s var(--spring);
+}
+.pedal.dragging .pedal-track {
+  transform: scaleX(1.06);
 }
 .pedal:focus-visible .pedal-track {
-  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.7);
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.8);
 }
 .pedal-fill {
   position: absolute;
@@ -439,55 +443,68 @@ svg {
   right: 0;
   top: 50%;
   bottom: 50%;
+  transition: background 0.3s;
 }
 .pedal.up .pedal-fill {
-  background: linear-gradient(0deg, var(--hot-2), var(--hot));
+  background: linear-gradient(0deg, rgba(255, 138, 59, 0.85), #ff3b5c);
+  box-shadow: 0 0 40px rgba(255, 59, 92, 0.6);
 }
 .pedal.down .pedal-fill {
-  background: linear-gradient(180deg, var(--cold-2), var(--cold));
+  background: linear-gradient(180deg, rgba(41, 200, 255, 0.85), #3a5bff);
+  box-shadow: 0 0 40px rgba(58, 91, 255, 0.6);
 }
-.pedal-mid {
+/* Bright line marking the current level */
+.pedal-level {
   position: absolute;
-  left: 10px;
-  right: 10px;
-  top: 50%;
-  height: 2px;
-  margin-top: -1px;
-  background: rgba(255, 255, 255, 0.45);
-  border-radius: 1px;
-}
-.pedal-notch {
-  position: absolute;
-  left: 22px;
-  right: 22px;
-  height: 1px;
-  background: rgba(255, 255, 255, 0.28);
-}
-.pedal-thumb {
-  position: absolute;
-  left: 7px;
-  right: 7px;
-  height: 36px;
-  transform: translateY(-50%);
-  border-radius: 16px;
+  left: 0;
+  right: 0;
+  height: 4px;
+  margin-top: -2px;
   background: #fff;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
-  transition: transform 0.15s var(--spring);
+  box-shadow: 0 0 14px rgba(255, 255, 255, 0.9);
   pointer-events: none;
 }
-.pedal.dragging .pedal-thumb {
-  transform: translateY(-50%) scale(1.06);
-}
-.pedal-thumb i {
-  width: 22px;
+/* Ticks on both edges: centre (original) and the snap speeds */
+.pedal-tick {
+  position: absolute;
+  left: 0;
+  right: 0;
   height: 2px;
-  border-radius: 1px;
-  background: rgba(0, 0, 0, 0.22);
+  margin-top: -1px;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.55) 14px, transparent 14px, transparent calc(100% - 14px), rgba(255, 255, 255, 0.55) calc(100% - 14px));
+}
+.pedal-tick.small {
+  height: 1px;
+  margin-top: 0;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.35) 8px, transparent 8px, transparent calc(100% - 8px), rgba(255, 255, 255, 0.35) calc(100% - 8px));
+}
+.pedal-icon {
+  position: absolute;
+  left: 50%;
+  width: 24px;
+  height: 24px;
+  margin-left: -12px;
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.45);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+  transition: stroke 0.25s, transform 0.25s var(--spring);
+}
+.pedal-icon.up {
+  top: 12px;
+}
+.pedal-icon.down {
+  bottom: 12px;
+}
+.pedal.up .pedal-icon.up,
+.pedal.down .pedal-icon.down {
+  stroke: #fff;
+  transform: scale(1.12);
 }
 
 .play-slot {

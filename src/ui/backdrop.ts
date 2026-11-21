@@ -55,8 +55,12 @@ export class Backdrop {
     this.ctx = canvas.getContext('2d')!;
     this.from = palette.map(lift);
     this.to = this.from;
-    canvas.width = 36;
-    canvas.height = 64;
+    // Small canvas, stretched by CSS. The radial gradients are already soft,
+    // so no CSS blur is needed (iOS Safari is unreliable with filters on a
+    // fixed, constantly redrawn canvas).
+    canvas.width = 90;
+    canvas.height = 160;
+    this.setCssFallback(this.to);
     requestAnimationFrame(this.frame);
   }
 
@@ -65,6 +69,14 @@ export class Backdrop {
     this.from = this.current();
     this.to = p.map(lift);
     this.mix = 0;
+    this.setCssFallback(this.to);
+  }
+
+  /** A plain CSS gradient in the same colours sits under the canvas, so the
+   *  page still takes on the cover's colours if the canvas can't draw. */
+  private setCssFallback(p: RGB[]) {
+    const root = document.documentElement.style;
+    p.forEach((c, i) => root.setProperty(`--c${i + 1}`, `rgb(${c.join(',')})`));
   }
 
   private current(): RGB[] {

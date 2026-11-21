@@ -24,19 +24,25 @@ export class Pedal {
     el.setAttribute('aria-valuemin', String(MIN_RATIO));
     el.setAttribute('aria-valuemax', String(MAX_RATIO));
     el.tabIndex = 0;
+    // Control Center-style: a frosted pill whose colour fill grows from the
+    // middle line, with a bright level line instead of a knob.
+    const chevrons = (dir: 'up' | 'down') =>
+      `<svg class="pedal-icon ${dir}" viewBox="0 0 24 24" aria-hidden="true">${
+        dir === 'up' ? '<path d="M6 13l6-6 6 6M6 19l6-6 6 6"/>' : '<path d="M6 5l6 6 6-6M6 11l6 6 6-6"/>'
+      }</svg>`;
     el.innerHTML = `
-      <span class="pedal-cap up" aria-hidden="true">+</span>
       <div class="pedal-track">
         <div class="pedal-fill"></div>
-        <div class="pedal-mid"></div>
+        <div class="pedal-tick" style="top:50%"></div>
         ${NOTCHES.filter((n) => n !== 1)
-          .map((n) => `<div class="pedal-notch" style="top:${this.toY(n) * 100}%"></div>`)
+          .map((n) => `<div class="pedal-tick small" style="top:${this.toY(n) * 100}%"></div>`)
           .join('')}
-        <div class="pedal-thumb"><i></i><i></i><i></i></div>
-      </div>
-      <span class="pedal-cap down" aria-hidden="true">−</span>`;
+        ${chevrons('up')}
+        ${chevrons('down')}
+        <div class="pedal-level"></div>
+      </div>`;
     this.track = el.querySelector('.pedal-track')!;
-    this.thumb = el.querySelector('.pedal-thumb')!;
+    this.thumb = el.querySelector('.pedal-level')!;
     this.fill = el.querySelector('.pedal-fill')!;
 
     let startY = 0;
