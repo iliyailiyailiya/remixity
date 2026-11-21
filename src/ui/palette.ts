@@ -102,9 +102,12 @@ export async function generatedCover(title: string): Promise<Blob> {
   }
 
   ctx.fillStyle = 'rgba(255,255,255,0.75)';
-  ctx.font = '600 30px system-ui, -apple-system, sans-serif';
   ctx.letterSpacing = '10px';
-  ctx.fillText('THE REMIXITY', 56, 84);
+  ctx.font = '300 30px system-ui, -apple-system, sans-serif';
+  ctx.fillText('THE ', 56, 84);
+  const theW = ctx.measureText('THE ').width;
+  ctx.font = '800 30px system-ui, -apple-system, sans-serif';
+  ctx.fillText('REMIXITY', 56 + theW, 84);
 
   ctx.fillStyle = '#fff';
   ctx.letterSpacing = '-2px';

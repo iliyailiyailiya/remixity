@@ -67,7 +67,40 @@ function thumbnail(img: CanvasImageSource): HTMLCanvasElement {
   t.imageSmoothingEnabled = true;
   t.imageSmoothingQuality = 'high';
   t.drawImage(mid, 0, 0, 12, 12);
-  return tiny;
+  return soften(tiny);
+}
+
+/**
+ * Blow the tiny colour map up to 128px and blur it, so later upscaling is
+ * smooth (a bare 12px image stretched over a screen shows blocky creases).
+ * The blur is a running average of offset copies, which needs no ctx.filter
+ * and no pixel readback, so it behaves the same in every browser.
+ */
+function soften(tiny: HTMLCanvasElement): HTMLCanvasElement {
+  const S = 128;
+  const out = document.createElement('canvas');
+  out.width = out.height = S;
+  const o = out.getContext('2d')!;
+  o.imageSmoothingEnabled = true;
+  o.imageSmoothingQuality = 'high';
+  o.drawImage(tiny, 0, 0, S, S);
+
+  const tmp = document.createElement('canvas');
+  tmp.width = tmp.height = S;
+  const tc = tmp.getContext('2d')!;
+  const dirs: [number, number][] = [];
+  for (let a = 0; a < 8; a++) dirs.push([Math.cos((a * Math.PI) / 4), Math.sin((a * Math.PI) / 4)]);
+  for (const r of [14, 9, 6, 4, 2]) {
+    tc.clearRect(0, 0, S, S);
+    tc.drawImage(out, 0, 0);
+    // Each tap blended at 1/(k+1) keeps an exact running average.
+    dirs.forEach(([dx, dy], k) => {
+      o.globalAlpha = 1 / (k + 2);
+      o.drawImage(tmp, dx * r, dy * r);
+    });
+    o.globalAlpha = 1;
+  }
+  return out;
 }
 
 export class Backdrop {
@@ -90,8 +123,8 @@ export class Backdrop {
     this.palette = palette.map(lift);
     // Small canvas, stretched by CSS: the content is soft anyway, and no CSS
     // blur is needed (iOS Safari is unreliable with filters on a canvas).
-    canvas.width = 90;
-    canvas.height = 160;
+    canvas.width = 180;
+    canvas.height = 320;
     this.setCssFallback(this.palette);
     requestAnimationFrame(this.frame);
   }
