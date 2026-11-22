@@ -196,29 +196,105 @@ export interface FoundCover {
   artist: string;
 }
 
+interface Hit {
+  cover: string;
+  title: string;
+  artist: string;
+  source: 'apple' | 'deezer';
+}
+
+/** Apple's catalogue: plain song search, then the artist's full catalogue. */
+async function appleHit(t: string, artist: string | null, signal: AbortSignal): Promise<Hit | undefined> {
+  const h = (await searchSongs(t, artist, signal)) ?? (await searchCatalogue(t, artist, signal));
+  if (!h?.artworkUrl100) return undefined;
+  return {
+    // The API links a 100px thumbnail; the same path serves bigger sizes.
+    cover: h.artworkUrl100.replace(/\/\d+x\d+bb\.(jpg|png)$/, '/1000x1000bb.$1'),
+    title: h.trackName ?? '',
+    artist: h.artistName ?? '',
+    source: 'apple',
+  };
+}
+
+interface DeezerTrack {
+  title?: string;
+  title_short?: string;
+  artist?: { name?: string };
+  album?: { cover_xl?: string };
+}
+
+/**
+ * Deezer's catalogue, through our relay (Deezer doesn't allow browser
+ * requests, and unlike Apple it doesn't rate-limit the relay). Without a
+ * known artist, the whole name is searched, then a shortened version.
+ */
+async function deezerHit(t: string, artist: string | null, signal: AbortSignal): Promise<Hit | undefined> {
+  const words = t.split(/\s+/).filter(Boolean);
+  const queries = artist
+    ? [`${artistsOf(artist)[0]} ${t}`]
+    : [t, words.length > 3 ? `${words[0]} ${words.slice(-2).join(' ')}` : ''].filter(Boolean);
+  const whole = norm(t);
+  for (const q of queries) {
+    let data: DeezerTrack[] = [];
+    const t0 = performance.now();
+    try {
+      const r = await fetch(`/api/deezer?q=${encodeURIComponent(q)}`, { signal });
+      if (!r.ok) {
+        log(`deezer ${q} → HTTP ${r.status}`);
+        continue;
+      }
+      data = ((await r.json()) as { data?: DeezerTrack[] }).data ?? [];
+      log(`deezer ${q} → ${data.length} results, ${Math.round(performance.now() - t0)} ms`);
+    } catch (err) {
+      if (signal.aborted) throw err;
+      log(`deezer ${q} → ${(err as Error).message}`);
+      continue;
+    }
+    const hit = data.find((x) => {
+      const name = x.title_short || x.title || '';
+      const by = x.artist?.name ?? '';
+      if (!x.album?.cover_xl) return false;
+      if (artist) return closeMatch(name, t) && artistMatches(by, artist);
+      // No artist: both the song and the artist must appear in the file name.
+      return norm(name).length >= 4 && whole.includes(norm(name)) && norm(by).length >= 2 && whole.includes(norm(by));
+    });
+    if (hit) return { cover: hit.album!.cover_xl!, title: hit.title ?? '', artist: hit.artist?.name ?? '', source: 'deezer' };
+  }
+  return undefined;
+}
+
 /**
  * Look the song up and return its cover (and proper names), or null.
- * Gives up quietly after a few seconds or on any error.
+ * Apple first; Deezer when Apple has no match. If Apple can't be reached
+ * directly, Deezer goes first (Apple rate-limits our relay).
+ * Gives up quietly after a while or on any error.
  */
 export async function findCover(title: string, artist: string | null): Promise<FoundCover | null> {
   const t = cleanTitle(title);
   if (!t) return null;
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), 20000); // generous for slow mobile data
+  const { signal } = ctl;
   try {
-    const hit = (await searchSongs(t, artist, ctl.signal)) ?? (await searchCatalogue(t, artist, ctl.signal));
-    if (!hit?.artworkUrl100) {
+    const apple = () => appleHit(t, artist, signal).catch((err) => (signal.aborted ? Promise.reject(err) : undefined));
+    const deezer = () => deezerHit(t, artist, signal);
+    const hit = viaRelay ? ((await deezer()) ?? (await apple())) : ((await apple()) ?? (await deezer()));
+    if (!hit) {
       log(`no match for "${t}" / "${artist ?? ''}"`);
       return null;
     }
-    log(`match: ${hit.artistName} – ${hit.trackName}`);
-    // The API links a 100px thumbnail; the same path serves bigger sizes.
-    const big = hit.artworkUrl100.replace(/\/\d+x\d+bb\.(jpg|png)$/, '/1000x1000bb.$1');
-    const img = await fetchApple(new URL(big), () => `/api/art?u=${encodeURIComponent(big)}`, ctl.signal);
+    log(`match (${hit.source}): ${hit.artist} – ${hit.title}`);
+    const img =
+      hit.source === 'apple'
+        ? await fetchApple(new URL(hit.cover), () => `/api/art?u=${encodeURIComponent(hit.cover)}`, signal)
+        : await fetch(hit.cover, { signal }).catch((err) => {
+            if (signal.aborted) throw err;
+            return fetch(`/api/art?u=${encodeURIComponent(hit.cover)}`, { signal });
+          });
     if (!img.ok) return null;
     const image = await img.blob();
     if (!image.type.startsWith('image/')) return null;
-    return { image, title: hit.trackName ?? '', artist: hit.artistName ?? '' };
+    return { image, title: hit.title, artist: hit.artist };
   } catch (err) {
     log(`gave up: ${(err as Error).name}: ${(err as Error).message}`);
     return null;

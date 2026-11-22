@@ -1,6 +1,6 @@
-// Relay for cover images from Apple's image servers (*.mzstatic.com), used
-// only when a visitor's browser can't load them directly. Only https URLs on
-// mzstatic.com are accepted. Nothing is stored or logged.
+// Relay for cover images from Apple (*.mzstatic.com) and Deezer (*.dzcdn.net),
+// used only when a visitor's browser can't load them directly. Only https
+// URLs on those hosts are accepted. Nothing is stored or logged.
 
 export const onRequest = async ({ request }: { request: Request }): Promise<Response> => {
   if (request.method !== 'GET') return new Response('Method not allowed', { status: 405 });
@@ -11,7 +11,7 @@ export const onRequest = async ({ request }: { request: Request }): Promise<Resp
   } catch {
     return new Response('Bad request', { status: 400 });
   }
-  if (target.protocol !== 'https:' || !/(^|\.)mzstatic\.com$/.test(target.hostname))
+  if (target.protocol !== 'https:' || !/(^|\.)(mzstatic\.com|dzcdn\.net)$/.test(target.hostname))
     return new Response('Forbidden', { status: 403 });
 
   const r = await fetch(target.toString(), { cf: { cacheTtlByStatus: { '200-299': 604800, '300-599': 0 }, cacheEverything: true } } as RequestInit);
