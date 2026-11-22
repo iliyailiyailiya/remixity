@@ -635,12 +635,6 @@ html {
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-.skip-btn text {
-  fill: currentColor;
-  stroke: none;
-  font: 700 6.2px system-ui, -apple-system, sans-serif;
-  text-anchor: middle;
-}
 .page-play .play-btn {
   width: 92px;
   height: 92px;

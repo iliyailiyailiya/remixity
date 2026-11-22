@@ -868,8 +868,6 @@ function skip(seconds: number) {
   player.seek(Math.min(player.duration, Math.max(0, player.position + seconds * params.ratio)));
   render();
 }
-$('back10').addEventListener('click', () => skip(-10));
-$('fwd10').addEventListener('click', () => skip(10));
 function goPage(i: number) {
   i = Math.min(PAGES.length - 1, Math.max(0, i));
   pagesEl.scrollTo({ left: i * pagesEl.clientWidth, behavior: 'smooth' });
