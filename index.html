@@ -36,6 +36,7 @@
       <label for="file" class="cta" data-i18n="chooseSong"></label>
       <p id="status" class="status" role="status" aria-live="polite"></p>
       <p class="fine" data-i18n="privacy"></p>
+      <p class="fine legal"><a href="/privacy.html" data-i18n="privacyLink"></a> · <a href="/terms.html" data-i18n="termsLink"></a></p>
     </section>
 
     <!-- ===== Player ===== -->
@@ -288,6 +289,7 @@
           </select>
         </div>
         <p class="fine" data-i18n="privacy"></p>
+        <p class="fine legal"><a href="/privacy.html" data-i18n="privacyLink"></a> · <a href="/terms.html" data-i18n="termsLink"></a></p>
       </div>
     </section>
 
@@ -308,7 +310,75 @@
         <button id="export" class="primary" data-i18n="export"></button>
         <div id="progress" class="progress" hidden><div></div></div>
         <p id="exportStatus" class="status" aria-live="polite"></p>
-        <a id="downloadLink" class="download" hidden data-i18n="download"></a>
+        <div class="share-row">
+          <a id="downloadLink" class="download" hidden data-i18n="download"></a>
+          <button id="webShare" class="ghost-btn" hidden>
+            <svg viewBox="0 0 24 24"><path d="M12 15V4M8 8l4-4 4 4M6 12v7h12v-7" /></svg>
+            <span data-i18n="shareFile"></span>
+          </button>
+        </div>
+        <button id="scOpen" class="sc-btn" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 15.5v-3M6 17v-6M9 17V9M12 17V7.5c3.5 0 5.5 2.4 5.8 4.6A2.6 2.6 0 0 1 21 14.6 2.5 2.5 0 0 1 18.5 17H12" /></svg>
+          <span data-i18n="scOpen"></span>
+        </button>
+      </div>
+    </section>
+
+    <section id="scSheet" class="sheet" aria-hidden="true" aria-labelledby="scSheetTitle">
+      <button class="grabber" data-close aria-label="Close"></button>
+      <div class="sheet-body">
+        <h2 id="scSheetTitle" class="sheet-title" data-i18n="scTitle"></h2>
+
+        <div class="sc-account">
+          <p id="scAccount" class="sc-account-text"></p>
+          <button id="scDisconnect" class="link-btn" data-i18n="scDisconnect" hidden></button>
+        </div>
+
+        <div class="card sc-form">
+          <label class="field">
+            <small data-i18n="scFieldTitle"></small>
+            <input id="scTrackTitle" type="text" maxlength="100" autocomplete="off" />
+          </label>
+          <label class="field">
+            <span class="field-head"><small data-i18n="scFieldDesc"></small>
+              <button id="scDescClear" type="button" class="link-btn" data-i18n="scRemoveDesc"></button></span>
+            <textarea id="scDesc" rows="3" maxlength="4000"></textarea>
+          </label>
+          <label class="field">
+            <small data-i18n="scFieldTags"></small>
+            <input id="scTags" type="text" autocomplete="off" autocapitalize="off" />
+            <small class="hint" data-i18n="scTagsHint"></small>
+          </label>
+
+          <div class="sc-art">
+            <img id="scArt" alt="" />
+            <div>
+              <small data-i18n="scArtwork"></small>
+              <label class="switch small">
+                <input id="scWatermark" type="checkbox" checked />
+                <span class="track"><i></i></span>
+                <span data-i18n="scWatermark"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="formats" role="radiogroup">
+            <label><input type="radio" name="scSharing" value="private" checked /><span data-i18n="scPrivate"></span></label>
+            <label><input type="radio" name="scSharing" value="public" /><span data-i18n="scPublic"></span></label>
+          </div>
+
+          <label class="check">
+            <input id="scRights" type="checkbox" />
+            <span data-i18n="scRights"></span>
+          </label>
+          <p class="hint" data-i18n="scCopyrightNote"></p>
+        </div>
+
+        <button id="scGo" class="primary"></button>
+        <div id="scProgress" class="progress" hidden><div></div></div>
+        <p id="scStatus" class="status" aria-live="polite"></p>
+        <a id="scResult" class="download" target="_blank" rel="noopener" hidden data-i18n="scOpenTrack"></a>
+        <p class="fine legal"><a href="/privacy.html" data-i18n="privacyLink"></a> · <a href="/terms.html" data-i18n="termsLink"></a></p>
       </div>
     </section>
 

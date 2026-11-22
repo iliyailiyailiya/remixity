@@ -1587,3 +1587,189 @@ input[type='range'] {
   color: #ffc861;
   margin-bottom: 2px;
 }
+
+/* ----- Sharing ----- */
+
+.share-row {
+  display: flex;
+  gap: 8px;
+}
+.share-row:has(> :not([hidden])) {
+  margin-top: 12px;
+}
+.share-row .download {
+  flex: 1;
+}
+.ghost-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 16px;
+  min-height: 50px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+.ghost-btn svg,
+.sc-btn svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.sc-btn {
+  width: 100%;
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px;
+  border-radius: 16px;
+  border: 0;
+  background: #ff5500; /* SoundCloud orange */
+  color: #fff;
+  font-weight: 750;
+  font-size: 1rem;
+  transition: transform 0.2s var(--spring);
+}
+.sc-btn:active {
+  transform: scale(0.97);
+}
+
+.sc-account {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: -4px 2px 12px;
+}
+.sc-account-text {
+  flex: 1;
+  margin: 0;
+  color: var(--dim);
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+.link-btn {
+  border: 0;
+  background: none;
+  padding: 4px 0;
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 650;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.sc-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.field small {
+  color: var(--dim);
+  font-weight: 600;
+}
+.field-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.field input,
+.field textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.18);
+  color: #fff;
+  padding: 11px 12px;
+  font: inherit;
+  font-size: 16px; /* no iOS focus zoom */
+  resize: vertical;
+}
+.field input:focus,
+.field textarea:focus {
+  outline: 2px solid rgba(255, 255, 255, 0.7);
+  outline-offset: 0;
+}
+.field .hint {
+  margin: 0;
+}
+
+.sc-art {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.sc-art img {
+  width: 84px;
+  height: 84px;
+  flex: none;
+  border-radius: 10px;
+  object-fit: cover;
+  background: var(--glass);
+}
+.sc-art > div {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.sc-art small {
+  color: var(--dim);
+  font-weight: 600;
+}
+.sc-art .switch {
+  margin: 0;
+  font-size: 0.88rem;
+}
+.sc-form .formats {
+  margin-bottom: 0;
+}
+
+.check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 0.92rem;
+  font-weight: 600;
+  line-height: 1.35;
+  cursor: pointer;
+}
+.check input {
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  flex: none;
+  accent-color: #34c759;
+}
+.sc-form > .hint {
+  margin: -4px 0 0;
+}
+
+.status.error {
+  color: #ffb4a8;
+}
+#scResult {
+  margin-top: 10px;
+}
+
+.legal a {
+  color: inherit;
+  text-underline-offset: 3px;
+}

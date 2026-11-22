@@ -10,6 +10,7 @@ import { detectBpm } from './engine/bpm';
 import { readbackIsNoisy } from './engine/noisecheck';
 import { Waveform } from './ui/waveform';
 import { EqView } from './ui/eqview';
+import { initShare } from './share/ui';
 import { Backdrop } from './ui/backdrop';
 import { defaultPalette, generatedCover, paletteFrom } from './ui/palette';
 import { Pedal, MAX_RATIO, MIN_RATIO } from './ui/pedal';
@@ -168,6 +169,9 @@ async function load(file: File) {
     playerView.hidden = false;
     status.textContent = '';
     $('downloadLink').hidden = true;
+    lastExport = null;
+    share.refreshWebShare();
+    share.trackChanged();
 
     origBpm = null;
     detectingBpm = true;
@@ -810,14 +814,36 @@ const link = $<HTMLAnchorElement>('downloadLink');
 const currentFormat = () =>
   (document.querySelector('input[name="fmt"]:checked') as HTMLInputElement).value as Format;
 
-function outputName(fmt: Format) {
+function remixTag() {
   const r = params.ratio;
-  let tag = 'remix';
-  if (r < 0.999) tag = params.reverbMix > 0.05 ? 'slowed + reverb' : 'slowed';
-  else if (r > 1.001) tag = r >= 1.15 ? 'nightcore' : 'sped up';
-  else if (params.reverbMix > 0.05) tag = 'reverb';
-  return safeFileName(`${trackName} (${tag})`) + (fmt === 'mp3' ? '.mp3' : '.wav');
+  if (r < 0.999) return params.reverbMix > 0.05 ? 'slowed + reverb' : 'slowed';
+  if (r > 1.001) return r >= 1.15 ? 'nightcore' : 'sped up';
+  return params.reverbMix > 0.05 ? 'reverb' : 'remix';
 }
+
+function outputName(fmt: Format) {
+  return safeFileName(`${trackName} (${remixTag()})`) + (fmt === 'mp3' ? '.mp3' : '.wav');
+}
+
+// The last file the user exported, for the share sheet.
+let lastExport: { blob: Blob; name: string } | null = null;
+
+const share = initShare({
+  renderMp3: (onProgress) => {
+    if (!buffer) return Promise.reject(new Error('no track'));
+    return exportAudio(buffer, { ...params }, 'mp3', (_stage, f) => onProgress(f));
+  },
+  fileName: () => outputName('mp3'),
+  remixTag,
+  title: () => $('title').textContent || trackName,
+  artist: () => {
+    const a = $('artist').textContent || '';
+    return a && a !== t('yourTrack') ? a : null;
+  },
+  coverSrc: () => coverUrl,
+  lastExport: () => lastExport,
+  showSheet,
+});
 
 function updateExportName() {
   $('exportName').textContent = outputName(currentFormat());
@@ -846,6 +872,8 @@ exportBtn.addEventListener('click', async () => {
     link.download = outputName(fmt);
     link.hidden = false;
     link.textContent = `${t('download')} · ${(blob.size / 1048576).toFixed(1)} MB`;
+    lastExport = { blob, name: outputName(fmt) };
+    share.refreshWebShare();
     exportStatus.textContent = '';
     link.click();
   } catch (err) {
