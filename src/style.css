@@ -2241,9 +2241,12 @@ input[type='range'] {
   position: relative;
   flex: 1;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 .lyrics {
-  height: 100%;
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   scrollbar-width: none;
   padding: 26px 2px 70px;
@@ -2302,8 +2305,10 @@ input[type='range'] {
 }
 .lyrics.plain + .lyrics-status {
   position: static;
-  margin-top: 6px;
-  font-size: 0.75rem;
+  flex: none;
+  margin-top: 4px;
+  font-size: 0.72rem;
+  line-height: 1.3;
 }
 
 /* Big lyrics: the whole screen, over the moving cover background */
