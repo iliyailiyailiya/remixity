@@ -89,7 +89,7 @@ const closeMatch = (a: string, b: string) => {
  */
 function artistsOf(artist: string): string[] {
   const parts = artist
-    .split(/\s*(?:,|&|\+|\/|;|\bx\b|\bfeat\.?|\bft\.?|\bwith\b|\band\b|\bи\b)\s*/i)
+    .split(/\s*(?:,|&|\+|\/|;|\bx\b|\bfeat\.?|\bft\.?|\bwith\b|\band\b|\baka\b|\bи\b)\s*/i)
     .map((p) => p.trim())
     .filter((p) => norm(p).length >= 2);
   // "Default缺省": a Latin and a Chinese name glued together; try each too.
@@ -364,18 +364,31 @@ async function musicbrainzHit(t: string, artist: string | null, signal: AbortSig
 export async function findCover(title: string, artist: string | null): Promise<FoundCover | null> {
   const t = cleanTitle(title);
   if (!t) return null;
-  // Readings of a possibly messy tag, most reliable first: a title holding
-  // "Artist - Song", the names as given, then the title alone.
+  // Readings of a possibly messy tag, most reliable first: a title that
+  // starts with the artist ("KORNELL AKA PIERMID-BALLS…", even without spaces
+  // around the dash), a title holding "Artist - Song", the names as given,
+  // then the title alone. A trailing uploader credit ("… By Middiwest Music")
+  // is only dropped in a later attempt, so "Stand By Me" stays intact first.
   const readings: [string, string | null][] = [];
+  const add = (rt: string, ra: string | null) => {
+    readings.push([rt, ra]);
+    const noBy = rt.replace(/\s+by\s+\S.*$/i, '').trim();
+    if (noBy && noBy !== rt) readings.push([noBy, ra]);
+  };
+  if (artist) {
+    const lead = t.toLowerCase().startsWith(artist.trim().toLowerCase());
+    const rest = lead ? cleanTitle(t.slice(artist.trim().length).replace(/^\s*[-–—:|~]\s*/, '')) : '';
+    if (rest) add(rest, artist);
+  }
   const split = t.match(/^(.+?)\s+[-–—]\s+(.+)$/);
-  if (split) readings.push([cleanTitle(split[2]), split[1].trim()]);
-  readings.push([t, artist]);
+  if (split) add(cleanTitle(split[2]), split[1].trim());
+  add(t, artist);
   // The bare title before any bracket, e.g. "Pattern (feat. X) [Remix 2]".
   const base = (split ? cleanTitle(split[2]) : t).split(/\s*[([{]/)[0].trim();
   if (base) readings.push([base, split ? split[1].trim() : artist]);
   if (artist) readings.push([t, null]);
   const seen = new Set<string>();
-  for (const [rt, ra] of readings) {
+  for (const [rt, ra] of readings.slice(0, 6)) {
     const key = `${rt}|${ra ?? ''}`;
     if (!rt || seen.has(key)) continue;
     seen.add(key);
