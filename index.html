@@ -523,6 +523,25 @@
       </div>
     </section>
 
+    <section id="trackSheet" class="sheet compact" aria-hidden="true" aria-labelledby="trackSheetTitle">
+      <button class="grabber" data-close aria-label="Close"></button>
+      <div class="sheet-body">
+        <h2 id="trackSheetTitle" class="sheet-title" data-i18n="songInfo"></h2>
+        <p class="hint info-hint" data-i18n="songInfoHint"></p>
+        <div class="card sc-form">
+          <label class="field">
+            <small data-i18n="tagTitle"></small>
+            <input id="trackTitleIn" type="text" autocomplete="off" />
+          </label>
+          <label class="field">
+            <small data-i18n="tagArtist"></small>
+            <input id="trackArtistIn" type="text" autocomplete="off" />
+          </label>
+        </div>
+        <button id="trackSave" class="primary" data-i18n="saveInfo"></button>
+      </div>
+    </section>
+
     <section id="nameSheet" class="sheet compact" aria-hidden="true" aria-labelledby="nameSheetTitle">
       <button class="grabber" data-close aria-label="Close"></button>
       <div class="sheet-body">

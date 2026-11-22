@@ -2655,3 +2655,23 @@ input[type='range'] {
 .fix-originals .ghost-btn {
   width: 100%;
 }
+
+.fix-missed-head {
+  margin: 18px 2px 4px;
+  color: var(--dim);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.fix-row.missed {
+  cursor: default;
+}
+.fix-edit {
+  flex: none;
+  min-height: 36px;
+  padding: 0 14px;
+  font-size: 0.85rem;
+}
+.warn-text {
+  color: #ffc861 !important;
+  white-space: normal !important;
+}

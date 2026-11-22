@@ -10,6 +10,7 @@ import { t } from '../i18n';
 import { findCover, includesArtist, sameName } from '../ui/coverSearch';
 import { allTracks, updateTrack, type Track } from './db';
 import { canUseFolders, updateOriginals } from './export';
+import { editTrackNames } from './editSheet';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const fill = (text: string, vars: Record<string, string | number>) =>
@@ -44,6 +45,8 @@ export function initFix(ctx: FixContext) {
   let running = false;
   let stop = false;
   let proposals: Proposal[] = [];
+  let missed: Track[] = []; // songs the search couldn't place
+  const stillMissing = new Set<string>();
   let urls: string[] = [];
 
   const url = (b: Blob | null) => {
@@ -115,7 +118,65 @@ export function initFix(ctx: FixContext) {
         return row;
       }),
     );
+    if (missed.length) {
+      const head = document.createElement('p');
+      head.className = 'fix-missed-head';
+      head.textContent = fill(t('fixMissed'), { n: missed.length });
+      list.append(head);
+      for (const tr of missed) {
+        const row = document.createElement('div');
+        row.className = 'fix-row missed';
+        const text = document.createElement('span');
+        text.className = 'lib-text';
+        const name = document.createElement('span');
+        name.className = 'lib-name';
+        name.textContent = tr.title;
+        const by = document.createElement('span');
+        by.className = 'lib-sub';
+        by.textContent = tr.artist ?? t('unknownArtist');
+        text.append(name, by);
+        if (stillMissing.has(tr.id)) {
+          const note = document.createElement('span');
+          note.className = 'fix-old plain warn-text';
+          note.textContent = t('fixStillMissing');
+          text.append(note);
+        }
+        const btn = document.createElement('button');
+        btn.className = 'ghost-btn fix-edit';
+        btn.textContent = t('fixEdit');
+        btn.addEventListener('click', () => void editAndRetry(tr));
+        row.append(thumb(tr.cover, tr.title), text, btn);
+        list.append(row);
+      }
+    }
     updateApply();
+  }
+
+  /** Fix a missed song's names by hand, then search again right away. */
+  async function editAndRetry(tr: Track) {
+    const updated = await editTrackNames(tr, ctx.showSheet, ctx.closeSheets);
+    ctx.showSheet(sheet);
+    if (!updated) return;
+    ctx.onApplied(); // the new names are saved: redraw the library
+    status.textContent = t('findingCover');
+    const found = await findCover(updated.title, updated.artist);
+    missed = missed.filter((m) => m.id !== tr.id);
+    if (found) {
+      stillMissing.delete(tr.id);
+      const title = found.title && !sameName(found.title, updated.title) ? found.title : null;
+      const artist =
+        found.artist && !sameName(found.artist, updated.artist) && !(updated.artist && includesArtist(updated.artist, found.artist))
+          ? found.artist
+          : null;
+      const cover = !updated.cover || replaceCovers.checked ? found.image : null;
+      if (title || artist || cover) proposals.push({ track: updated, title, artist, cover, apply: true });
+      status.textContent = '';
+    } else {
+      stillMissing.add(tr.id);
+      missed.push(updated);
+      status.textContent = '';
+    }
+    renderList();
   }
 
   function updateApply() {
@@ -129,6 +190,8 @@ export function initFix(ctx: FixContext) {
     running = true;
     stop = false;
     proposals = [];
+    missed = [];
+    stillMissing.clear();
     renderList();
     startBtn.textContent = t('fixStop');
     bar.hidden = false;
@@ -152,6 +215,9 @@ export function initFix(ctx: FixContext) {
           proposals.push({ track: tr, title, artist, cover, apply: true });
           renderList();
         }
+      } else {
+        missed.push(tr);
+        renderList();
       }
       // Be gentle with the catalogues (MusicBrainz allows ~1 request/second).
       await wait(600);

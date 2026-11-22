@@ -4,6 +4,7 @@
 import { t } from '../i18n';
 import { allPlaylists, allTracks, deletePlaylist, deleteTrack, newId, savePlaylist, type Playlist, type Track } from './db';
 import { importFiles } from './import';
+import { editTrackNames } from './editSheet';
 import { canShareBatches, canUseFolders, cleanedFile, prepareBatch, saveAsZip, saveToFolder, shareOrDownload } from './export';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -233,6 +234,10 @@ export function initLibrary(ctx: LibraryContext) {
     file.catch(() => {});
     const items = [
       { label: t('playNext'), run: () => ctx.playNext(tr.id) },
+      {
+        label: t('editInfo2'),
+        run: () => void editTrackNames(tr, ctx.showSheet, ctx.closeSheets).then((u) => u && refresh()),
+      },
       {
         label: t('saveCopy'),
         run: () =>
