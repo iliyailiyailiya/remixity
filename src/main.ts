@@ -36,6 +36,8 @@ let trackName = '';
 let songTitle = '';
 let songArtist: string | null = null;
 let coverIsGenerated = false;
+// The cover embedded in the file (kept so a found cover can be undone).
+let fileCoverUrl = '';
 let coverUrl = '';
 let loadToken = 0;
 let player: Player | null = null;
@@ -157,14 +159,18 @@ async function load(file: File) {
     // Cover art (or a generated one) drives the background colours.
     const cover = $<HTMLImageElement>('cover');
     if (coverUrl) URL.revokeObjectURL(coverUrl);
+    if (fileCoverUrl && fileCoverUrl !== coverUrl) URL.revokeObjectURL(fileCoverUrl);
     coverUrl = URL.createObjectURL(meta.cover ?? (await generatedCover(title)));
+    fileCoverUrl = meta.cover ? coverUrl : '';
     cover.onerror = async () => {
       // Embedded art the browser can't show: fall back to a generated cover.
       cover.onerror = null;
       URL.revokeObjectURL(coverUrl);
+      fileCoverUrl = '';
       coverUrl = URL.createObjectURL(await generatedCover(title));
       cover.src = coverUrl;
       setGeneratedCover(true);
+      setAltCover(null);
     };
     cover.onload = async () => {
       // Paint the cover itself as the background (no pixel readback, so it
@@ -180,6 +186,8 @@ async function load(file: File) {
     songTitle = title;
     songArtist = meta.artist || fromName.artist || null;
     setGeneratedCover(!meta.cover);
+    // The file has its own cover: leave it, but offer a search on request.
+    setAltCover(meta.cover ? 'search' : null);
     if (!meta.cover && findCoversEnabled()) void searchCover(token, false);
 
     home.hidden = true;
@@ -332,15 +340,58 @@ async function searchCover(token: number, manual: boolean) {
     if (manual) setTimeout(() => token === loadToken && coverIsGenerated && (findCoverLabel.textContent = t('findCover')), 2500);
     return;
   }
-  const cover = $<HTMLImageElement>('cover');
-  cover.onerror = null;
-  URL.revokeObjectURL(coverUrl);
-  coverUrl = URL.createObjectURL(found.image);
-  cover.src = coverUrl; // onload repaints the background
+  showCover(URL.createObjectURL(found.image));
   setGeneratedCover(false);
   updateMediaSession(songTitle, songArtist ?? '');
   suggestNames(found.title, found.artist);
 }
+
+/** Put a new cover in place (the file's own cover is kept for "restore"). */
+function showCover(url: string) {
+  const cover = $<HTMLImageElement>('cover');
+  cover.onerror = null;
+  if (coverUrl && coverUrl !== fileCoverUrl) URL.revokeObjectURL(coverUrl);
+  coverUrl = url;
+  cover.src = url; // onload repaints the background
+}
+
+// ---------- another cover for files that have one ----------
+
+const altCoverBtn = $<HTMLButtonElement>('altCoverBtn');
+function setAltCover(mode: 'search' | 'restore' | null) {
+  altCoverBtn.hidden = mode === null;
+  altCoverBtn.disabled = false;
+  altCoverBtn.classList.toggle('restore', mode === 'restore');
+  const label = t(mode === 'restore' ? 'restoreCover' : 'findOtherCover');
+  altCoverBtn.setAttribute('aria-label', label);
+  altCoverBtn.title = label;
+}
+altCoverBtn.addEventListener('click', async (e) => {
+  e.stopPropagation(); // not a play/pause tap on the cover
+  if (altCoverBtn.classList.contains('restore')) {
+    showCover(fileCoverUrl);
+    hideNameSuggestion();
+    setAltCover('search');
+    return;
+  }
+  const token = loadToken;
+  altCoverBtn.disabled = true;
+  const found = await findCover(songTitle, songArtist);
+  if (token !== loadToken) return;
+  if (!found) {
+    // Say so briefly with the same pill the generated covers use.
+    findCoverLabel.textContent = t('noCoverFound');
+    findCoverBtn.hidden = false;
+    findCoverBtn.disabled = true;
+    setTimeout(() => token === loadToken && !coverIsGenerated && (findCoverBtn.hidden = true), 2500);
+    setAltCover('search');
+    return;
+  }
+  showCover(URL.createObjectURL(found.image));
+  updateMediaSession(songTitle, songArtist ?? '');
+  suggestNames(found.title, found.artist);
+  setAltCover('restore');
+});
 
 // ---------- "Use these names?" (the catalogue's names for a messy file) ----------
 
@@ -389,12 +440,9 @@ coverFileIn.addEventListener('change', () => {
   const file = coverFileIn.files?.[0];
   coverFileIn.value = '';
   if (!file || !file.type.startsWith('image/') || !buffer) return;
-  const cover = $<HTMLImageElement>('cover');
-  cover.onerror = null;
-  URL.revokeObjectURL(coverUrl);
-  coverUrl = URL.createObjectURL(file);
-  cover.src = coverUrl; // onload repaints the background
+  showCover(URL.createObjectURL(file));
   setGeneratedCover(false);
+  if (fileCoverUrl) setAltCover('restore');
   hideNameSuggestion();
   updateMediaSession(songTitle, songArtist ?? '');
 });

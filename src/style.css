@@ -2188,3 +2188,18 @@ input[type='range'] {
   right: 54px;
   cursor: pointer;
 }
+
+/* Third corner button: find another cover (files that have one) / restore it */
+.cover-btn.alt {
+  right: 98px;
+}
+.cover-btn.alt .i-restore,
+.cover-btn.alt.restore .i-search {
+  display: none;
+}
+.cover-btn.alt.restore .i-restore {
+  display: block;
+}
+.cover-btn.alt:disabled {
+  opacity: 0.5;
+}
