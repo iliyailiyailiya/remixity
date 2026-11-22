@@ -147,6 +147,7 @@ async function load(file: File, known?: Track, ready?: Promise<Prepared>) {
       player.setRepeat(repeatOn);
       player.onEnded = () => (nextInQueue(true) ? undefined : render());
       player.onInterrupted = render;
+      player.onPlay = announcePlaying;
     }
     void player.ctx.resume();
 
@@ -744,10 +745,35 @@ if ('mediaSession' in navigator) {
 for (const ev of ['gesturestart', 'gesturechange']) document.addEventListener(ev, (e) => e.preventDefault());
 
 // Coming back to the page: wake the audio if the system parked it.
+// Only one copy of the app plays at a time: another tab, the home-screen
+// app, or an old page that kept running after a reload. Whichever starts
+// playing tells the others to pause.
+const appId = Math.random().toString(36).slice(2);
+let others: BroadcastChannel | null = null;
+try {
+  others = new BroadcastChannel('remixity-playback');
+  others.onmessage = (e: MessageEvent<{ playing?: string }>) => {
+    if (e.data?.playing && e.data.playing !== appId && player?.playing) {
+      player.pause();
+      render();
+    }
+  };
+} catch {
+  /* not supported */
+}
+function announcePlaying() {
+  try {
+    others?.postMessage({ playing: appId });
+  } catch {
+    /* closed */
+  }
+}
+
 // Leaving or reloading the page: silence it for good. (On iPhone, with the
 // "playback" audio session, the old page's sound could otherwise keep going
 // after a reload, unseen, and play on top of the next song.)
 addEventListener('pagehide', (e) => {
+  if (!e.persisted) others?.close();
   if (!player) return;
   player.pause();
   if (e.persisted) void player.ctx.suspend(); // may come back from the back/forward cache

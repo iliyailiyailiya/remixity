@@ -58,6 +58,8 @@ export class Player {
   analyser: AnalyserNode;
   onEnded: () => void = () => {};
   onInterrupted: () => void = () => {};
+  /** Playback started (by any route: button, lock screen, auto-advance). */
+  onPlay: () => void = () => {};
 
   constructor(params: FxParams) {
     this.ctx = new AudioContext({ latencyHint: 'playback' });
@@ -194,6 +196,7 @@ export class Player {
   play() {
     if (!this.buffer || this.playing) return;
     if (this.ctx.state !== 'running') void this.ctx.resume();
+    this.onPlay();
     if (this.offset >= this.duration - 0.01) this.offset = 0;
     if (this.keepPitch) {
       this.playStretched();
