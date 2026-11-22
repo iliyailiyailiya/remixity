@@ -217,8 +217,13 @@ function togglePlay() {
 // The timeline runs off one loop that never stops (cheap when paused), so
 // nothing that restarts playback (seek, skip, loop) can leave it frozen.
 function tick() {
-  if (player && !document.hidden) renderTransport();
-  requestAnimationFrame(tick);
+  requestAnimationFrame(tick); // schedule first: an error below can't stop the loop
+  if (!player || document.hidden) return;
+  try {
+    renderTransport();
+  } catch (err) {
+    console.error(err);
+  }
 }
 requestAnimationFrame(tick);
 
@@ -269,7 +274,11 @@ const barFrac = (x: number) => {
 };
 barEl.addEventListener('pointerdown', (e) => {
   if (!player) return;
-  barEl.setPointerCapture(e.pointerId);
+  try {
+    barEl.setPointerCapture(e.pointerId);
+  } catch {
+    /* pointer already gone */
+  }
   barEl.classList.add('active');
   scrubbing = barFrac(e.clientX);
   renderTransport();
@@ -288,6 +297,7 @@ const endScrub = () => {
 };
 barEl.addEventListener('pointerup', endScrub);
 barEl.addEventListener('pointercancel', endScrub);
+barEl.addEventListener('lostpointercapture', endScrub); // Safari can drop the pointer silently
 
 document.addEventListener('keydown', (e) => {
   const tag = (e.target as HTMLElement).tagName;

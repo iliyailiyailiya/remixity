@@ -10,7 +10,12 @@ export class Player {
   private buffer: AudioBuffer | null = null;
   private src: AudioBufferSourceNode | null = null;
   private offset = 0; // position in source seconds when last (re)started
-  private startedAt = 0; // ctx time of last (re)start
+  // Seconds of playback since the last (re)start. Counted with the system
+  // clock while the audio engine runs, not with ctx.currentTime: on iOS
+  // Safari that clock can stall (e.g. after the audio route changes)
+  // while the sound keeps playing, which froze the timeline.
+  private elapsed = 0;
+  private wallLast = 0;
   private ratio = 1;
   private irKey = '';
   playing = false;
@@ -103,10 +108,23 @@ export class Player {
     if (this.playing) this.seek(this.position);
   }
 
+  private restartClock() {
+    this.elapsed = 0;
+    this.wallLast = performance.now();
+  }
+
+  /** Playback seconds since the last restart (only while audio is running). */
+  private clock() {
+    const now = performance.now();
+    if (this.ctx.state === 'running') this.elapsed += (now - this.wallLast) / 1000;
+    this.wallLast = now;
+    return this.elapsed;
+  }
+
   /** Current position in source seconds. */
   get position() {
     if (!this.playing) return this.offset;
-    let p = this.offset + (this.ctx.currentTime - this.startedAt) * this.ratio;
+    let p = this.offset + this.clock() * this.ratio;
     if (this.loop) {
       const [a, b] = this.loop;
       if (p >= b) p = a + ((p - a) % (b - a));
@@ -143,7 +161,7 @@ export class Player {
     };
     src.start(0, this.offset);
     this.src = src;
-    this.startedAt = this.ctx.currentTime;
+    this.restartClock();
     this.playing = true;
   }
 
@@ -165,7 +183,7 @@ export class Player {
     if (p.ratio !== this.ratio) {
       // Rebase the clock so the position stays correct across speed changes.
       this.offset = this.position;
-      this.startedAt = this.ctx.currentTime;
+      this.restartClock();
       this.ratio = p.ratio;
       this.src?.playbackRate.setValueAtTime(p.ratio, this.ctx.currentTime);
     }
