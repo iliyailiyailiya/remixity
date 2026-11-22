@@ -19,7 +19,8 @@ export const PLAYLIST_TITLE = 'Remixity';
 /** The button only shows once the app is registered and the ID is set. */
 export const soundcloudEnabled = CLIENT_ID !== '';
 
-export const redirectUri = () => `${location.origin}/sc-callback.html`;
+// Cloudflare Pages serves sc-callback.html at this clean address.
+export const redirectUri = () => `${location.origin}/sc-callback`;
 
 export class SoundCloudError extends Error {
   constructor(

@@ -1773,3 +1773,38 @@ input[type='range'] {
   color: inherit;
   text-underline-offset: 3px;
 }
+
+/* Manual SoundCloud posting tip (until the API app is set up) */
+.sc-tip {
+  margin-top: 12px;
+}
+.sc-tip h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+.sc-tip .hint {
+  margin: 4px 0 12px;
+}
+.sc-tip-buttons {
+  display: flex;
+  gap: 8px;
+}
+.sc-tip-buttons .ghost-btn {
+  flex: 1;
+  min-height: 44px;
+  padding: 0 10px;
+  font-size: 0.88rem;
+}
+.ghost-btn.done {
+  border-color: #34c759;
+  color: #b7f5c6;
+}
+.sc-tip-link {
+  display: block;
+  margin-top: 12px;
+  text-align: center;
+  color: #ff8a4c;
+  font-weight: 700;
+  font-size: 0.9rem;
+  text-underline-offset: 3px;
+}

@@ -2,7 +2,7 @@
 
 A free slowed + reverb and nightcore maker that runs fully in the browser. No uploads, no account, no Pro tier.
 
-Live: https://remixity.vercel.app. Deploy with `vercel deploy --prod` (settings are in `vercel.json`).
+Live: https://remixity.pages.dev (Cloudflare Pages). Deploy with `npm run deploy`, which builds and uploads `dist/` plus the `functions/` folder. Response headers are in `public/_headers`.
 
 ```bash
 npm install
@@ -29,16 +29,17 @@ npm run build    # static site in dist/, host anywhere
 
 ## Share to SoundCloud (setup)
 
-The button stays hidden until `VITE_SC_CLIENT_ID` is set. Audio goes straight from the
-browser to SoundCloud; only the one-time login code passes through `api/sc-token.ts`,
-because SoundCloud requires the client secret for the token exchange.
+The button stays hidden until `VITE_SC_CLIENT_ID` is set at build time. Audio goes straight
+from the browser to SoundCloud; only the one-time login code passes through
+`functions/api/sc-token.ts`, because SoundCloud requires the client secret for the token exchange.
 
 1. A SoundCloud **Artist Pro** account is required to register an API app.
 2. Register the app at https://soundcloud.com/you/apps with the redirect URI
-   `https://remixity.vercel.app/sc-callback.html`.
-3. In Vercel → Project → Settings → Environment Variables (Production), add:
-   - `VITE_SC_CLIENT_ID` = the client ID (public, turns the button on)
-   - `SC_CLIENT_ID` = the same client ID
-   - `SC_CLIENT_SECRET` = the client secret (server only)
-   - `SC_REDIRECT_URI` = `https://remixity.vercel.app/sc-callback.html`
-4. Redeploy (`vercel deploy --prod`). See `.env.example`; never commit real values.
+   `https://remixity.pages.dev/sc-callback` (use your own domain once you have one).
+3. In Cloudflare → Workers & Pages → remixity → Settings → Variables and secrets (Production), add:
+   - `SC_CLIENT_ID` = the client ID
+   - `SC_CLIENT_SECRET` = the client secret (as a secret)
+   - `SC_REDIRECT_URI` = `https://remixity.pages.dev/sc-callback`
+4. Because the site is built on your machine, put the public client ID in a local,
+   gitignored file `.env.production.local`: `VITE_SC_CLIENT_ID=<client id>`.
+5. `npm run deploy`. See `.env.example`; never commit real values.

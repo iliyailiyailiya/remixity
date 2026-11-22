@@ -5,7 +5,7 @@ import { t } from '../i18n';
 import { makeArtwork } from './artwork';
 import * as sc from './soundcloud';
 
-const SITE = 'https://remixity.vercel.app';
+const SITE = 'https://remixity.pages.dev';
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
 export interface ShareContext {
@@ -50,10 +50,47 @@ export function initShare(ctx: ShareContext) {
     }
   });
 
+  // ---------- posting to SoundCloud by hand ----------
+  // Until the API app exists, help people who upload the file themselves:
+  // copy a ready description (with the site link) and tags.
+  const tip = $('scTip');
+  const copy = async (btn: HTMLButtonElement, text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // Older browsers: copy through a temporary text field.
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.cssText = 'position:fixed;opacity:0';
+      document.body.append(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+    }
+    const label = btn.textContent;
+    btn.textContent = t('scCopied');
+    btn.classList.add('done');
+    setTimeout(() => {
+      btn.textContent = label;
+      btn.classList.remove('done');
+    }, 1600);
+  };
+  $<HTMLButtonElement>('scCopyDesc').addEventListener('click', (e) =>
+    copy(e.currentTarget as HTMLButtonElement, t('scDefaultDesc')),
+  );
+  $<HTMLButtonElement>('scCopyTags').addEventListener('click', (e) =>
+    copy(e.currentTarget as HTMLButtonElement, TAGS[ctx.remixTag()] ?? TAGS.remix),
+  );
+
+  const refresh = () => {
+    refreshWebShare();
+    tip.hidden = sc.soundcloudEnabled || !ctx.lastExport();
+  };
+
   // ---------- SoundCloud ----------
   const openBtn = $<HTMLButtonElement>('scOpen');
   openBtn.hidden = !sc.soundcloudEnabled;
-  if (!sc.soundcloudEnabled) return { refreshWebShare, trackChanged: () => {} };
+  if (!sc.soundcloudEnabled) return { refreshWebShare: refresh, trackChanged: () => {} };
 
   const sheet = $('scSheet');
   const titleIn = $<HTMLInputElement>('scTrackTitle');
@@ -243,7 +280,7 @@ export function initShare(ctx: ShareContext) {
   });
 
   return {
-    refreshWebShare,
+    refreshWebShare: refresh,
     /** A new song was loaded: start the review fresh next time. */
     trackChanged: () => {
       filledFor = '';
