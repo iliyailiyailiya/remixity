@@ -106,6 +106,10 @@
       <div class="cover-wrap">
         <div id="coverFrame" class="cover">
           <img id="cover" alt="" />
+          <label for="coverFile" id="chooseCoverBtn" class="cover-btn pick" role="button" tabindex="0" data-i18n-aria="chooseCover" aria-label="Choose cover image">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="2.5" /><circle cx="9" cy="10" r="1.6" /><path d="M20.5 15.5l-4.5-4.5-7.5 8" /></svg>
+          </label>
+          <input id="coverFile" class="visually-hidden" type="file" accept="image/*" />
           <button id="blurBtn" class="cover-btn" aria-pressed="false" data-i18n-aria="blurCover" aria-label="Blur cover">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5c3.4 4 5.8 7.1 5.8 10.1a5.8 5.8 0 0 1-11.6 0C6.2 10.6 8.6 7.5 12 3.5z" /><path d="M9.2 14.2a2.8 2.8 0 0 0 2.8 2.8" /></svg>
           </button>

@@ -127,11 +127,14 @@ async function searchCatalogue(title: string, artist: string | null, signal: Abo
     : [words[0], words.slice(0, 2).join(' ')].filter((n, i, a) => n && a.indexOf(n) === i);
   const whole = norm(title);
   for (const name of names) {
-    const artists = (await get({ term: name, media: 'music', entity: 'musicArtist', limit: '3' }, 'search', signal))
+    // Many artists share a name ("hako", "HAKO", "HaKo"…): check every matching
+    // profile, in one combined lookup to stay quick on mobile data.
+    const ids = (await get({ term: name, media: 'music', entity: 'musicArtist', limit: '5' }, 'search', signal))
       .filter((a) => a.artistId && matches(a.artistName ?? '', name))
-      .slice(0, 2);
-    for (const a of artists) {
-      const songs = (await get({ id: String(a.artistId), entity: 'song', limit: '200' }, 'lookup', signal)).filter(
+      .map((a) => a.artistId);
+    if (!ids.length) continue;
+    {
+      const songs = (await get({ id: ids.join(','), entity: 'song', limit: '200' }, 'lookup', signal)).filter(
         (x) => x.wrapperType === 'track' && x.artworkUrl100,
       );
       const hit = artist
@@ -161,7 +164,7 @@ export async function findCover(title: string, artist: string | null): Promise<F
   const t = cleanTitle(title);
   if (!t) return null;
   const ctl = new AbortController();
-  const timer = setTimeout(() => ctl.abort(), 10000);
+  const timer = setTimeout(() => ctl.abort(), 20000); // generous for slow mobile data
   try {
     const hit = (await searchSongs(t, artist, ctl.signal)) ?? (await searchCatalogue(t, artist, ctl.signal));
     if (!hit?.artworkUrl100) return null;

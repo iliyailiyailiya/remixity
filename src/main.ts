@@ -371,6 +371,29 @@ $('suggestNo').addEventListener('click', (e) => {
 });
 findCoverBtn.addEventListener('click', () => void searchCover(loadToken, true));
 
+// Your own picture as the cover (for songs no catalogue has).
+const coverFileIn = $<HTMLInputElement>('coverFile');
+$('chooseCoverBtn').addEventListener('click', (e) => e.stopPropagation()); // not a play/pause tap
+$('chooseCoverBtn').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault();
+    coverFileIn.click();
+  }
+});
+coverFileIn.addEventListener('change', () => {
+  const file = coverFileIn.files?.[0];
+  coverFileIn.value = '';
+  if (!file || !file.type.startsWith('image/') || !buffer) return;
+  const cover = $<HTMLImageElement>('cover');
+  cover.onerror = null;
+  URL.revokeObjectURL(coverUrl);
+  coverUrl = URL.createObjectURL(file);
+  cover.src = coverUrl; // onload repaints the background
+  setGeneratedCover(false);
+  hideNameSuggestion();
+  updateMediaSession(songTitle, songArtist ?? '');
+});
+
 function togglePlay() {
   if (!player || !buffer) return;
   if (player.playing) player.pause();

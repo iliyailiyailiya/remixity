@@ -2182,3 +2182,9 @@ input[type='range'] {
   stroke-width: 2.4;
   stroke-linecap: round;
 }
+
+/* Second corner button (choose your own cover), left of the blur toggle */
+.cover-btn.pick {
+  right: 54px;
+  cursor: pointer;
+}
