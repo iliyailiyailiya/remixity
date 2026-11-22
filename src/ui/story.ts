@@ -158,7 +158,7 @@ export class StoryPainter {
     c.font = `800 62px ${FONT}`;
     const titleLines = wrap(c, info.title, art, 2);
     c.font = `500 52px ${FONT}`;
-    const artistLines = info.artist ? wrap(c, info.artist, art, 1) : [];
+    const artistLines = info.artist ? wrap(c, info.artist, art, 2) : [];
     const textH = titleLines.length * 72 + artistLines.length * 64;
     const ch = pad + art + 34 + textH + 26 + 52 + (progress !== null ? 40 : 0) + pad;
     const cx = (W - cw) / 2;
