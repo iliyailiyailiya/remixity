@@ -363,6 +363,25 @@ async function musicbrainzHit(t: string, artist: string | null, signal: AbortSig
 export async function findCover(title: string, artist: string | null): Promise<FoundCover | null> {
   const t = cleanTitle(title);
   if (!t) return null;
+  // Readings of a possibly messy tag, most reliable first: a title holding
+  // "Artist - Song", the names as given, then the title alone.
+  const readings: [string, string | null][] = [];
+  const split = t.match(/^(.+?)\s+[-–—]\s+(.+)$/);
+  if (split) readings.push([cleanTitle(split[2]), split[1].trim()]);
+  readings.push([t, artist]);
+  if (artist) readings.push([t, null]);
+  const seen = new Set<string>();
+  for (const [rt, ra] of readings) {
+    const key = `${rt}|${ra ?? ''}`;
+    if (!rt || seen.has(key)) continue;
+    seen.add(key);
+    const found = await findCoverFor(rt, ra);
+    if (found) return found;
+  }
+  return null;
+}
+
+async function findCoverFor(t: string, artist: string | null): Promise<FoundCover | null> {
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), 20000); // generous for slow mobile data
   const { signal } = ctl;

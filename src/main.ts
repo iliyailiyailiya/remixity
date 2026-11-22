@@ -5,7 +5,7 @@ import { decodeData, niceName, safeFileName } from './engine/decode';
 import { Player } from './engine/player';
 import { exportAudio, Format, Stage } from './engine/render';
 import { addMarker, assemble, cut, EditState, initialEdit, keepOnly, removeMarker } from './engine/edit';
-import { readMeta, metaFromFileName, tidyName } from './engine/meta';
+import { isJunkArtist, readMeta, metaFromFileName, splitArtistTitle, tidyName } from './engine/meta';
 import { detectBpm } from './engine/bpm';
 import { readbackIsNoisy } from './engine/noisecheck';
 import { Waveform } from './ui/waveform';
@@ -151,9 +151,15 @@ async function load(file: File) {
     player.load(decoded);
     wave.setBuffer(decoded);
 
-    const title = meta.title || fromName.title || name;
+    // Tags from download sites are often wrong: the artist tag names the site
+    // ("DatPiff") and the title holds "Artist - Song". Fix that for display.
+    let title = tidyName(meta.title || '') || fromName.title || name;
+    let artistTag: string | null = isJunkArtist(meta.artist) ? null : meta.artist!;
+    const split = splitArtistTitle(title);
+    if (split && !artistTag) [artistTag, title] = [split.artist, split.title];
+    artistTag ??= fromName.artist || null;
     $('title').textContent = title;
-    $('artist').textContent = meta.artist || fromName.artist || t('yourTrack');
+    $('artist').textContent = artistTag || t('yourTrack');
     document.title = `${title} · THE REMIXITY`;
 
     // Cover art (or a generated one) drives the background colours.
@@ -184,7 +190,7 @@ async function load(file: File) {
 
     // No cover in the file: look it up by artist and title (just the name).
     songTitle = title;
-    songArtist = meta.artist || fromName.artist || null;
+    songArtist = artistTag;
     setGeneratedCover(!meta.cover);
     // The file has its own cover: leave it, but offer a search on request.
     setAltCover(meta.cover ? 'search' : null);
@@ -202,7 +208,7 @@ async function load(file: File) {
     origBpm = null;
     detectingBpm = true;
     render();
-    updateMediaSession(title, meta.artist || fromName.artist || '');
+    updateMediaSession(title, artistTag ?? '');
     setTimeout(showSwipeHint, 700);
     detectBpm(decoded)
       .then((bpm) => {

@@ -203,6 +203,23 @@ export function tidyName(name: string): string {
     .trim();
 }
 
+/**
+ * Artist tags that name where the file came from, not who made it
+ * ("DatPiff", "YouTube", "SoundCloud", "Unknown artist", "Artist - Topic"…).
+ */
+export function isJunkArtist(artist: string | null | undefined): boolean {
+  if (!artist) return true;
+  return /^(datpiff|youtube|soundcloud|spotify|audiomack|bandcamp|deezer|apple music|music|artist|unknown( artist)?|various( artists)?|va|n\/a|topic|.+\s-\s*topic|www\..+|.+\.(com|net|org|ru|co))$/i.test(
+    artist.trim(),
+  );
+}
+
+/** "Larry June & Cardo - Friday Activities" → { artist, title }, or null. */
+export function splitArtistTitle(text: string): { artist: string; title: string } | null {
+  const m = text.match(/^(.+?)\s+[-–—]\s+(.+)$/);
+  return m ? { artist: m[1].trim(), title: m[2].trim() } : null;
+}
+
 export function metaFromFileName(name: string): TrackMeta {
   name = tidyName(name) || name;
   const m = name.match(/^(.+?)\s+[-–—]\s+(.+)$/);
