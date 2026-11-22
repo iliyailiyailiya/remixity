@@ -17,6 +17,7 @@ export class Player {
   /** What you hear, for the EQ's spectrum display. */
   analyser: AnalyserNode;
   onEnded: () => void = () => {};
+  onInterrupted: () => void = () => {};
 
   constructor(params: FxParams) {
     this.ctx = new AudioContext({ latencyHint: 'playback' });
@@ -25,6 +26,15 @@ export class Player {
     this.analyser.fftSize = 4096;
     this.analyser.smoothingTimeConstant = 0.75;
     this.chain.output.connect(this.analyser);
+    // If the system takes the audio away (a call, Siri, another app),
+    // pause properly so the play button and timeline stay truthful.
+    this.ctx.addEventListener('statechange', () => {
+      const st = this.ctx.state as string;
+      if (this.playing && (st === 'suspended' || st === 'interrupted')) {
+        this.pause();
+        this.onInterrupted();
+      }
+    });
 
     // Until the look-ahead limiter worklet has loaded (or if the browser
     // can't run it), a gentle compressor keeps playback from clipping.
@@ -74,7 +84,7 @@ export class Player {
     this.playing = false;
     this.offset = keepAt !== undefined ? Math.min(Math.max(0, keepAt), buffer.duration) : 0;
     if (this.loop && this.loop[1] > buffer.duration) this.loop = null;
-    if (wasPlaying) void this.play();
+    if (wasPlaying) this.play();
   }
 
   get duration() {
@@ -104,9 +114,14 @@ export class Player {
     return Math.min(p, this.duration);
   }
 
-  async play() {
-    if (!this.buffer) return;
-    await this.ctx.resume();
+  /**
+   * Start playback. Synchronous on purpose: the old version awaited
+   * ctx.resume() first, so a quick second tap (or a seek) could start a
+   * second source that pause() no longer knew about.
+   */
+  play() {
+    if (!this.buffer || this.playing) return;
+    if (this.ctx.state !== 'running') void this.ctx.resume();
     if (this.offset >= this.duration - 0.01) this.offset = 0;
     const src = this.ctx.createBufferSource();
     src.buffer = this.buffer;
@@ -143,7 +158,7 @@ export class Player {
     const wasPlaying = this.playing;
     this.pause();
     this.offset = Math.max(0, Math.min(seconds, this.duration));
-    if (wasPlaying) void this.play();
+    if (wasPlaying) this.play();
   }
 
   setParams(p: FxParams) {

@@ -26,6 +26,23 @@
 
 html {
   -webkit-text-size-adjust: 100%;
+  /* No double-tap zoom anywhere (fast taps on buttons zoomed the page). */
+  touch-action: manipulation;
+}
+body,
+button,
+input,
+label,
+select,
+canvas {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+/* iOS zooms into inputs with text under 16px; keep them at 16px. */
+input[type='number'],
+input[type='text'],
+select {
+  font-size: max(16px, 1em);
 }
 
 body {

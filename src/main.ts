@@ -105,9 +105,24 @@ async function load(file: File) {
   status.textContent = t('loading');
   try {
     // Create the AudioContext inside the user gesture so iOS lets it play.
-    player ??= new Player(params);
-    player.onEnded = render;
+    if (!player) {
+      // Ask for "media playback" audio: keeps playing with the screen
+      // locked or the tab in the background, and ignores the silent switch.
+      const nav = navigator as Navigator & { audioSession?: { type: string } };
+      if (nav.audioSession) nav.audioSession.type = 'playback';
+      player = new Player(params);
+      player.onEnded = render;
+      player.onInterrupted = render;
+    }
     void player.ctx.resume();
+
+    // A new song starts fresh: normal speed, its own BPM, no effects.
+    player.pause();
+    Object.assign(params, DEFAULT_PARAMS);
+    autoSpace = true;
+    origBpm = null;
+    detectingBpm = true;
+    apply();
 
     const data = await file.arrayBuffer();
     const name = niceName(file.name);
@@ -157,6 +172,7 @@ async function load(file: File) {
     origBpm = null;
     detectingBpm = true;
     render();
+    updateMediaSession(title, meta.artist || fromName.artist || '');
     setTimeout(showSwipeHint, 700);
     detectBpm(decoded)
       .then((bpm) => {
@@ -194,15 +210,55 @@ $('cover').addEventListener('click', togglePlay);
 function togglePlay() {
   if (!player || !buffer) return;
   if (player.playing) player.pause();
-  else void player.play().then(tick);
+  else player.play();
   render();
 }
 
+// The timeline runs off one loop that never stops (cheap when paused), so
+// nothing that restarts playback (seek, skip, loop) can leave it frozen.
 function tick() {
-  if (!player) return;
-  renderTransport();
-  if (player.playing) requestAnimationFrame(tick);
+  if (player && !document.hidden) renderTransport();
+  requestAnimationFrame(tick);
 }
+requestAnimationFrame(tick);
+
+// Lock screen / Control Center / headphone buttons.
+function updateMediaSession(title: string, artist: string) {
+  if (!('mediaSession' in navigator)) return;
+  navigator.mediaSession.metadata = new MediaMetadata({
+    title,
+    artist,
+    album: 'THE REMIXITY',
+    artwork: coverUrl ? [{ src: coverUrl, sizes: '512x512' }] : [],
+  });
+}
+if ('mediaSession' in navigator) {
+  const ms = navigator.mediaSession;
+  const on = (a: MediaSessionAction, h: MediaSessionActionHandler) => {
+    try {
+      ms.setActionHandler(a, h);
+    } catch {
+      /* action not supported here */
+    }
+  };
+  on('play', () => player && !player.playing && togglePlay());
+  on('pause', () => player?.playing && togglePlay());
+  on('seekbackward', () => skip(-10));
+  on('seekforward', () => skip(10));
+  on('seekto', (d) => {
+    if (!player || d.seekTime === undefined) return;
+    player.seek(d.seekTime * params.ratio);
+    render();
+  });
+}
+
+// It's an app, not a document: no pinch zoom (iOS ignores user-scalable).
+for (const ev of ['gesturestart', 'gesturechange']) document.addEventListener(ev, (e) => e.preventDefault());
+
+// Coming back to the page: wake the audio if the system parked it.
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && player?.playing && player.ctx.state !== 'running') void player.ctx.resume();
+});
 
 // Progress bar: drag to scrub, seek on release.
 const barEl = $('bar');
@@ -796,6 +852,7 @@ exportBtn.addEventListener('click', async () => {
 
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 
+let lastPositionSync = 0;
 function renderTransport() {
   if (!player) return;
   const dur = player.duration || 1;
@@ -805,6 +862,21 @@ function renderTransport() {
   $('tNow').textContent = fmtTime(pos / r);
   $('tLeft').textContent = `−${fmtTime((dur - pos) / r)}`;
   playerView.classList.toggle('playing', player.playing);
+  if ('mediaSession' in navigator) {
+    const ms = navigator.mediaSession;
+    const state = player.playing ? 'playing' : 'paused';
+    // The lock screen extrapolates on its own; update it about once a second.
+    const now = performance.now();
+    if (now - lastPositionSync > 1000 || ms.playbackState !== state) {
+      lastPositionSync = now;
+      try {
+        ms.setPositionState({ duration: dur / r, position: Math.min(pos, dur) / r, playbackRate: 1 });
+      } catch {
+        /* not supported */
+      }
+    }
+    if (ms.playbackState !== state) ms.playbackState = state;
+  }
   playToggles.forEach((b) => b.setAttribute('aria-label', t(player!.playing ? 'pause' : 'play')));
   backdrop.speed = (player.playing ? 1 : 0.3) * r;
   if (page === 'chop') wave.setProgress(pos / dur);
