@@ -216,6 +216,32 @@ export function isJunkArtist(artist: string | null | undefined): boolean {
   );
 }
 
+/**
+ * Some downloaders write every tag value twice ("Song, Song" or "Artist,
+ * Artist"), and some add the songwriter's full legal name to the artist
+ * ("ANIKV, LIL KRYSTALLL, Озеров Степан Александрович"). Clean both.
+ */
+export function undoubleTitle(title: string): string {
+  return title.replace(/^(.+?)(?:\s*(?:,|;|\/)\s*\1)+$/u, '$1').trim();
+}
+
+// A Russian/Ukrainian full name with a patronymic ("Иванов Иван Иванович"):
+// a songwriter credit, not a performing artist.
+const LEGAL_NAME = /^\p{L}+\s+\p{L}+\s+\p{L}+(ович|евич|ьич|ична|овна|евна|івна|ович)$/iu;
+
+export function undoubleArtist(artist: string): string {
+  const parts = artist.split(/\s*(?:,|;|\s\/)\s*/u).filter(Boolean);
+  if (parts.length < 2) return artist.trim();
+  const seen = new Set<string>();
+  const kept = parts.filter((p) => {
+    const key = p.toLowerCase();
+    if (seen.has(key) || LEGAL_NAME.test(p)) return false;
+    seen.add(key);
+    return true;
+  });
+  return (kept.length ? kept : parts.slice(0, 1)).join(', ');
+}
+
 /** "Larry June & Cardo - Friday Activities" → { artist, title }, or null. */
 export function splitArtistTitle(text: string): { artist: string; title: string } | null {
   const m = text.match(/^(.+?)\s+[-–—]\s+(.+)$/);
@@ -248,8 +274,8 @@ export function readMeta(data: ArrayBuffer): TrackMeta {
  */
 export function songNames(meta: TrackMeta, name: string): { title: string; artist: string | null } {
   const fromName = metaFromFileName(name);
-  let title = tidyName(meta.title || '') || fromName.title || name;
-  let artist: string | null = isJunkArtist(meta.artist) ? null : meta.artist!;
+  let title = tidyName(undoubleTitle(meta.title || '')) || fromName.title || name;
+  let artist: string | null = isJunkArtist(meta.artist) ? null : undoubleArtist(meta.artist!);
   const split = splitArtistTitle(title);
   if (split && !artist) [artist, title] = [split.artist, split.title];
   artist ??= fromName.artist || null;

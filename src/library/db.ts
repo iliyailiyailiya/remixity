@@ -2,6 +2,8 @@
 // covers in one store, the audio in another (so listing the library never
 // touches the big files), and playlists. Nothing leaves the device.
 
+import { undoubleArtist, undoubleTitle } from '../engine/meta';
+
 export interface Track {
   id: string;
   title: string;
@@ -136,3 +138,12 @@ export async function keepStorage(): Promise<void> {
 
 export const newId = () =>
   typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`;
+
+/** Songs added before names were cleaned of doubles ("Song, Song"): fix them once. */
+export async function undoubled(tr: Track): Promise<Track> {
+  const title = undoubleTitle(tr.title) || tr.title;
+  const artist = tr.artist ? undoubleArtist(tr.artist) : tr.artist;
+  if (title === tr.title && artist === tr.artist) return tr;
+  // Names changed, so "Fix my library" should look this song up again.
+  return (await updateTrack(tr.id, { title, artist, checkedAt: 0 })) ?? tr;
+}

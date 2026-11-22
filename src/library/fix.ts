@@ -8,7 +8,7 @@
 
 import { t } from '../i18n';
 import { findCover, includesArtist, sameName } from '../ui/coverSearch';
-import { allTracks, updateTrack, type Track } from './db';
+import { allTracks, undoubled, updateTrack, type Track } from './db';
 import { canUseFolders, updateOriginals } from './export';
 import { editTrackNames } from './editSheet';
 
@@ -195,7 +195,7 @@ export function initFix(ctx: FixContext) {
     renderList();
     startBtn.textContent = t('fixStop');
     bar.hidden = false;
-    const all = (await allTracks()).filter((tr) => recheck.checked || !tr.checkedAt);
+    const all = (await Promise.all((await allTracks()).map(undoubled))).filter((tr) => recheck.checked || !tr.checkedAt);
     let checked = 0;
     for (const tr of all) {
       if (stop) break;

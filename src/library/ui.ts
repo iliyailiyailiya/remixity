@@ -2,7 +2,7 @@
 // with search, import and per-song / per-playlist menus.
 
 import { t } from '../i18n';
-import { allPlaylists, allTracks, deletePlaylist, deleteTrack, newId, savePlaylist, type Playlist, type Track } from './db';
+import { allPlaylists, allTracks, deletePlaylist, deleteTrack, newId, savePlaylist, undoubled, type Playlist, type Track } from './db';
 import { importFiles } from './import';
 import { editTrackNames } from './editSheet';
 import { canShareBatches, canUseFolders, cleanedFile, prepareBatch, saveAsZip, saveToFolder, shareOrDownload } from './export';
@@ -205,8 +205,10 @@ export function initLibrary(ctx: LibraryContext) {
 
   async function refresh() {
     [tracks, playlists] = await Promise.all([allTracks(), allPlaylists()]);
+    tracks = await Promise.all(tracks.map(undoubled));
     await render();
   }
+
 
   // ---------- menus ----------
 
