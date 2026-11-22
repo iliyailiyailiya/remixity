@@ -8,8 +8,8 @@
 // Before a track is loaded, a small canvas shows soft blobs in the house
 // colours.
 //
-// The drift runs on its own clock that advances faster or slower with the
-// playback speed, so slowed tracks literally drift slower.
+// The drift speeds up and slows down with the playback speed, so slowed
+// tracks literally drift slower.
 
 import type { RGB } from './palette';
 
@@ -59,16 +59,27 @@ interface ArtGroup {
   layers: HTMLImageElement[];
 }
 
+/**
+ * The cover layers are drawn small (1/K of their size), blurred there, and
+ * scaled up K× on the GPU: a blur on a small element is cheap, and the upscale
+ * smooths it further. The drift itself is a compositor animation (no work on
+ * the main thread per frame); its playbackRate follows the playback speed.
+ */
+const K = 8;
+const LOOP_S = [40, 47, 53]; // one full drift loop per layer, in seconds at speed 1
+
 export class Backdrop {
   private ctx: CanvasRenderingContext2D;
   private palette: RGB[];
   private art: HTMLDivElement;
   private group: ArtGroup | null = null;
+  private anims: Animation[] = [];
   private t = Math.random() * 100;
   private last = performance.now();
+  private lastDraw = 0;
+  private running = false;
   private reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  /** Drift speed multiplier (1 = normal). */
-  speed = 0.35;
+  private rate = 0.35;
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -83,7 +94,22 @@ export class Backdrop {
     this.art.setAttribute('aria-hidden', 'true');
     canvas.after(this.art);
     this.setCssFallback(this.palette);
-    requestAnimationFrame(this.frame);
+    this.startBlobs();
+    let resizeTimer = 0;
+    addEventListener('resize', () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = window.setTimeout(() => this.animate(), 200);
+    });
+  }
+
+  /** Drift speed multiplier (1 = normal). */
+  get speed() {
+    return this.rate;
+  }
+  set speed(v: number) {
+    if (Math.abs(v - this.rate) < 0.005) return;
+    this.rate = v;
+    for (const a of this.anims) a.playbackRate = v;
   }
 
   /** Paint this cover as the background (cross-fades from the previous one). */
@@ -106,7 +132,8 @@ export class Backdrop {
     this.art.append(el);
     const prev = this.group;
     this.group = { el, layers };
-    this.place();
+    this.running = false; // the blob canvas is covered now
+    this.animate();
     // Fade the new cover in over the old one once it has decoded.
     const show = () => {
       el.classList.add('in');
@@ -125,33 +152,57 @@ export class Backdrop {
     p.forEach((c, i) => root.setProperty(`--c${i + 1}`, `rgb(${c.join(',')})`));
   }
 
-  private frame = (now: number) => {
-    const dt = Math.min(0.1, (now - this.last) / 1000);
-    this.last = now;
-    if (!this.reduced) this.t += dt * this.speed;
-    if (!document.hidden) {
-      if (this.group) this.place();
-      else this.drawBlobs();
-    }
-    requestAnimationFrame(this.frame);
-  };
-
-  /** Move the drifting cover layers. */
-  private place() {
+  /** (Re)start the cover layers' drift for the current screen size. */
+  private animate() {
     if (!this.group) return;
     const w = innerWidth;
     const h = innerHeight;
     const side = Math.max(w, h);
-    const { t } = this;
-    this.group.layers.forEach((img, i) => {
+    const old = this.anims;
+    this.anims = this.group.layers.map((img, i) => {
       const l = LAYERS[i];
-      const size = l.s * side;
-      const x = (l.hx + 0.18 * Math.sin(t * 0.5 + l.ph)) * w - size / 2;
-      const y = (l.hy + 0.14 * Math.cos(t * 0.37 + l.ph)) * h - size / 2;
-      img.style.width = img.style.height = `${size}px`;
-      img.style.transform = `translate3d(${x.toFixed(1)}px,${y.toFixed(1)}px,0) rotate(${(t * l.spin * 6 + l.ph).toFixed(3)}rad)`;
-    });
+      const size = (l.s * side) / K;
+      img.style.width = img.style.height = `${size.toFixed(1)}px`;
+      const turns = Math.sign(l.spin) * 2;
+      const at = (u: number) => {
+        const x = (l.hx + 0.18 * Math.sin(u + l.ph)) * w - size / 2;
+        const y = (l.hy + 0.14 * Math.cos(2 * u + l.ph)) * h - size / 2;
+        const rot = l.ph + turns * u;
+        return `translate3d(${x.toFixed(1)}px,${y.toFixed(1)}px,0) rotate(${rot.toFixed(3)}rad) scale(${K})`;
+      };
+      if (this.reduced) {
+        img.style.transform = at(0);
+        return null;
+      }
+      const N = 32;
+      const frames = Array.from({ length: N + 1 }, (_, k) => ({ transform: at((k / N) * Math.PI * 2) }));
+      const a = img.animate(frames, { duration: LOOP_S[i] * 1000, iterations: Infinity, easing: 'linear' });
+      // Carry on from where the previous drift was, so a resize doesn't jump.
+      a.currentTime = (old[i]?.currentTime as number | null) ?? Math.random() * LOOP_S[i] * 1000;
+      a.playbackRate = this.rate;
+      return a;
+    }).filter((a): a is Animation => !!a);
+    for (const a of old) a.cancel();
   }
+
+  private startBlobs() {
+    if (this.running) return;
+    this.running = true;
+    requestAnimationFrame(this.frame);
+  }
+
+  /** Blob background (before any cover): ~20 redraws a second is plenty. */
+  private frame = (now: number) => {
+    if (!this.running) return;
+    const dt = Math.min(0.1, (now - this.last) / 1000);
+    this.last = now;
+    if (!this.reduced) this.t += dt * this.rate;
+    if (!document.hidden && now - this.lastDraw > 50) {
+      this.lastDraw = now;
+      this.drawBlobs();
+    }
+    requestAnimationFrame(this.frame);
+  };
 
   private drawBlobs() {
     const { ctx, canvas, t } = this;

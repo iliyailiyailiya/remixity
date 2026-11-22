@@ -114,18 +114,22 @@ svg {
   object-fit: cover;
   user-select: none;
 }
+/* Drawn at 1/8 size, blurred, then scaled up 8× (cheap; see backdrop.ts). */
 .bg-art-base {
-  inset: -15%;
-  width: 130%;
-  height: 130%;
-  filter: blur(70px) saturate(1.5) brightness(1.08);
+  left: -15%;
+  top: -15%;
+  width: calc(130% / 8);
+  height: calc(130% / 8);
+  transform-origin: 0 0;
+  transform: scale(8);
+  filter: blur(9px) saturate(1.5) brightness(1.08);
 }
 .bg-art-layer {
   left: 0;
   top: 0;
   opacity: 0.55;
   border-radius: 50%;
-  filter: blur(60px) saturate(1.5);
+  filter: blur(7.5px) saturate(1.5);
   will-change: transform;
 }
 

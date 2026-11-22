@@ -83,6 +83,7 @@ for (const s of langSels) {
   s.addEventListener('change', () => {
     setLang(s.value as Lang);
     langSels.forEach((o) => (o.value = s.value));
+    shown.playing = null; // re-label the play buttons in the new language
     render();
   });
 }
@@ -121,7 +122,18 @@ document.addEventListener('drop', (e) => {
 });
 
 /** Load a song. `known` = a library song, whose stored names and cover win. */
-async function load(file: File, known?: Track) {
+const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+/** Read a file's tags and decode its audio (the slow part of loading a song). */
+async function prepare(file: File) {
+  const data = await file.arrayBuffer();
+  const meta = readMeta(data);
+  const decoded = await decodeData(data);
+  return { meta, decoded };
+}
+type Prepared = Awaited<ReturnType<typeof prepare>>;
+
+async function load(file: File, known?: Track, ready?: Promise<Prepared>) {
   const token = ++loadToken;
   status.textContent = t('loading');
   try {
@@ -147,10 +159,8 @@ async function load(file: File, known?: Track) {
     detectingBpm = true;
     apply();
 
-    const data = await file.arrayBuffer();
     const name = niceName(file.name);
-    const meta = readMeta(data);
-    const decoded = await decodeData(data);
+    const { meta, decoded } = await (ready ?? prepare(file));
     if (token !== loadToken) return;
 
     original = buffer = decoded;
@@ -224,7 +234,9 @@ async function load(file: File, known?: Track) {
     render();
     updateMediaSession(title, artistTag ?? '');
     setTimeout(showSwipeHint, 700);
-    detectBpm(decoded)
+    // Tempo detection waits a moment so it doesn't compete with starting playback.
+    wait(1200)
+      .then(() => (token === loadToken ? detectBpm(decoded) : null))
       .then((bpm) => {
         if (token === loadToken) origBpm = bpm;
       })
@@ -358,19 +370,63 @@ function setQueue(ids: string[], index: number) {
   updateTrackButtons();
 }
 
+// The next song in the queue, fetched ahead of time: its file right after
+// the current song starts (cheap: the browser keeps it on disk), and decoded
+// during the current song's last 30 seconds, so auto-advance is instant.
+// Only one song is ever held ahead, to keep memory in check.
+interface Ahead {
+  id: string;
+  track: Track;
+  file: File;
+  ready?: Promise<Prepared>;
+}
+let ahead: Ahead | null = null;
+
+async function fetchAhead() {
+  const id = queue[queueIndex + 1];
+  if (!id) return (ahead = null);
+  if (ahead?.id === id) return;
+  ahead = null;
+  const [track, audio] = await Promise.all([getTrack(id), getAudio(id)]);
+  if (!track || !audio || queue[queueIndex + 1] !== id) return;
+  ahead = { id, track, file: new File([audio], track.fileName, { type: track.type }) };
+}
+
+function decodeAhead() {
+  const a = ahead;
+  // (Only while a queue song is playing, not a file opened on its own.)
+  if (!a || a.ready || a.id !== queue[queueIndex + 1] || libraryId !== queue[queueIndex]) return;
+  a.ready = prepare(a.file);
+  a.ready.catch(() => {
+    if (ahead === a) ahead = null;
+  });
+}
+
 /** Load (and by default start) the queue's song at `index`. */
 async function playFromQueue(index: number, autoplay = true): Promise<boolean> {
   const id = queue[index];
   if (!id) return false;
   queueIndex = index;
   updateTrackButtons();
-  const [track, audio] = await Promise.all([getTrack(id), getAudio(id)]);
-  if (!track || !audio) return false;
-  await load(new File([audio], track.fileName, { type: track.type }), track);
-  if (autoplay && player && !player.playing && queue[queueIndex] === id) {
+  let track: Track | undefined;
+  let file: File;
+  let ready: Promise<Prepared> | undefined;
+  if (ahead?.id === id) {
+    ({ track, file, ready } = ahead);
+    ahead = null;
+  } else {
+    const [t, audio] = await Promise.all([getTrack(id), getAudio(id)]);
+    if (!t || !audio) return false;
+    track = t;
+    file = new File([audio], t.fileName, { type: t.type });
+  }
+  await load(file, track, ready);
+  if (queue[queueIndex] !== id) return true;
+  if (autoplay && player && !player.playing) {
     player.play();
     render();
   }
+  void fetchAhead();
   return true;
 }
 
@@ -1335,22 +1391,36 @@ exportBtn.addEventListener('click', async () => {
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 
 let lastPositionSync = 0;
+// Last values written by renderTransport: it runs every frame, so it only
+// touches the page when something visible actually changed.
+const shown = { bar: '', now: '', left: '', playing: null as boolean | null };
+const barFill = $('barFill');
+const tNow = $('tNow');
+const tLeft = $('tLeft');
+
 function renderTransport() {
   if (!player) return;
   const dur = player.duration || 1;
   const pos = scrubbing !== null ? scrubbing * dur : player.position;
   const r = params.ratio;
-  $('barFill').style.width = `${(pos / dur) * 100}%`;
-  $('tNow').textContent = fmtTime(pos / r);
-  $('tLeft').textContent = `−${fmtTime((dur - pos) / r)}`;
-  playerView.classList.toggle('playing', player.playing);
+  const bar = `${((pos / dur) * 100).toFixed(2)}%`;
+  if (bar !== shown.bar) barFill.style.width = shown.bar = bar;
+  const now = fmtTime(pos / r);
+  if (now !== shown.now) tNow.textContent = shown.now = now;
+  const left = `−${fmtTime((dur - pos) / r)}`;
+  if (left !== shown.left) tLeft.textContent = shown.left = left;
+  if (player.playing !== shown.playing) {
+    shown.playing = player.playing;
+    playerView.classList.toggle('playing', player.playing);
+    playToggles.forEach((b) => b.setAttribute('aria-label', t(player!.playing ? 'pause' : 'play')));
+  }
   if ('mediaSession' in navigator) {
     const ms = navigator.mediaSession;
     const state = player.playing ? 'playing' : 'paused';
     // The lock screen extrapolates on its own; update it about once a second.
-    const now = performance.now();
-    if (now - lastPositionSync > 1000 || ms.playbackState !== state) {
-      lastPositionSync = now;
+    const wall = performance.now();
+    if (wall - lastPositionSync > 1000 || ms.playbackState !== state) {
+      lastPositionSync = wall;
       try {
         ms.setPositionState({ duration: dur / r, position: Math.min(pos, dur) / r, playbackRate: 1 });
       } catch {
@@ -1359,10 +1429,10 @@ function renderTransport() {
     }
     if (ms.playbackState !== state) ms.playbackState = state;
   }
-  playToggles.forEach((b) => b.setAttribute('aria-label', t(player!.playing ? 'pause' : 'play')));
   backdrop.speed = (player.playing ? 1 : 0.3) * r;
   if (page === 'chop') wave.setProgress(pos / dur);
   if (page === 'lyrics') lyricsView.update(toOriginal(pos));
+  if (ahead && !ahead.ready && player.playing && dur - pos < 30) decodeAhead();
 }
 
 function render() {
