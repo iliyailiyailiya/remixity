@@ -744,6 +744,19 @@ if ('mediaSession' in navigator) {
 for (const ev of ['gesturestart', 'gesturechange']) document.addEventListener(ev, (e) => e.preventDefault());
 
 // Coming back to the page: wake the audio if the system parked it.
+// Leaving or reloading the page: silence it for good. (On iPhone, with the
+// "playback" audio session, the old page's sound could otherwise keep going
+// after a reload, unseen, and play on top of the next song.)
+addEventListener('pagehide', (e) => {
+  if (!player) return;
+  player.pause();
+  if (e.persisted) void player.ctx.suspend(); // may come back from the back/forward cache
+  else void player.ctx.close();
+});
+addEventListener('pageshow', (e) => {
+  if (e.persisted && player) render();
+});
+
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden && player?.playing && player.ctx.state !== 'running') void player.ctx.resume();
 });
