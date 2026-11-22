@@ -208,12 +208,8 @@ html {
   stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
-  animation: more-bob 2s ease-in-out infinite;
-}
-@keyframes more-bob {
-  50% {
-    transform: translateY(4px);
-  }
+  display: block;
+  /* Static on purpose: Safari flickered while animating this SVG. */
 }
 
 /* One ad, home screen only, fixed height so nothing shifts when it loads. */
