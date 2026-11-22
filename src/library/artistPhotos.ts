@@ -37,14 +37,19 @@ interface DeezerArtist {
   picture_big?: string;
 }
 
-async function lookUp(name: string): Promise<string> {
-  const r = await fetch(`/api/deezer?q=${encodeURIComponent(`artist:"${name}"`)}`);
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
-  const data = ((await r.json()) as { data?: { artist?: DeezerArtist }[] }).data ?? [];
-  for (const { artist } of data) {
-    const pic = artist?.picture_big || artist?.picture_medium || '';
-    // Artists without a photo get a placeholder address with an empty id.
-    if (artist?.name && sameName(artist.name, name) && pic && !pic.includes('/artist//')) return pic;
+async function lookUp(name: string, song?: string): Promise<string> {
+  // The name alone finds most artists; a common-word name ("FACE") needs one
+  // of their songs next to it.
+  const queries = [name, song ? `${name} ${song}` : ''].filter(Boolean);
+  for (const q of queries) {
+    const r = await fetch(`/api/deezer?q=${encodeURIComponent(q)}`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data = ((await r.json()) as { data?: { artist?: DeezerArtist }[] }).data ?? [];
+    for (const { artist } of data) {
+      const pic = artist?.picture_big || artist?.picture_medium || '';
+      // Artists without a photo get a placeholder address with an empty id.
+      if (artist?.name && sameName(artist.name, name) && pic && !pic.includes('/artist//')) return pic;
+    }
   }
   return '';
 }
@@ -53,7 +58,7 @@ const pending = new Map<string, Promise<string | null>>();
 let queue: Promise<unknown> = Promise.resolve();
 
 /** The photo address for this artist, or null if there isn't one (yet). */
-export function artistPhoto(name: string): Promise<string | null> {
+export function artistPhoto(name: string, song?: string): Promise<string | null> {
   const key = name.trim().toLocaleLowerCase();
   if (!key || !findCoversEnabled()) return Promise.resolve(null);
   const hit = load()[key];
@@ -62,7 +67,7 @@ export function artistPhoto(name: string): Promise<string | null> {
   if (!p) {
     p = queue.then(async () => {
       try {
-        const url = await lookUp(name);
+        const url = await lookUp(name, song);
         load()[key] = { url, at: Date.now() };
         save();
         await new Promise((r) => setTimeout(r, 250)); // be gentle

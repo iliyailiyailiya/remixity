@@ -74,7 +74,7 @@ export function initLibrary(ctx: LibraryContext) {
   }
 
   /** Swap an artist row's thumbnail for their photo once we have it. */
-  function withArtistPhoto(r: HTMLElement, name: string) {
+  function withArtistPhoto(r: HTMLElement, name: string, song: string) {
     const put = (url: string | null) => {
       const cur = r.querySelector('.lib-thumb');
       if (!url || !cur) return;
@@ -88,7 +88,7 @@ export function initLibrary(ctx: LibraryContext) {
     };
     const known = knownArtistPhoto(name);
     if (known) put(known);
-    else void artistPhoto(name).then(put);
+    else void artistPhoto(name, song).then(put);
   }
 
   function row(opts: { cover: Blob | null; name: string; sub: string; round?: boolean; onClick: () => void; onMore?: () => void; playing?: boolean }) {
@@ -191,7 +191,7 @@ export function initLibrary(ctx: LibraryContext) {
               void render();
             },
           });
-          if (name) withArtistPhoto(r, name);
+          if (name) withArtistPhoto(r, name, songs[0].title);
           return r;
         });
     } else {
