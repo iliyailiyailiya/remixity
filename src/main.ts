@@ -233,6 +233,7 @@ async function load(file: File, known?: Track, ready?: Promise<Prepared>) {
     detectingBpm = true;
     render();
     updateMediaSession(title, artistTag ?? '');
+    if (lyricsOpen) fillLyricsHead();
     setTimeout(showSwipeHint, 700);
     // Tempo detection waits a moment so it doesn't compete with starting playback.
     wait(1200)
@@ -506,6 +507,44 @@ const lyricsView = new LyricsView($('lyricsBox'), $('lyricsStatus'), (orig) => {
   player.seek(fromOriginal(orig));
   render();
 });
+lyricsView.onSwipe = (dir) => goPage(pageIndex() + dir);
+
+// Big lyrics: tap the widget. The same lyrics box moves into the full view
+// and back, so it keeps following the song.
+const lyricsFull = $('lyricsFull');
+const lyricsWrap = $('lyricsWrap');
+const lyricsHome = lyricsWrap.parentElement!;
+let lyricsOpen = false;
+
+function fillLyricsHead() {
+  $('lyFullTitle').textContent = $('title').textContent;
+  $('lyFullArtist').textContent = $('artist').textContent;
+  $<HTMLImageElement>('lyFullCover').src = $<HTMLImageElement>('cover').src;
+}
+
+function openLyrics() {
+  if (lyricsOpen) return;
+  lyricsOpen = true;
+  fillLyricsHead();
+  $('lyricsFullBody').append(lyricsWrap);
+  lyricsFull.hidden = false;
+  document.body.classList.add('lyrics-open');
+  lyricsView.expanded = true;
+  requestAnimationFrame(() => lyricsView.recenter());
+}
+
+function closeLyrics() {
+  if (!lyricsOpen) return;
+  lyricsOpen = false;
+  lyricsFull.hidden = true;
+  document.body.classList.remove('lyrics-open');
+  lyricsHome.append(lyricsWrap);
+  lyricsView.expanded = false;
+  requestAnimationFrame(() => lyricsView.recenter());
+}
+
+lyricsView.onTap = openLyrics;
+$('lyricsClose').addEventListener('click', closeLyrics);
 
 async function loadLyrics(token: number) {
   if (!original) return;
@@ -745,6 +784,10 @@ barEl.addEventListener('lostpointercapture', endScrub); // Safari can drop the p
 
 document.addEventListener('keydown', (e) => {
   const tag = (e.target as HTMLElement).tagName;
+  if (e.key === 'Escape' && lyricsOpen) {
+    closeLyrics();
+    return;
+  }
   if (e.key === 'Escape' && openSheet) {
     closeSheets();
     return;
@@ -1410,6 +1453,7 @@ function renderTransport() {
   if (player.playing !== shown.playing) {
     shown.playing = player.playing;
     playerView.classList.toggle('playing', player.playing);
+    lyricsFull.classList.toggle('playing', player.playing);
     playToggles.forEach((b) => b.setAttribute('aria-label', t(player!.playing ? 'pause' : 'play')));
   }
   if ('mediaSession' in navigator) {
@@ -1429,7 +1473,7 @@ function renderTransport() {
   }
   backdrop.speed = (player.playing ? 1 : 0.3) * r;
   if (page === 'chop') wave.setProgress(pos / dur);
-  if (page === 'lyrics') lyricsView.update(toOriginal(pos));
+  if (page === 'lyrics' || lyricsOpen) lyricsView.update(toOriginal(pos));
   if (ahead && !ahead.ready && player.playing && dur - pos < 30) decodeAhead();
 }
 

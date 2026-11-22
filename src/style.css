@@ -1101,10 +1101,12 @@ html {
   fill: currentColor;
 }
 .mini-play .i-pause,
-.player.playing .mini-play .i-play {
+.player.playing .mini-play .i-play,
+.lyrics-full.playing .mini-play .i-play {
   display: none;
 }
-.player.playing .mini-play .i-pause {
+.player.playing .mini-play .i-pause,
+.lyrics-full.playing .mini-play .i-pause {
   display: block;
 }
 .play-btn:active {
@@ -2244,24 +2246,29 @@ input[type='range'] {
   height: 100%;
   overflow-y: auto;
   scrollbar-width: none;
-  padding: 18% 2px 40%;
+  padding: 26px 2px 70px;
   box-sizing: border-box;
+  /* Vertical scrolling only: a sideways drag here is handled in code, so the
+     widget stack doesn't wobble while you scroll the lyrics. */
+  touch-action: pan-y;
+  overscroll-behavior: contain;
+  cursor: zoom-in;
   /* soft fade at the top and bottom edges */
-  -webkit-mask-image: linear-gradient(transparent, #000 18%, #000 75%, transparent);
-  mask-image: linear-gradient(transparent, #000 18%, #000 75%, transparent);
+  -webkit-mask-image: linear-gradient(transparent, #000 16%, #000 78%, transparent);
+  mask-image: linear-gradient(transparent, #000 16%, #000 78%, transparent);
 }
 .lyrics::-webkit-scrollbar {
   display: none;
 }
 .ly-line {
-  margin: 0 0 10px;
-  font-size: 1.08rem;
+  margin: 0 0 8px;
+  font-size: 1rem;
   font-weight: 750;
   line-height: 1.3;
   letter-spacing: -0.01em;
   color: rgba(255, 255, 255, 0.34);
-  cursor: pointer;
   transform-origin: left center;
+  overflow-wrap: anywhere;
   transition: color 0.3s, transform 0.3s, opacity 0.3s;
 }
 .ly-line.past {
@@ -2281,8 +2288,7 @@ input[type='range'] {
 .lyrics.plain .ly-line {
   color: rgba(255, 255, 255, 0.85);
   font-weight: 600;
-  font-size: 0.98rem;
-  cursor: default;
+  font-size: 0.95rem;
 }
 .lyrics-status {
   position: absolute;
@@ -2298,6 +2304,117 @@ input[type='range'] {
   position: static;
   margin-top: 6px;
   font-size: 0.75rem;
+}
+
+/* Big lyrics: the whole screen, over the moving cover background */
+.lyrics-full {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  background: rgba(8, 5, 16, 0.38);
+  padding: max(14px, env(safe-area-inset-top)) 0 0;
+  animation: lyrics-in 0.28s var(--spring);
+}
+.lyrics-full[hidden] {
+  display: none;
+}
+@keyframes lyrics-in {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+}
+.lyrics-full-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: min(100%, 900px);
+  margin: 0 auto;
+  padding: 0 18px 8px;
+  box-sizing: border-box;
+}
+.lyrics-full-cover {
+  width: 46px;
+  height: 46px;
+  border-radius: 10px;
+  object-fit: cover;
+  flex: none;
+}
+.lyrics-full-names {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.lyrics-full-names b,
+.lyrics-full-names span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lyrics-full-names span {
+  color: var(--dim);
+  font-size: 0.9rem;
+}
+.lyrics-full-close {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 0;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+.lyrics-full-close svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+}
+.lyrics-full-body {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  width: min(100%, 900px);
+  margin: 0 auto;
+  padding: 0 22px;
+  box-sizing: border-box;
+}
+.lyrics-full .lyrics {
+  padding: 22vh 4px 45vh;
+  cursor: auto;
+  -webkit-mask-image: linear-gradient(transparent, #000 12%, #000 80%, transparent);
+  mask-image: linear-gradient(transparent, #000 12%, #000 80%, transparent);
+}
+.lyrics-full .ly-line {
+  font-size: clamp(1.55rem, 4.2vw, 2.6rem);
+  line-height: 1.22;
+  margin-bottom: 0.55em;
+  cursor: pointer;
+  letter-spacing: -0.02em;
+}
+.lyrics-full .ly-line.now {
+  transform: scale(1.03);
+}
+.lyrics-full .lyrics.plain .ly-line {
+  font-size: clamp(1.15rem, 3vw, 1.7rem);
+  cursor: default;
+}
+.lyrics-full .lyrics.plain {
+  padding-top: 12px;
+}
+body.lyrics-open {
+  overflow: hidden;
+}
+/* Only the cover background behind the big lyrics, not the player. */
+body.lyrics-open .player {
+  visibility: hidden;
 }
 
 /* ----- Library ----- */

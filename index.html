@@ -194,7 +194,7 @@
             <svg viewBox="0 0 24 24" class="i-pause"><rect x="6" y="5" width="4.2" height="14" rx="1.3" /><rect x="13.8" y="5" width="4.2" height="14" rx="1.3" /></svg>
           </button>
             </div>
-            <div class="lyrics-wrap">
+            <div class="lyrics-wrap" id="lyricsWrap">
               <div id="lyricsBox" class="lyrics"></div>
               <p id="lyricsStatus" class="lyrics-status"></p>
             </div>
@@ -306,6 +306,25 @@
         </button>
       </div>
     </main>
+
+    <!-- Big lyrics: opened by tapping the lyrics widget -->
+    <section id="lyricsFull" class="lyrics-full" hidden aria-modal="true" role="dialog" data-i18n-aria="lyrics" aria-label="Lyrics">
+      <header class="lyrics-full-head">
+        <img id="lyFullCover" class="lyrics-full-cover" alt="" />
+        <div class="lyrics-full-names">
+          <b id="lyFullTitle"></b>
+          <span id="lyFullArtist"></span>
+        </div>
+        <button class="mini-play play-toggle" data-i18n-aria="play" aria-label="Play">
+          <svg viewBox="0 0 24 24" class="i-play"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.4-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z" /></svg>
+          <svg viewBox="0 0 24 24" class="i-pause"><rect x="6" y="5" width="4.2" height="14" rx="1.3" /><rect x="13.8" y="5" width="4.2" height="14" rx="1.3" /></svg>
+        </button>
+        <button id="lyricsClose" class="lyrics-full-close" data-i18n-aria="close" aria-label="Close">
+          <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18" /></svg>
+        </button>
+      </header>
+      <div id="lyricsFullBody" class="lyrics-full-body"></div>
+    </section>
 
     <!-- ===== Library ===== -->
     <section id="library" class="library" hidden aria-labelledby="libTitle">

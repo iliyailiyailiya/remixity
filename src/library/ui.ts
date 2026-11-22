@@ -4,6 +4,7 @@
 import { t } from '../i18n';
 import { allPlaylists, allTracks, deletePlaylist, deleteTrack, newId, savePlaylist, undoubled, type Playlist, type Track } from './db';
 import { importFiles } from './import';
+import { artistPhoto, knownArtistPhoto } from './artistPhotos';
 import { editTrackNames } from './editSheet';
 import { canShareBatches, canUseFolders, cleanedFile, prepareBatch, saveAsZip, saveToFolder, shareOrDownload } from './export';
 
@@ -70,6 +71,24 @@ export function initLibrary(ctx: LibraryContext) {
     d.className = `lib-thumb${round ? ' round' : ''}`;
     d.textContent = (label.trim()[0] ?? '♪').toUpperCase();
     return d;
+  }
+
+  /** Swap an artist row's thumbnail for their photo once we have it. */
+  function withArtistPhoto(r: HTMLElement, name: string) {
+    const put = (url: string | null) => {
+      const cur = r.querySelector('.lib-thumb');
+      if (!url || !cur) return;
+      const img = document.createElement('img');
+      img.className = 'lib-thumb round';
+      img.alt = '';
+      img.decoding = 'async';
+      img.referrerPolicy = 'no-referrer';
+      img.onload = () => cur.replaceWith(img); // keep the old one if it fails
+      img.src = url;
+    };
+    const known = knownArtistPhoto(name);
+    if (known) put(known);
+    else void artistPhoto(name).then(put);
   }
 
   function row(opts: { cover: Blob | null; name: string; sub: string; round?: boolean; onClick: () => void; onMore?: () => void; playing?: boolean }) {
@@ -160,8 +179,8 @@ export function initLibrary(ctx: LibraryContext) {
       }
       rows = [...groups.entries()]
         .sort(([a], [b]) => (!a ? 1 : !b ? -1 : byText(a, b)))
-        .map(([name, songs]) =>
-          row({
+        .map(([name, songs]) => {
+          const r = row({
             cover: songs.find((s) => s.cover)?.cover ?? null,
             name: name || t('unknownArtist'),
             sub: fill(t('songsCount'), { n: songs.length }),
@@ -171,8 +190,10 @@ export function initLibrary(ctx: LibraryContext) {
               search.value = '';
               void render();
             },
-          }),
-        );
+          });
+          if (name) withArtistPhoto(r, name);
+          return r;
+        });
     } else {
       title.textContent = t('library');
       const add = row({ cover: null, name: `＋ ${t('newPlaylist')}`, sub: '', onClick: () => askName(t('newPlaylist'), '', createPlaylist) });

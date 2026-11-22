@@ -127,6 +127,12 @@ export class LyricsView {
   private lineEls: HTMLElement[] = [];
   private current = -1;
   private userScrollUntil = 0;
+  /** Shown big (full screen): tapping a line jumps there. */
+  expanded = false;
+  /** Tapped while small: open the big view. */
+  onTap: () => void = () => {};
+  /** A sideways swipe on the small widget (the box itself only scrolls up/down). */
+  onSwipe: (dir: 1 | -1) => void = () => {};
 
   constructor(
     private box: HTMLElement,
@@ -137,6 +143,43 @@ export class LyricsView {
     const pause = () => (this.userScrollUntil = performance.now() + 3500);
     box.addEventListener('wheel', pause, { passive: true });
     box.addEventListener('touchmove', pause, { passive: true });
+    box.addEventListener('click', (e) => {
+      if (this.expanded) {
+        const i = this.lineEls.indexOf(e.target as HTMLElement);
+        if (i >= 0 && this.lyrics?.synced) {
+          this.userScrollUntil = 0;
+          this.onSeek(this.lyrics.lines[i].t);
+        }
+      } else this.onTap();
+    });
+    let x0 = 0;
+    let y0 = 0;
+    box.addEventListener(
+      'touchstart',
+      (e) => {
+        x0 = e.touches[0].clientX;
+        y0 = e.touches[0].clientY;
+      },
+      { passive: true },
+    );
+    box.addEventListener(
+      'touchend',
+      (e) => {
+        if (this.expanded) return;
+        const dx = e.changedTouches[0].clientX - x0;
+        const dy = e.changedTouches[0].clientY - y0;
+        if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy) * 1.4) this.onSwipe(dx < 0 ? 1 : -1);
+      },
+      { passive: true },
+    );
+  }
+
+  /** Jump straight to the current line (after the box moved or resized). */
+  recenter() {
+    this.userScrollUntil = 0;
+    const el = this.lineEls[this.current];
+    if (el) this.box.scrollTop = el.offsetTop - this.box.clientHeight * 0.38;
+    else this.box.scrollTop = 0;
   }
 
   /** Show a state message instead of lyrics. */
@@ -152,14 +195,11 @@ export class LyricsView {
   show(lyrics: Lyrics, notSyncedText: string) {
     this.lyrics = lyrics;
     this.current = -1;
-    this.lineEls = lyrics.lines.map((l, i) => {
+    this.lineEls = lyrics.lines.map((l) => {
       const p = document.createElement('p');
       p.className = 'ly-line';
       p.textContent = l.text || '♪';
       if (!l.text) p.classList.add('gap');
-      if (lyrics.synced) {
-        p.addEventListener('click', () => this.onSeek(lyrics.lines[i].t));
-      }
       return p;
     });
     this.box.replaceChildren(...this.lineEls);
