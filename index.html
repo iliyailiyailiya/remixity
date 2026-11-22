@@ -10,6 +10,11 @@
     />
     <title>THE REMIXITY · Slowed + Reverb & Nightcore</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="REMIXITY" />
   </head>
   <body>
     <canvas id="bg" class="bg" aria-hidden="true"></canvas>
@@ -35,6 +40,7 @@
         <h1 class="brand"><span class="the">THE</span><span class="name">REMIXITY</span></h1>
         <p class="pitch" data-i18n="dropTrack"></p>
         <label for="file" class="cta" data-i18n="chooseSong"></label>
+        <button id="openLibraryHome" class="cta-secondary"><svg viewBox="0 0 24 24"><path d="M5 4v16M9.5 4v16" /><path d="M14 4.5l5 15" /></svg><span data-i18n="openLibrary"></span></button>
         <p id="status" class="status" role="status" aria-live="polite"></p>
         <p class="fine" data-i18n="privacy"></p>
         <a class="more-link" href="#about"><span data-i18n="homeMore"></span>
@@ -98,6 +104,7 @@
     <main id="player" class="player" hidden>
       <header class="topbar">
         <span class="mini-brand">THE <b>REMIXITY</b></span>
+        <button id="openLibrary" class="icon-btn" data-i18n-aria="library" aria-label="Library"><svg viewBox="0 0 24 24"><path d="M5 4v16M9.5 4v16" /><path d="M14 4.5l5 15" /></svg></button>
         <label for="file" class="icon-btn" data-i18n-aria="newTrack" aria-label="New track">
           <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>
         </label>
@@ -166,6 +173,9 @@
       <div class="dash glass" id="dash">
         <div class="pages" id="pages">
           <section class="page page-play" data-page="play">
+            <button id="prevTrack" class="skip-btn track-btn" hidden data-i18n-aria="prevTrack" aria-label="Previous">
+              <svg viewBox="0 0 24 24"><path d="M6 5v14" /><path d="M19 5.8v12.4a.8.8 0 0 1-1.2.7L9 12.7a.8.8 0 0 1 0-1.4l8.8-6.2a.8.8 0 0 1 1.2.7z" /></svg>
+            </button>
             <button id="back10" class="skip-btn" data-i18n-aria="back10" aria-label="Back 10 seconds">
               <svg viewBox="0 0 24 24"><path d="M13 6.2a7 7 0 1 1-7.3 6.8" /><path d="M14.6 3.6 12 6.2l2.6 2.6" /><text x="12.6" y="15.6">10</text></svg>
             </button>
@@ -175,6 +185,9 @@
             </button>
             <button id="fwd10" class="skip-btn" data-i18n-aria="fwd10" aria-label="Forward 10 seconds">
               <svg viewBox="0 0 24 24"><path d="M11 6.2a7 7 0 1 0 7.3 6.8" /><path d="M9.4 3.6 12 6.2 9.4 8.8" /><text x="11.4" y="15.6">10</text></svg>
+            </button>
+            <button id="nextTrack" class="skip-btn track-btn" hidden data-i18n-aria="nextTrack" aria-label="Next">
+              <svg viewBox="0 0 24 24"><path d="M18 5v14" /><path d="M5 5.8v12.4a.8.8 0 0 0 1.2.7l8.8-6.2a.8.8 0 0 0 0-1.4L6.2 5.1A.8.8 0 0 0 5 5.8z" /></svg>
             </button>
           </section>
 
@@ -299,6 +312,38 @@
         </button>
       </div>
     </main>
+
+    <!-- ===== Library ===== -->
+    <section id="library" class="library" hidden aria-labelledby="libTitle">
+      <header class="lib-top">
+        <button id="libBack" class="icon-btn" data-i18n-aria="back" aria-label="Back">
+          <svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" /></svg>
+        </button>
+        <h2 id="libTitle" class="lib-title" data-i18n="library"></h2>
+        <label for="libFiles" class="icon-btn" data-i18n-aria="libAddSongs" aria-label="Add songs">
+          <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>
+        </label>
+      </header>
+      <div id="libTabs" class="lib-tabs" role="tablist">
+        <button data-tab="songs" aria-pressed="true" data-i18n="libSongs"></button>
+        <button data-tab="artists" aria-pressed="false" data-i18n="libArtists"></button>
+        <button data-tab="playlists" aria-pressed="false" data-i18n="libPlaylists"></button>
+      </div>
+      <input id="libSearch" class="lib-search" type="search" autocomplete="off" data-i18n-placeholder="libSearch" placeholder="Search" />
+      <div id="libActions" class="lib-actions">
+        <button id="libPlayAll" class="lib-pill"><svg viewBox="0 0 24 24"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.4-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z" /></svg><span data-i18n="libPlayAll"></span></button>
+        <button id="libShuffle" class="lib-pill"><svg viewBox="0 0 24 24"><path d="M16 4h4v4M4 20l16-16M20 16v4h-4M15 15l5 5M4 4l5 5" /></svg><span data-i18n="libShuffle"></span></button>
+      </div>
+      <p id="libStatus" class="lib-status" aria-live="polite"></p>
+      <div id="libList" class="lib-list"></div>
+      <div id="libEmpty" class="lib-empty" hidden>
+        <p data-i18n="libEmpty"></p>
+        <label for="libFiles" class="cta" data-i18n="libAddSongs"></label>
+        <label for="libFolder" class="lib-folder-btn" data-i18n="libAddFolder"></label>
+      </div>
+    </section>
+    <input id="libFiles" class="visually-hidden" type="file" multiple accept="audio/*,.mp3,.m4a,.aac,.wav,.flac,.ogg,.opus,.aif,.aiff" />
+    <input id="libFolder" class="visually-hidden" type="file" multiple webkitdirectory />
 
     <!-- ===== Sheets ===== -->
     <div id="sheetScrim" class="sheet-scrim"></div>
@@ -434,6 +479,28 @@
           </label>
         </div>
         <button id="infoSave" class="primary" data-i18n="saveInfo"></button>
+      </div>
+    </section>
+
+    <section id="actionSheet" class="sheet compact" aria-hidden="true" aria-labelledby="actionTitle">
+      <button class="grabber" data-close aria-label="Close"></button>
+      <div class="sheet-body">
+        <h2 id="actionTitle" class="sheet-title action-title"></h2>
+        <div id="actionList" class="action-list"></div>
+      </div>
+    </section>
+
+    <section id="nameSheet" class="sheet compact" aria-hidden="true" aria-labelledby="nameSheetTitle">
+      <button class="grabber" data-close aria-label="Close"></button>
+      <div class="sheet-body">
+        <h2 id="nameSheetTitle" class="sheet-title"></h2>
+        <div class="card sc-form">
+          <label class="field">
+            <small data-i18n="playlistName"></small>
+            <input id="nameInput" type="text" maxlength="80" autocomplete="off" />
+          </label>
+        </div>
+        <button id="nameSave" class="primary" data-i18n="saveInfo"></button>
       </div>
     </section>
 

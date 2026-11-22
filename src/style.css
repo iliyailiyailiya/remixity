@@ -2301,3 +2301,277 @@ input[type='range'] {
   margin-top: 6px;
   font-size: 0.75rem;
 }
+
+/* ----- Library ----- */
+
+.cta-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 11px 20px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+.cta-secondary svg,
+#openLibrary svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+.topbar {
+  gap: 4px;
+}
+.topbar .mini-brand {
+  flex: 1;
+}
+
+.library {
+  position: fixed;
+  inset: 0;
+  z-index: 8; /* above the player, below sheets */
+  display: flex;
+  flex-direction: column;
+  padding: max(10px, env(safe-area-inset-top)) 16px 0;
+  background: rgba(14, 11, 20, 0.72);
+  -webkit-backdrop-filter: blur(30px) saturate(1.3);
+  backdrop-filter: blur(30px) saturate(1.3);
+  animation: lib-in 0.28s ease-out;
+}
+@keyframes lib-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+}
+.lib-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 48px;
+}
+.lib-top svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.lib-title {
+  flex: 1;
+  margin: 0;
+  font-size: 1.6rem;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lib-tabs {
+  display: flex;
+  gap: 6px;
+  margin: 6px 0 10px;
+}
+.lib-tabs button {
+  flex: 1;
+  padding: 8px 4px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--dim);
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+.lib-tabs button[aria-pressed='true'] {
+  background: #fff;
+  border-color: #fff;
+  color: #120c1f;
+}
+.lib-search {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 16px;
+}
+.lib-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.lib-pill {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px;
+  border-radius: 12px;
+  border: 0;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.92rem;
+}
+.lib-pill svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+#libPlayAll svg {
+  fill: currentColor;
+  stroke: none;
+}
+.lib-status {
+  margin: 8px 2px 0;
+  min-height: 1.2em;
+  color: var(--dim);
+  font-size: 0.82rem;
+}
+.lib-list {
+  flex: 1;
+  overflow-y: auto;
+  margin: 4px -16px 0;
+  padding: 0 16px max(20px, env(safe-area-inset-bottom));
+  -webkit-overflow-scrolling: touch;
+}
+.lib-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 7px 0;
+  border: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  background: none;
+  color: #fff;
+  text-align: left;
+  cursor: pointer;
+}
+.lib-row.playing .lib-name {
+  color: #ffb4f0;
+}
+.lib-thumb {
+  flex: none;
+  width: 46px;
+  height: 46px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: linear-gradient(135deg, #5b3a8c, #2a3f8f);
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.85);
+}
+.lib-thumb.round {
+  border-radius: 50%;
+}
+.lib-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.lib-name,
+.lib-sub {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lib-name {
+  font-weight: 650;
+}
+.lib-sub {
+  color: var(--dim);
+  font-size: 0.85rem;
+}
+.lib-more {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--dim);
+  font-size: 1.2rem;
+  letter-spacing: 1px;
+}
+.lib-empty {
+  margin: 30px auto;
+  max-width: 340px;
+  text-align: center;
+  color: var(--dim);
+  line-height: 1.5;
+}
+.lib-empty .cta {
+  margin-top: 8px;
+}
+.lib-folder-btn {
+  display: block;
+  margin-top: 14px;
+  color: #fff;
+  font-weight: 650;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+/* A folder picker only exists on computers */
+@media (hover: none) and (pointer: coarse) {
+  .lib-folder-btn {
+    display: none;
+  }
+}
+
+/* Action sheet (song / playlist menus) */
+.action-title {
+  font-size: 1.15rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.action-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.action-list button {
+  padding: 14px;
+  border-radius: 14px;
+  border: 0;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-weight: 650;
+  font-size: 1rem;
+  text-align: left;
+}
+.action-list button.danger {
+  color: #ff8a80;
+}
+
+/* Previous / next only appear when there's a queue */
+.page-play {
+  gap: clamp(6px, 3vw, 28px);
+}
+.track-btn svg {
+  width: 30px;
+  height: 30px;
+}
+.track-btn svg path:last-child {
+  fill: currentColor;
+}

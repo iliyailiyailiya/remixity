@@ -5,7 +5,7 @@ import { decodeData, niceName, safeFileName } from './engine/decode';
 import { Player } from './engine/player';
 import { exportAudio, Format, Stage } from './engine/render';
 import { addMarker, assemble, cut, EditState, initialEdit, keepOnly, removeMarker } from './engine/edit';
-import { isJunkArtist, readMeta, metaFromFileName, splitArtistTitle, tidyName } from './engine/meta';
+import { readMeta, songNames, tidyName } from './engine/meta';
 import { detectBpm } from './engine/bpm';
 import { readbackIsNoisy } from './engine/noisecheck';
 import { Waveform } from './ui/waveform';
@@ -15,6 +15,8 @@ import { initAds } from './ads';
 import { findCover, findCoversEnabled, includesArtist, sameName, searchLog, setFindCovers } from './ui/coverSearch';
 import { withTags } from './engine/tags';
 import { findLyrics, findLyricsEnabled, LyricsView, setFindLyrics } from './ui/lyrics';
+import { getAudio, getTrack, updateTrack, type Track } from './library/db';
+import { initLibrary } from './library/ui';
 import { Backdrop } from './ui/backdrop';
 import { defaultPalette, generatedCover, paletteFrom } from './ui/palette';
 import { Pedal, MAX_RATIO, MIN_RATIO } from './ui/pedal';
@@ -94,7 +96,10 @@ const status = $('status');
 
 fileInput.addEventListener('change', () => {
   const f = fileInput.files?.[0];
-  if (f) void load(f);
+  if (f) {
+    setQueue([], 0);
+    void load(f);
+  }
   fileInput.value = '';
 });
 document.addEventListener('dragover', (e) => {
@@ -108,10 +113,14 @@ document.addEventListener('drop', (e) => {
   e.preventDefault();
   home.classList.remove('dragover');
   const f = e.dataTransfer?.files?.[0];
-  if (f) void load(f);
+  if (f) {
+    setQueue([], 0);
+    void load(f);
+  }
 });
 
-async function load(file: File) {
+/** Load a song. `known` = a library song, whose stored names and cover win. */
+async function load(file: File, known?: Track) {
   const token = ++loadToken;
   status.textContent = t('loading');
   try {
@@ -123,7 +132,7 @@ async function load(file: File) {
       if (nav.audioSession) nav.audioSession.type = 'playback';
       player = new Player(params);
       player.setRepeat(repeatOn);
-      player.onEnded = render;
+      player.onEnded = () => (nextInQueue(true) ? undefined : render());
       player.onInterrupted = render;
     }
     void player.ctx.resume();
@@ -139,7 +148,6 @@ async function load(file: File) {
 
     const data = await file.arrayBuffer();
     const name = niceName(file.name);
-    const fromName = metaFromFileName(name);
     const meta = readMeta(data);
     const decoded = await decodeData(data);
     if (token !== loadToken) return;
@@ -153,13 +161,13 @@ async function load(file: File) {
     player.load(decoded);
     wave.setBuffer(decoded);
 
-    // Tags from download sites are often wrong: the artist tag names the site
-    // ("DatPiff") and the title holds "Artist - Song". Fix that for display.
-    let title = tidyName(meta.title || '') || fromName.title || name;
-    let artistTag: string | null = isJunkArtist(meta.artist) ? null : meta.artist!;
-    const split = splitArtistTitle(title);
-    if (split && !artistTag) [artistTag, title] = [split.artist, split.title];
-    artistTag ??= fromName.artist || null;
+    // Tags from download sites are often wrong; songNames() sorts that out.
+    const names = songNames(meta, name);
+    const title = known?.title ?? names.title;
+    const artistTag = known ? known.artist : names.artist;
+    const hasCover = known ? !!known.cover : !!meta.cover;
+    const coverBlob = known ? known.cover : meta.cover;
+    libraryId = known?.id ?? null;
     $('title').textContent = title;
     $('artist').textContent = artistTag || t('yourTrack');
     document.title = `${title} · THE REMIXITY`;
@@ -168,8 +176,8 @@ async function load(file: File) {
     const cover = $<HTMLImageElement>('cover');
     if (coverUrl) URL.revokeObjectURL(coverUrl);
     if (fileCoverUrl && fileCoverUrl !== coverUrl) URL.revokeObjectURL(fileCoverUrl);
-    coverUrl = URL.createObjectURL(meta.cover ?? (await generatedCover(title)));
-    fileCoverUrl = meta.cover ? coverUrl : '';
+    coverUrl = URL.createObjectURL(coverBlob ?? (await generatedCover(title)));
+    fileCoverUrl = hasCover ? coverUrl : '';
     cover.onerror = async () => {
       // Embedded art the browser can't show: fall back to a generated cover.
       cover.onerror = null;
@@ -193,12 +201,12 @@ async function load(file: File) {
     // No cover in the file: look it up by artist and title (just the name).
     songTitle = title;
     songArtist = artistTag;
-    setGeneratedCover(!meta.cover);
+    setGeneratedCover(!hasCover);
     // A file's own cover is left alone (search on request); without one,
     // the search runs by itself. The 🔍 button is there either way.
     setAltCover('search');
     coverStatus(null);
-    if (!meta.cover && findCoversEnabled()) void searchCover(token, false);
+    if (!hasCover && findCoversEnabled()) void searchCover(token, false);
     void loadLyrics(token);
 
     home.hidden = true;
@@ -303,6 +311,7 @@ async function applyNames(newTitle: string, newArtist: string | null) {
   $('artist').textContent = newArtist ?? t('yourTrack');
   document.title = `${newTitle} · THE REMIXITY`;
   void loadLyrics(loadToken); // the right names may find lyrics now
+  if (libraryId) void updateTrack(libraryId, { title: newTitle, artist: newArtist });
   // Export details and the SoundCloud review start over from the new names.
   exportKey = '';
   fileEdited = false;
@@ -327,6 +336,87 @@ for (const el of [infoTitleIn, infoArtistIn])
 const findBox = $<HTMLInputElement>('findCovers');
 findBox.checked = findCoversEnabled();
 findBox.addEventListener('change', () => setFindCovers(findBox.checked));
+
+// ---------- library + queue (⏮ ⏭, auto-advance, lock screen) ----------
+
+let queue: string[] = []; // library song ids
+let queueIndex = 0;
+let libraryId: string | null = null; // the library song that's loaded, if any
+const prevBtn = $<HTMLButtonElement>('prevTrack');
+const nextBtn = $<HTMLButtonElement>('nextTrack');
+
+function updateTrackButtons() {
+  const on = queue.length > 1;
+  prevBtn.hidden = nextBtn.hidden = !on;
+  nextBtn.disabled = queueIndex >= queue.length - 1;
+}
+
+function setQueue(ids: string[], index: number) {
+  queue = ids;
+  queueIndex = index;
+  updateTrackButtons();
+}
+
+/** Load (and by default start) the queue's song at `index`. */
+async function playFromQueue(index: number, autoplay = true): Promise<boolean> {
+  const id = queue[index];
+  if (!id) return false;
+  queueIndex = index;
+  updateTrackButtons();
+  const [track, audio] = await Promise.all([getTrack(id), getAudio(id)]);
+  if (!track || !audio) return false;
+  await load(new File([audio], track.fileName, { type: track.type }), track);
+  if (autoplay && player && !player.playing && queue[queueIndex] === id) {
+    player.play();
+    render();
+  }
+  return true;
+}
+
+/** Go to the next song; returns false at the end of the queue. */
+function nextInQueue(_auto: boolean): boolean {
+  if (queueIndex + 1 >= queue.length) return false;
+  void playFromQueue(queueIndex + 1);
+  return true;
+}
+
+/** Like every player: back to the start first, then the previous song. */
+async function prevInQueue() {
+  if (player && (player.position > 3 || queueIndex === 0)) {
+    player.seek(0);
+    render();
+    return;
+  }
+  await playFromQueue(queueIndex - 1);
+}
+
+prevBtn.addEventListener('click', () => void prevInQueue());
+nextBtn.addEventListener('click', () => void nextInQueue(false));
+
+const library = initLibrary({
+  play: (ids, index) => {
+    setQueue(ids, index);
+    void playFromQueue(index);
+  },
+  playNext: (id) => {
+    if (!queue.length) {
+      if (libraryId) queue = [libraryId];
+      else {
+        setQueue([id], 0);
+        void playFromQueue(0);
+        return;
+      }
+    }
+    queue = queue.filter((q, i) => q !== id || i === queueIndex);
+    queue.splice(queueIndex + 1, 0, id);
+    updateTrackButtons();
+  },
+  currentId: () => libraryId,
+  showSheet,
+  closeSheets,
+});
+$('openLibrary').addEventListener('click', () => library.open());
+$('openLibraryHome').addEventListener('click', () => library.open());
 
 // ---------- lyrics (LRCLIB), synced to the original song's time ----------
 
@@ -407,6 +497,7 @@ async function searchCover(token: number, manual: boolean) {
   }
   coverStatus(null);
   showCover(URL.createObjectURL(found.image));
+  if (libraryId) void updateTrack(libraryId, { cover: found.image, coverFound: true });
   setGeneratedCover(false);
   // A file's own cover can be brought back; a generated one isn't worth it.
   setAltCover(fileCoverUrl ? 'restore' : 'search');
@@ -492,6 +583,7 @@ coverFileIn.addEventListener('change', () => {
   coverFileIn.value = '';
   if (!file || !file.type.startsWith('image/') || !buffer) return;
   showCover(URL.createObjectURL(file));
+  if (libraryId) void updateTrack(libraryId, { cover: file, coverFound: true });
   setGeneratedCover(false);
   if (fileCoverUrl) setAltCover('restore');
   hideNameSuggestion();
@@ -541,6 +633,8 @@ if ('mediaSession' in navigator) {
   on('pause', () => player?.playing && togglePlay());
   on('seekbackward', () => skip(-10));
   on('seekforward', () => skip(10));
+  on('previoustrack', () => void prevInQueue());
+  on('nexttrack', () => void nextInQueue(false));
   on('seekto', (d) => {
     if (!player || d.seekTime === undefined) return;
     player.seek(d.seekTime * params.ratio);
@@ -1345,4 +1439,9 @@ if (new URLSearchParams(location.search).has('debug')) {
   show();
   document.body.append(panel);
   window.addEventListener('coversearchlog', show);
+}
+
+// Installable app + offline (production only; dev keeps hot reload simple).
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => void navigator.serviceWorker.register('/sw.js').catch(() => {}));
 }

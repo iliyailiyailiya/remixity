@@ -239,3 +239,19 @@ export function readMeta(data: ArrayBuffer): TrackMeta {
   }
   return {};
 }
+
+/**
+ * The title and artist to show for a song, from its tags and file name.
+ * Download-site tags are often wrong: the artist tag names the site
+ * ("DatPiff") and the title holds "Artist - Song". `name` is the cleaned
+ * file name without extension.
+ */
+export function songNames(meta: TrackMeta, name: string): { title: string; artist: string | null } {
+  const fromName = metaFromFileName(name);
+  let title = tidyName(meta.title || '') || fromName.title || name;
+  let artist: string | null = isJunkArtist(meta.artist) ? null : meta.artist!;
+  const split = splitArtistTitle(title);
+  if (split && !artist) [artist, title] = [split.artist, split.title];
+  artist ??= fromName.artist || null;
+  return { title, artist };
+}
