@@ -31,9 +31,25 @@ const LOOKALIKE: Record<string, string> = {
   с: 'c', т: 't', у: 'y', х: 'x', і: 'i', ј: 'j',
 };
 
+// Chinese titles come in Traditional (鴿哨) and Simplified (鸽哨) script, and
+// catalogues don't agree on which. When a song has Chinese characters we load
+// OpenCC's converter (only then, it's ~100 KB) and compare in Simplified.
+const HAN = /[\u3400-\u9fff]/;
+let toSimplified: ((s: string) => string) | null = null;
+async function loadChinese() {
+  if (toSimplified) return;
+  try {
+    const { Converter } = await import('opencc-js/t2cn');
+    toSimplified = Converter({ from: 't', to: 'cn' });
+  } catch {
+    log('Chinese converter failed to load');
+  }
+}
+const simplified = (s: string) => (toSimplified && HAN.test(s) ? toSimplified(s) : s);
+
 /** Lowercase letters and digits only, without accents, lookalikes or "feat." parts. */
 function norm(s: string): string {
-  return s
+  return simplified(s)
     .normalize('NFKD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
@@ -75,7 +91,14 @@ function artistsOf(artist: string): string[] {
     .split(/\s*(?:,|&|\+|\/|;|\bx\b|\bfeat\.?|\bft\.?|\bwith\b|\band\b|\bи\b)\s*/i)
     .map((p) => p.trim())
     .filter((p) => norm(p).length >= 2);
-  return parts.length ? parts : [artist];
+  // "Default缺省": a Latin and a Chinese name glued together; try each too.
+  const pieces = parts.flatMap((p) =>
+    HAN.test(p) && /[a-z]/i.test(p)
+      ? (p.match(/[\u3400-\u9fff]+|[^\u3400-\u9fff]+/g) ?? []).map((x) => x.trim()).filter((x) => norm(x).length >= 2)
+      : [],
+  );
+  const all = [...new Set([...parts, ...pieces])];
+  return all.length ? all : [artist];
 }
 
 /** The catalogue's artist line contains one of the file's artists. */
@@ -164,7 +187,7 @@ async function searchSongs(title: string, artist: string | null, signal: AbortSi
 async function searchCatalogue(title: string, artist: string | null, signal: AbortSignal) {
   const words = title.split(/\s+/).filter(Boolean);
   const names = artist
-    ? artistsOf(artist).slice(0, 2)
+    ? artistsOf(artist).slice(0, 3)
     : [words[0], words.slice(0, 2).join(' ')].filter((n, i, a) => n && a.indexOf(n) === i);
   const whole = norm(title);
   for (const name of names) {
@@ -189,6 +212,16 @@ async function searchCatalogue(title: string, artist: string | null, signal: Abo
   }
   return undefined;
 }
+
+/** Same name apart from case, spaces, punctuation, lookalike letters or script. */
+export const sameName = (a: string | null, b: string | null) => norm(a ?? '') === norm(b ?? '');
+
+/** The artist line `full` already includes `part` (e.g. "ARTIFEX27 & axaero" ⊇ "Artifex27"). */
+export const includesArtist = (full: string | null, part: string) => {
+  const f = norm(full ?? '');
+  const p = norm(part);
+  return p.length > 0 && f.includes(p);
+};
 
 export interface FoundCover {
   image: Blob;
@@ -233,9 +266,11 @@ interface DeezerTrack {
  */
 async function deezerHit(t: string, artist: string | null, signal: AbortSignal): Promise<Hit | undefined> {
   const words = t.split(/\s+/).filter(Boolean);
+  const titles = [...new Set([simplified(t), t])];
   const queries = artist
-    ? [`${artistsOf(artist)[0]} ${t}`]
-    : [t, words.length > 3 ? `${words[0]} ${words.slice(-2).join(' ')}` : ''].filter(Boolean);
+    ? // Each artist (and glued-name piece) with the title, Simplified first.
+      [...new Set(artistsOf(artist).slice(0, 3).flatMap((a) => titles.map((x) => `${a} ${x}`)))].slice(0, 6)
+    : [...new Set([...titles, words.length > 3 ? `${words[0]} ${words.slice(-2).join(' ')}` : ''])].filter(Boolean);
   const whole = norm(t);
   for (const q of queries) {
     let data: DeezerTrack[] = [];
@@ -332,6 +367,7 @@ export async function findCover(title: string, artist: string | null): Promise<F
   const timer = setTimeout(() => ctl.abort(), 20000); // generous for slow mobile data
   const { signal } = ctl;
   try {
+    if (HAN.test(`${t} ${artist ?? ''}`)) await loadChinese();
     const apple = () => appleHit(t, artist, signal).catch((err) => (signal.aborted ? Promise.reject(err) : undefined));
     const deezer = () => deezerHit(t, artist, signal);
     const musicbrainz = () => musicbrainzHit(t, artist, signal);

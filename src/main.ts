@@ -12,7 +12,7 @@ import { Waveform } from './ui/waveform';
 import { EqView } from './ui/eqview';
 import { initShare } from './share/ui';
 import { initAds } from './ads';
-import { findCover, findCoversEnabled, searchLog, setFindCovers } from './ui/coverSearch';
+import { findCover, findCoversEnabled, includesArtist, sameName, searchLog, setFindCovers } from './ui/coverSearch';
 import { withTags } from './engine/tags';
 import { Backdrop } from './ui/backdrop';
 import { defaultPalette, generatedCover, paletteFrom } from './ui/palette';
@@ -347,12 +347,17 @@ async function searchCover(token: number, manual: boolean) {
 const nameSuggest = $('nameSuggest');
 let suggestion: { title: string; artist: string } | null = null;
 
-const sameName = (a: string | null, b: string | null) =>
-  (a ?? '').trim().toLocaleLowerCase() === (b ?? '').trim().toLocaleLowerCase();
-
 function suggestNames(title: string, artist: string) {
-  if (!title || (sameName(title, songTitle) && sameName(artist, songArtist))) return;
-  suggestion = { title, artist };
+  if (!title) return;
+  // Keep what's already right: a title that only differs in case/punctuation
+  // ("Виновата сама" vs "Виновата сама.."), or an artist line that already
+  // names the catalogue's artist and more ("ARTIFEX27 & axaero" vs "Artifex27").
+  const newTitle = sameName(title, songTitle) ? songTitle : title;
+  const newArtist = !artist || (songArtist && includesArtist(songArtist, artist)) ? songArtist ?? artist : artist;
+  if (newTitle === songTitle && newArtist === songArtist) return;
+  suggestion = { title: newTitle, artist: newArtist ?? '' };
+  title = suggestion.title;
+  artist = suggestion.artist;
   $('suggestTitle').textContent = title;
   $('suggestArtist').textContent = artist;
   nameSuggest.hidden = false;
