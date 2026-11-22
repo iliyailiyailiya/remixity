@@ -1,6 +1,7 @@
-// Finds cover art for songs whose files have none, in Apple's iTunes
-// catalogue (its search API allows browser requests; Google Images has no
-// public API). Only the artist and title are sent, never the audio.
+// Finds cover art for songs whose files have none: Apple's iTunes catalogue,
+// then Deezer's (through our relay), then MusicBrainz + Cover Art Archive.
+// (Google Images has no public API.) Only the artist and title are sent,
+// never the audio.
 //
 // A result is used only if its title (and artist, when we know it) really
 // match, so a wrong cover is never shown; otherwise the generated cover stays.
@@ -200,7 +201,9 @@ interface Hit {
   cover: string;
   title: string;
   artist: string;
-  source: 'apple' | 'deezer';
+  source: 'apple' | 'deezer' | 'musicbrainz';
+  /** Already downloaded (MusicBrainz: we check the art exists while searching). */
+  image?: Blob;
 }
 
 /** Apple's catalogue: plain song search, then the artist's full catalogue. */
@@ -263,9 +266,62 @@ async function deezerHit(t: string, artist: string | null, signal: AbortSignal):
   return undefined;
 }
 
+interface MbRecording {
+  title?: string;
+  'artist-credit'?: { name?: string; joinphrase?: string }[];
+  releases?: { id: string }[];
+}
+
+/**
+ * Last resort: MusicBrainz, the open music database, with artwork from the
+ * Cover Art Archive. Asked straight from the browser (it allows that, and
+ * limits each visitor to about one request per second). Needs an artist.
+ */
+async function musicbrainzHit(t: string, artist: string | null, signal: AbortSignal): Promise<Hit | undefined> {
+  if (!artist) return undefined;
+  const main = artistsOf(artist)[0];
+  const url = new URL('https://musicbrainz.org/ws/2/recording');
+  const quote = (v: string) => v.replace(/["\\]/g, ' ');
+  url.search = new URLSearchParams({
+    query: `recording:"${quote(t)}" AND artist:"${quote(main)}"`,
+    fmt: 'json',
+    limit: '10',
+  }).toString();
+  let recs: MbRecording[] = [];
+  try {
+    const r = await fetch(url, { signal });
+    if (!r.ok) {
+      log(`musicbrainz ${main} ${t} → HTTP ${r.status}`);
+      return undefined;
+    }
+    recs = ((await r.json()) as { recordings?: MbRecording[] }).recordings ?? [];
+    log(`musicbrainz ${main} ${t} → ${recs.length} results`);
+  } catch (err) {
+    if (signal.aborted) throw err;
+    log(`musicbrainz → ${(err as Error).message}`);
+    return undefined;
+  }
+  const credit = (r: MbRecording) => (r['artist-credit'] ?? []).map((c) => `${c.name ?? ''}${c.joinphrase ?? ''}`).join('');
+  const good = recs.filter((r) => closeMatch(r.title ?? '', t) && artistMatches(credit(r), artist));
+  const releases = [...new Set(good.flatMap((r) => (r.releases ?? []).map((x) => x.id)))].slice(0, 3);
+  for (const id of releases) {
+    try {
+      const img = await fetch(`https://coverartarchive.org/release/${id}/front-500`, { signal });
+      if (!img.ok) continue;
+      const image = await img.blob();
+      if (!image.type.startsWith('image/')) continue;
+      const rec = good.find((r) => r.releases?.some((x) => x.id === id))!;
+      return { cover: '', image, title: rec.title ?? t, artist: credit(rec), source: 'musicbrainz' };
+    } catch (err) {
+      if (signal.aborted) throw err;
+    }
+  }
+  return undefined;
+}
+
 /**
  * Look the song up and return its cover (and proper names), or null.
- * Apple first; Deezer when Apple has no match. If Apple can't be reached
+ * Apple first, then Deezer, then MusicBrainz. If Apple can't be reached
  * directly, Deezer goes first (Apple rate-limits our relay).
  * Gives up quietly after a while or on any error.
  */
@@ -278,12 +334,17 @@ export async function findCover(title: string, artist: string | null): Promise<F
   try {
     const apple = () => appleHit(t, artist, signal).catch((err) => (signal.aborted ? Promise.reject(err) : undefined));
     const deezer = () => deezerHit(t, artist, signal);
-    const hit = viaRelay ? ((await deezer()) ?? (await apple())) : ((await apple()) ?? (await deezer()));
+    const musicbrainz = () => musicbrainzHit(t, artist, signal);
+    // Apple → Deezer → MusicBrainz; Deezer first when Apple is unreachable.
+    const order = viaRelay ? [deezer, apple, musicbrainz] : [apple, deezer, musicbrainz];
+    let hit: Hit | undefined;
+    for (const source of order) if ((hit = await source())) break;
     if (!hit) {
       log(`no match for "${t}" / "${artist ?? ''}"`);
       return null;
     }
     log(`match (${hit.source}): ${hit.artist} – ${hit.title}`);
+    if (hit.image) return { image: hit.image, title: hit.title, artist: hit.artist };
     const img =
       hit.source === 'apple'
         ? await fetchApple(new URL(hit.cover), () => `/api/art?u=${encodeURIComponent(hit.cover)}`, signal)
