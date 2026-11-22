@@ -65,6 +65,22 @@ const closeMatch = (a: string, b: string) => {
   return long.startsWith(short) && short.length >= long.length * 0.7;
 };
 
+/**
+ * "Fimiguerrero, Lancey & Len" → ["Fimiguerrero", "Lancey", "Len"]. Files often
+ * shorten or reorder collaborators, so each artist is checked on its own.
+ */
+function artistsOf(artist: string): string[] {
+  const parts = artist
+    .split(/\s*(?:,|&|\+|\/|;|\bx\b|\bfeat\.?|\bft\.?|\bwith\b|\band\b|\bи\b)\s*/i)
+    .map((p) => p.trim())
+    .filter((p) => norm(p).length >= 2);
+  return parts.length ? parts : [artist];
+}
+
+/** The catalogue's artist line contains one of the file's artists. */
+const artistMatches = (catalogue: string, artist: string) =>
+  matches(catalogue, artist) || artistsOf(artist).some((a) => matches(catalogue, a));
+
 interface ITunesResult {
   wrapperType?: string;
   artistId?: number;
@@ -84,8 +100,9 @@ async function get(params: Record<string, string>, path: string, signal: AbortSi
 
 /** Pass 1: a plain song search for "artist title". */
 async function searchSongs(title: string, artist: string | null, signal: AbortSignal) {
+  const main = artist ? artistsOf(artist)[0] : null;
   const results = await get(
-    { term: [artist, title].filter(Boolean).join(' '), media: 'music', entity: 'song', limit: '10' },
+    { term: [main, title].filter(Boolean).join(' '), media: 'music', entity: 'song', limit: '15' },
     'search',
     signal,
   );
@@ -93,7 +110,7 @@ async function searchSongs(title: string, artist: string | null, signal: AbortSi
     (x) =>
       x.artworkUrl100 &&
       (matches(x.trackName ?? '', title) || matches(x.collectionName ?? '', title)) &&
-      (!artist || matches(x.artistName ?? '', artist)),
+      (!artist || artistMatches(x.artistName ?? '', artist)),
   );
 }
 
@@ -105,7 +122,9 @@ async function searchSongs(title: string, artist: string | null, signal: AbortSi
  */
 async function searchCatalogue(title: string, artist: string | null, signal: AbortSignal) {
   const words = title.split(/\s+/).filter(Boolean);
-  const names = artist ? [artist] : [words[0], words.slice(0, 2).join(' ')].filter((n, i, a) => n && a.indexOf(n) === i);
+  const names = artist
+    ? artistsOf(artist).slice(0, 2)
+    : [words[0], words.slice(0, 2).join(' ')].filter((n, i, a) => n && a.indexOf(n) === i);
   const whole = norm(title);
   for (const name of names) {
     const artists = (await get({ term: name, media: 'music', entity: 'musicArtist', limit: '3' }, 'search', signal))
