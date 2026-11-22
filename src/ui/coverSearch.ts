@@ -61,7 +61,8 @@ function norm(s: string): string {
 /** Drop remix/upload noise: "(slowed + reverb)", "[Official Audio]", "(lyrics)"… */
 export function cleanTitle(title: string): string {
   return title
-    .replace(/[([{][^)\]}]*(slowed|reverb|sped|nightcore|remix|official|audio|video|lyric|visuali[sz]er|prod\.?|bass ?boost|8d|hq|hd)[^)\]}]*[)\]}]/gi, '')
+    .replace(/\s+\|\s+.*$/, '') // channel tails: "Pattern [Music Video] | GRM Daily"
+    .replace(/[([{][^)\]}]*(slowed|reverb|sped|nightcore|remix|official|audio|video|lyric|visuali[sz]er|prod\.?|bass ?boost|8d|hq|hd|shot by|dir\.?|directed|filmed|performance|live)[^)\]}]*[)\]}]/gi, '')
     .replace(/\b\d{5,}\b/g, '') // download/upload IDs like "Blow Me 79435477"
     .replace(/\s{2,}/g, ' ')
     .trim();
@@ -369,6 +370,9 @@ export async function findCover(title: string, artist: string | null): Promise<F
   const split = t.match(/^(.+?)\s+[-–—]\s+(.+)$/);
   if (split) readings.push([cleanTitle(split[2]), split[1].trim()]);
   readings.push([t, artist]);
+  // The bare title before any bracket, e.g. "Pattern (feat. X) [Remix 2]".
+  const base = (split ? cleanTitle(split[2]) : t).split(/\s*[([{]/)[0].trim();
+  if (base) readings.push([base, split ? split[1].trim() : artist]);
   if (artist) readings.push([t, null]);
   const seen = new Set<string>();
   for (const [rt, ra] of readings) {
