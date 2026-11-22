@@ -12,6 +12,8 @@ import { Waveform } from './ui/waveform';
 import { EqView } from './ui/eqview';
 import { initShare } from './share/ui';
 import { initAds } from './ads';
+import { findCover, findCoversEnabled, setFindCovers } from './ui/coverSearch';
+import { withTags } from './engine/tags';
 import { Backdrop } from './ui/backdrop';
 import { defaultPalette, generatedCover, paletteFrom } from './ui/palette';
 import { Pedal, MAX_RATIO, MIN_RATIO } from './ui/pedal';
@@ -30,6 +32,10 @@ let edit: EditState = initialEdit(0);
 let history: EditState[] = [];
 let sel: [number, number] | null = null; // selection in buffer seconds
 let trackName = '';
+// The song's own title/artist (for tags and the cover search).
+let songTitle = '';
+let songArtist: string | null = null;
+let coverIsGenerated = false;
 let coverUrl = '';
 let loadToken = 0;
 let player: Player | null = null;
@@ -113,6 +119,7 @@ async function load(file: File) {
       const nav = navigator as Navigator & { audioSession?: { type: string } };
       if (nav.audioSession) nav.audioSession.type = 'playback';
       player = new Player(params);
+      player.setRepeat(repeatOn);
       player.onEnded = render;
       player.onInterrupted = render;
     }
@@ -157,6 +164,7 @@ async function load(file: File) {
       URL.revokeObjectURL(coverUrl);
       coverUrl = URL.createObjectURL(await generatedCover(title));
       cover.src = coverUrl;
+      setGeneratedCover(true);
     };
     cover.onload = async () => {
       // Paint the cover itself as the background (no pixel readback, so it
@@ -165,6 +173,13 @@ async function load(file: File) {
       backdrop.setPalette(await paletteFrom(cover)); // CSS fallback, best effort
     };
     cover.src = coverUrl;
+    setBlur(false); // blur is per song
+
+    // No cover in the file: look it up by artist and title (just the name).
+    songTitle = title;
+    songArtist = meta.artist || fromName.artist || null;
+    setGeneratedCover(!meta.cover);
+    if (!meta.cover && findCoversEnabled()) void searchCover(token, false);
 
     home.hidden = true;
     playerView.hidden = false;
@@ -212,6 +227,61 @@ function setRatio(r: number) {
 const playToggles = document.querySelectorAll<HTMLButtonElement>('.play-toggle');
 playToggles.forEach((b) => b.addEventListener('click', togglePlay));
 $('cover').addEventListener('click', togglePlay);
+
+// ---------- repeat, cover blur, cover search ----------
+
+const repeatBtn = $<HTMLButtonElement>('repeatBtn');
+let repeatOn = false;
+repeatBtn.addEventListener('click', () => {
+  repeatOn = !repeatOn;
+  player?.setRepeat(repeatOn);
+  repeatBtn.setAttribute('aria-pressed', String(repeatOn));
+});
+
+const blurBox = $<HTMLInputElement>('blurCover');
+function setBlur(on: boolean) {
+  blurBox.checked = on;
+  $('coverFrame').classList.toggle('blurred', on);
+}
+blurBox.addEventListener('change', () => setBlur(blurBox.checked));
+
+const findBox = $<HTMLInputElement>('findCovers');
+findBox.checked = findCoversEnabled();
+findBox.addEventListener('change', () => setFindCovers(findBox.checked));
+
+// ---------- finding a missing cover ----------
+
+const findCoverBtn = $<HTMLButtonElement>('findCoverBtn');
+const findCoverLabel = $('findCoverLabel');
+
+function setGeneratedCover(generated: boolean) {
+  coverIsGenerated = generated;
+  findCoverBtn.hidden = !generated;
+  findCoverBtn.disabled = false;
+  findCoverLabel.textContent = t('findCover');
+}
+
+/** Search for the current song's cover; swap it in if a real match turns up. */
+async function searchCover(token: number, manual: boolean) {
+  findCoverBtn.disabled = true;
+  findCoverLabel.textContent = t('findingCover');
+  const found = await findCover(songTitle, songArtist);
+  if (token !== loadToken) return;
+  if (!found) {
+    findCoverBtn.disabled = false;
+    findCoverLabel.textContent = manual ? t('noCoverFound') : t('findCover');
+    if (manual) setTimeout(() => token === loadToken && coverIsGenerated && (findCoverLabel.textContent = t('findCover')), 2500);
+    return;
+  }
+  const cover = $<HTMLImageElement>('cover');
+  cover.onerror = null;
+  URL.revokeObjectURL(coverUrl);
+  coverUrl = URL.createObjectURL(found);
+  cover.src = coverUrl; // onload repaints the background
+  setGeneratedCover(false);
+  updateMediaSession(songTitle, songArtist ?? '');
+}
+findCoverBtn.addEventListener('click', () => void searchCover(loadToken, true));
 
 function togglePlay() {
   if (!player || !buffer) return;
@@ -823,8 +893,51 @@ function remixTag() {
   return params.reverbMix > 0.05 ? 'reverb' : 'remix';
 }
 
+const extOf = (fmt: Format) => (fmt === 'mp3' ? '.mp3' : '.wav');
+const baseName = () => safeFileName(`${trackName} (${remixTag()})`);
+
 function outputName(fmt: Format) {
-  return safeFileName(`${trackName} (${remixTag()})`) + (fmt === 'mp3' ? '.mp3' : '.wav');
+  return baseName() + extOf(fmt);
+}
+
+// Export details: file name, title, artist, cover. Pre-filled with the
+// song's own details; your edits stick until the song or remix changes.
+const fileIn = $<HTMLInputElement>('exportFile');
+const titleIn = $<HTMLInputElement>('tagTitle');
+const artistIn = $<HTMLInputElement>('tagArtist');
+const keepCoverBox = $<HTMLInputElement>('keepCover');
+let exportKey = '';
+let fileEdited = false;
+fileIn.addEventListener('input', () => (fileEdited = true));
+
+function fillExportDetails() {
+  const key = `${loadToken}|${remixTag()}`;
+  if (key === exportKey) return;
+  const sameSong = exportKey.split('|')[0] === String(loadToken);
+  exportKey = key;
+  if (!fileEdited || !sameSong) {
+    fileIn.value = baseName();
+    fileEdited = false;
+  }
+  if (!sameSong) {
+    titleIn.value = songTitle;
+    artistIn.value = songArtist ?? '';
+    keepCoverBox.checked = true;
+  }
+}
+
+function exportFileName(fmt: Format) {
+  return (safeFileName(fileIn.value.trim()) || baseName()) + extOf(fmt);
+}
+
+async function coverBytes(): Promise<{ data: Uint8Array; mime: string } | null> {
+  if (!coverUrl) return null;
+  try {
+    const b = await (await fetch(coverUrl)).blob();
+    return { data: new Uint8Array(await b.arrayBuffer()), mime: b.type || 'image/jpeg' };
+  } catch {
+    return null;
+  }
 }
 
 // The last file the user exported, for the share sheet.
@@ -848,7 +961,8 @@ const share = initShare({
 });
 
 function updateExportName() {
-  $('exportName').textContent = outputName(currentFormat());
+  fillExportDetails();
+  $('exportExt').textContent = extOf(currentFormat());
 }
 
 exportBtn.addEventListener('click', async () => {
@@ -869,12 +983,18 @@ exportBtn.addEventListener('click', async () => {
       progress.classList.toggle('indeterminate', f === null);
       progressBar.style.width = `${Math.round((f ?? 0) * 100)}%`;
     });
+    const tagged = await withTags(blob, fmt === 'mp3' ? 'mp3' : 'wav', {
+      title: titleIn.value.trim(),
+      artist: artistIn.value.trim(),
+      cover: keepCoverBox.checked ? await coverBytes() : null,
+    });
+    const name = exportFileName(fmt);
     if (link.href) URL.revokeObjectURL(link.href);
-    link.href = URL.createObjectURL(blob);
-    link.download = outputName(fmt);
+    link.href = URL.createObjectURL(tagged);
+    link.download = name;
     link.hidden = false;
-    link.textContent = `${t('download')} · ${(blob.size / 1048576).toFixed(1)} MB`;
-    lastExport = { blob, name: outputName(fmt) };
+    link.textContent = `${t('download')} · ${(tagged.size / 1048576).toFixed(1)} MB`;
+    lastExport = { blob: tagged, name };
     share.refreshWebShare();
     exportStatus.textContent = '';
     link.click();

@@ -97,6 +97,24 @@ export class Player {
   }
 
   private loop: [number, number] | null = null;
+  private repeatAll = false;
+
+  get repeating() {
+    return this.repeatAll;
+  }
+
+  /** Repeat the whole track, gaplessly. A chop loop region still wins. */
+  setRepeat(on: boolean) {
+    this.repeatAll = on;
+    if (this.playing) this.seek(this.position);
+  }
+
+  /** The region the source loops over right now, if any. */
+  private loopRegion(): [number, number] | null {
+    if (this.loop) return this.loop;
+    if (this.repeatAll && this.duration > 0.05) return [0, this.duration];
+    return null;
+  }
 
   get looping() {
     return this.loop !== null;
@@ -125,8 +143,9 @@ export class Player {
   get position() {
     if (!this.playing) return this.offset;
     let p = this.offset + this.clock() * this.ratio;
-    if (this.loop) {
-      const [a, b] = this.loop;
+    const region = this.loopRegion();
+    if (region) {
+      const [a, b] = region;
       if (p >= b) p = a + ((p - a) % (b - a));
     }
     return Math.min(p, this.duration);
@@ -143,8 +162,9 @@ export class Player {
     if (this.offset >= this.duration - 0.01) this.offset = 0;
     const src = this.ctx.createBufferSource();
     src.buffer = this.buffer;
-    if (this.loop) {
-      const [a, b] = this.loop;
+    const region = this.loopRegion();
+    if (region) {
+      const [a, b] = region;
       if (this.offset < a || this.offset >= b) this.offset = a;
       src.loop = true;
       src.loopStart = a;
