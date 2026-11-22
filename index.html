@@ -178,6 +178,21 @@
             </button>
           </section>
 
+          <section class="page page-lyrics" data-page="lyrics">
+            <div class="page-head">
+              <h4 data-i18n="lyrics"></h4>
+              <span class="readout" data-i18n="lyricsSource"></span>
+              <button class="mini-play play-toggle" data-i18n-aria="play" aria-label="Play">
+            <svg viewBox="0 0 24 24" class="i-play"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.4-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z" /></svg>
+            <svg viewBox="0 0 24 24" class="i-pause"><rect x="6" y="5" width="4.2" height="14" rx="1.3" /><rect x="13.8" y="5" width="4.2" height="14" rx="1.3" /></svg>
+          </button>
+            </div>
+            <div class="lyrics-wrap">
+              <div id="lyricsBox" class="lyrics"></div>
+              <p id="lyricsStatus" class="lyrics-status"></p>
+            </div>
+          </section>
+
           <section class="page page-drive" data-page="drive">
             <div class="gauge" aria-live="off">
               <div id="bpmBig" class="bpm-big">—</div>
@@ -265,10 +280,11 @@
         </div>
         <div class="page-dots" id="dots" role="tablist">
           <button data-go="0" aria-label="Play"></button>
-          <button data-go="1" aria-label="Speed"></button>
-          <button data-go="2" aria-label="Reverb"></button>
-          <button data-go="3" aria-label="Equalizer"></button>
-          <button data-go="4" aria-label="Chop"></button>
+          <button data-go="1" aria-label="Lyrics"></button>
+          <button data-go="2" aria-label="Speed"></button>
+          <button data-go="3" aria-label="Reverb"></button>
+          <button data-go="4" aria-label="Equalizer"></button>
+          <button data-go="5" aria-label="Chop"></button>
         </div>
         <button id="pagePrev" class="page-arrow prev" disabled data-i18n-aria="prevPage" aria-label="Previous">
           <svg viewBox="0 0 24 24"><path d="M14.5 6l-6 6 6 6" /></svg>
@@ -349,6 +365,12 @@
             <span data-i18n="findCovers"></span>
           </label>
           <p class="hint" data-i18n="findCoversHint"></p>
+          <label class="switch">
+            <input id="findLyrics" type="checkbox" checked />
+            <span class="track"><i></i></span>
+            <span data-i18n="findLyrics"></span>
+          </label>
+          <p class="hint" data-i18n="findLyricsHint"></p>
         </div>
 
         <details class="card fold">

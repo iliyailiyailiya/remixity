@@ -14,6 +14,7 @@ import { initShare } from './share/ui';
 import { initAds } from './ads';
 import { findCover, findCoversEnabled, includesArtist, sameName, searchLog, setFindCovers } from './ui/coverSearch';
 import { withTags } from './engine/tags';
+import { findLyrics, findLyricsEnabled, LyricsView, setFindLyrics } from './ui/lyrics';
 import { Backdrop } from './ui/backdrop';
 import { defaultPalette, generatedCover, paletteFrom } from './ui/palette';
 import { Pedal, MAX_RATIO, MIN_RATIO } from './ui/pedal';
@@ -198,6 +199,7 @@ async function load(file: File) {
     setAltCover('search');
     coverStatus(null);
     if (!meta.cover && findCoversEnabled()) void searchCover(token, false);
+    void loadLyrics(token);
 
     home.hidden = true;
     playerView.hidden = false;
@@ -300,6 +302,7 @@ async function applyNames(newTitle: string, newArtist: string | null) {
   $('title').textContent = newTitle;
   $('artist').textContent = newArtist ?? t('yourTrack');
   document.title = `${newTitle} · THE REMIXITY`;
+  void loadLyrics(loadToken); // the right names may find lyrics now
   // Export details and the SoundCloud review start over from the new names.
   exportKey = '';
   fileEdited = false;
@@ -324,6 +327,53 @@ for (const el of [infoTitleIn, infoArtistIn])
 const findBox = $<HTMLInputElement>('findCovers');
 findBox.checked = findCoversEnabled();
 findBox.addEventListener('change', () => setFindCovers(findBox.checked));
+
+// ---------- lyrics (LRCLIB), synced to the original song's time ----------
+
+/** Edited-timeline seconds → original song seconds (chop cuts shift time). */
+function toOriginal(pos: number): number {
+  let t = 0;
+  for (const s of edit.segments) {
+    const len = s.end - s.start;
+    if (pos < t + len) return s.start + (pos - t);
+    t += len;
+  }
+  const last = edit.segments[edit.segments.length - 1];
+  return last ? last.end : pos;
+}
+/** Original song seconds → edited timeline (a cut-out moment maps to the next kept one). */
+function fromOriginal(orig: number): number {
+  let t = 0;
+  for (const s of edit.segments) {
+    if (orig < s.start) return t;
+    if (orig < s.end) return t + (orig - s.start);
+    t += s.end - s.start;
+  }
+  return t;
+}
+
+const lyricsView = new LyricsView($('lyricsBox'), $('lyricsStatus'), (orig) => {
+  if (!player) return;
+  player.seek(fromOriginal(orig));
+  render();
+});
+
+async function loadLyrics(token: number) {
+  if (!original) return;
+  if (!findLyricsEnabled()) return lyricsView.message(t('lyricsOff'));
+  lyricsView.message(t('lyricsLoading'));
+  const found = await findLyrics(songTitle, songArtist, original.duration);
+  if (token !== loadToken) return;
+  if (found) lyricsView.show(found, t('lyricsNotSynced'));
+  else lyricsView.message(t('lyricsNone'));
+}
+
+const lyricsBox = $<HTMLInputElement>('findLyrics');
+lyricsBox.checked = findLyricsEnabled();
+lyricsBox.addEventListener('change', () => {
+  setFindLyrics(lyricsBox.checked);
+  void loadLyrics(loadToken);
+});
 
 // ---------- finding a missing cover ----------
 
@@ -615,7 +665,7 @@ const wave = new Waveform($<HTMLCanvasElement>('wave'), {
 
 // ---------- dashboard pages: swipe like a widget stack ----------
 
-const PAGES = ['play', 'drive', 'space', 'eq', 'chop'] as const;
+const PAGES = ['play', 'lyrics', 'drive', 'space', 'eq', 'chop'] as const;
 const pagesEl = $('pages');
 const dots = [...document.querySelectorAll<HTMLButtonElement>('#dots button')];
 let page: (typeof PAGES)[number] = 'play';
@@ -1215,6 +1265,7 @@ function renderTransport() {
   playToggles.forEach((b) => b.setAttribute('aria-label', t(player!.playing ? 'pause' : 'play')));
   backdrop.speed = (player.playing ? 1 : 0.3) * r;
   if (page === 'chop') wave.setProgress(pos / dur);
+  if (page === 'lyrics') lyricsView.update(toOriginal(pos));
 }
 
 function render() {

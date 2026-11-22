@@ -34,9 +34,9 @@ const LOOKALIKE: Record<string, string> = {
 // Chinese titles come in Traditional (鴿哨) and Simplified (鸽哨) script, and
 // catalogues don't agree on which. When a song has Chinese characters we load
 // OpenCC's converter (only then, it's ~100 KB) and compare in Simplified.
-const HAN = /[\u3400-\u9fff]/;
+export const HAN = /[\u3400-\u9fff]/;
 let toSimplified: ((s: string) => string) | null = null;
-async function loadChinese() {
+export async function loadChinese() {
   if (toSimplified) return;
   try {
     const { Converter } = await import('opencc-js/t2cn');
@@ -76,7 +76,7 @@ const matches = (a: string, b: string) => {
 };
 
 /** Stricter: the names are the same, or one only adds a little to the other. */
-const closeMatch = (a: string, b: string) => {
+export const closeMatch = (a: string, b: string) => {
   const x = norm(a);
   const y = norm(b);
   if (!x || !y) return false;
@@ -103,8 +103,20 @@ function artistsOf(artist: string): string[] {
   return all.length ? all : [artist];
 }
 
+/**
+ * Without a known artist, a result only counts if both its song name and its
+ * artist appear in the text we have ("Toxis JTIM B Soul HA ДЕНЬ"). A title
+ * alone matches too many strangers' songs ("Животные" by a kids' channel).
+ */
+export const nameInTitle = (song: string, by: string, text: string) => {
+  const whole = norm(text);
+  const s = norm(song);
+  const a = norm(by);
+  return s.length >= 4 && a.length >= 2 && whole.includes(s) && whole.includes(a);
+};
+
 /** The catalogue's artist line contains one of the file's artists. */
-const artistMatches = (catalogue: string, artist: string) =>
+export const artistMatches = (catalogue: string, artist: string) =>
   matches(catalogue, artist) || artistsOf(artist).some((a) => matches(catalogue, a));
 
 interface ITunesResult {
@@ -118,7 +130,7 @@ interface ITunesResult {
 
 /** What each request did, for the ?debug panel (no personal data, just URLs). */
 export const searchLog: string[] = [];
-const log = (line: string) => {
+export const log = (line: string) => {
   searchLog.push(line);
   if (searchLog.length > 40) searchLog.shift();
   window.dispatchEvent(new Event('coversearchlog'));
@@ -175,8 +187,10 @@ async function searchSongs(title: string, artist: string | null, signal: AbortSi
   return results.find(
     (x) =>
       x.artworkUrl100 &&
-      (matches(x.trackName ?? '', title) || matches(x.collectionName ?? '', title)) &&
-      (!artist || artistMatches(x.artistName ?? '', artist)),
+      (artist
+        ? (matches(x.trackName ?? '', title) || matches(x.collectionName ?? '', title)) &&
+          artistMatches(x.artistName ?? '', artist)
+        : nameInTitle(x.trackName ?? '', x.artistName ?? '', title)),
   );
 }
 
@@ -362,14 +376,17 @@ async function musicbrainzHit(t: string, artist: string | null, signal: AbortSig
  * directly, Deezer goes first (Apple rate-limits our relay).
  * Gives up quietly after a while or on any error.
  */
-export async function findCover(title: string, artist: string | null): Promise<FoundCover | null> {
+/**
+ * Readings of a possibly messy title/artist tag, most reliable first: a title
+ * that starts with the artist ("KORNELL AKA PIERMID-BALLS…", even without
+ * spaces around the dash), a title holding "Artist - Song", the names as
+ * given, the bare title before any bracket, then the title alone. A trailing
+ * uploader credit ("… By Middiwest Music") is only dropped in a later
+ * attempt, so "Stand By Me" stays intact first. Shared with the lyrics search.
+ */
+export function nameReadings(title: string, artist: string | null): [string, string | null][] {
   const t = cleanTitle(title);
-  if (!t) return null;
-  // Readings of a possibly messy tag, most reliable first: a title that
-  // starts with the artist ("KORNELL AKA PIERMID-BALLS…", even without spaces
-  // around the dash), a title holding "Artist - Song", the names as given,
-  // then the title alone. A trailing uploader credit ("… By Middiwest Music")
-  // is only dropped in a later attempt, so "Stand By Me" stays intact first.
+  if (!t) return [];
   const readings: [string, string | null][] = [];
   const add = (rt: string, ra: string | null) => {
     readings.push([rt, ra]);
@@ -389,10 +406,16 @@ export async function findCover(title: string, artist: string | null): Promise<F
   if (base) readings.push([base, split ? split[1].trim() : artist]);
   if (artist) readings.push([t, null]);
   const seen = new Set<string>();
-  for (const [rt, ra] of readings.slice(0, 6)) {
+  return readings.filter(([rt, ra]) => {
     const key = `${rt}|${ra ?? ''}`;
-    if (!rt || seen.has(key)) continue;
+    if (!rt || seen.has(key)) return false;
     seen.add(key);
+    return true;
+  }).slice(0, 6);
+}
+
+export async function findCover(title: string, artist: string | null): Promise<FoundCover | null> {
+  for (const [rt, ra] of nameReadings(title, artist)) {
     const found = await findCoverFor(rt, ra);
     if (found) return found;
   }
