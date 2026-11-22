@@ -2642,3 +2642,16 @@ input[type='range'] {
   bottom: 0;
   margin-top: 12px;
 }
+
+#libSaveAll svg {
+  fill: none;
+  stroke: currentColor;
+}
+.fix-originals {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.fix-originals .ghost-btn {
+  width: 100%;
+}

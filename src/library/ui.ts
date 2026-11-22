@@ -4,6 +4,7 @@
 import { t } from '../i18n';
 import { allPlaylists, allTracks, deletePlaylist, deleteTrack, newId, savePlaylist, type Playlist, type Track } from './db';
 import { importFiles } from './import';
+import { canShareBatches, canUseFolders, cleanedFile, prepareBatch, saveAsZip, saveToFolder, shareOrDownload } from './export';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const fill = (text: string, vars: Record<string, string | number>) =>
@@ -227,8 +228,18 @@ export function initLibrary(ctx: LibraryContext) {
   }
 
   function songMenu(tr: Track, inPlaylist?: Playlist) {
+    // Build the file now, so the share sheet can open right on the tap.
+    const file = cleanedFile(tr);
+    file.catch(() => {});
     const items = [
       { label: t('playNext'), run: () => ctx.playNext(tr.id) },
+      {
+        label: t('saveCopy'),
+        run: () =>
+          void file
+            .then((f) => shareOrDownload([f]))
+            .catch((err) => (status.textContent = (err as Error).message)),
+      },
       { label: t('addToPlaylist'), run: () => pickPlaylist(tr) },
     ];
     if (inPlaylist)
@@ -334,6 +345,7 @@ export function initLibrary(ctx: LibraryContext) {
   }
   tabs.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach((b) =>
     b.addEventListener('click', () => {
+      resetSave();
       tab = b.dataset.tab as Tab;
       detail = null;
       search.value = '';
@@ -351,6 +363,58 @@ export function initLibrary(ctx: LibraryContext) {
     ctx.play(shown.map((s) => s.id), 0);
     close();
   });
+  // ---------- save cleaned copies ----------
+
+  let saveQueue: Track[] = [];
+  let prepared: { files: File[]; used: number } | null = null;
+  const saveLabel = $('libSaveLabel');
+  const progress = (n: number, total: number) => (status.textContent = fill(t('savePreparing'), { n: Math.min(n + 1, total), total }));
+  const resetSave = () => {
+    saveQueue = [];
+    prepared = null;
+    saveLabel.textContent = t('saveAll');
+  };
+
+  $('libSaveAll').addEventListener('click', async () => {
+    try {
+      if (canUseFolders) {
+        const n = await saveToFolder(shown, progress);
+        status.textContent = fill(t('saved'), { n });
+        return;
+      }
+      if (!canShareBatches()) {
+        const n = await saveAsZip(shown, progress);
+        status.textContent = fill(t('saved'), { n });
+        return;
+      }
+      // Phones: tap 1 prepares a batch, tap 2 opens the share sheet at once.
+      if (!prepared) {
+        if (!saveQueue.length) saveQueue = [...shown];
+        prepared = await prepareBatch(saveQueue, progress);
+        saveLabel.textContent = fill(t('saveReady'), { n: prepared.files.length });
+        status.textContent = t('saveHowTo');
+        return;
+      }
+      const batch = prepared;
+      prepared = null;
+      if (!(await shareOrDownload(batch.files))) {
+        saveLabel.textContent = fill(t('saveReady'), { n: batch.files.length });
+        prepared = batch; // cancelled: keep it ready
+        return;
+      }
+      saveQueue = saveQueue.slice(batch.used);
+      if (saveQueue.length) {
+        status.textContent = fill(t('saved'), { n: batch.used });
+        saveLabel.textContent = fill(t('saveNext'), { n: Math.min(20, saveQueue.length), left: saveQueue.length });
+      } else {
+        status.textContent = t('savedAll');
+        resetSave();
+      }
+    } catch (err) {
+      if ((err as DOMException).name !== 'AbortError') status.textContent = (err as Error).message;
+    }
+  });
+
   $('libShuffle').addEventListener('click', () => {
     if (!shown.length) return;
     const ids = shown.map((s) => s.id);

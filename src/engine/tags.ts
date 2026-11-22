@@ -82,25 +82,56 @@ function infoText(id: string, text: string): Uint8Array {
   return chunk(id, concat([enc.encode(text), new Uint8Array([0])]));
 }
 
-/** Add tags to an exported file. */
+/** An MP3 without its ID3v2 tag(s) at the start and ID3v1 tag at the end. */
+function stripMp3Tags(b: Uint8Array<ArrayBuffer>): Uint8Array<ArrayBuffer> {
+  let start = 0;
+  // Some files carry more than one ID3v2 tag in a row.
+  while (b[start] === 0x49 && b[start + 1] === 0x44 && b[start + 2] === 0x33) {
+    const size = ((b[start + 6] & 0x7f) << 21) | ((b[start + 7] & 0x7f) << 14) | ((b[start + 8] & 0x7f) << 7) | (b[start + 9] & 0x7f);
+    const footer = b[start + 5] & 0x10 ? 10 : 0;
+    start += 10 + size + footer;
+    if (start >= b.length) return b; // broken tag: leave the file alone
+  }
+  let end = b.length;
+  if (end - start > 128 && b[end - 128] === 0x54 && b[end - 127] === 0x41 && b[end - 126] === 0x47) end -= 128; // "TAG"
+  return b.subarray(start, end);
+}
+
+/** A WAV's chunks without its old title/artist (LIST INFO) and ID3 chunks. */
+function stripWavTags(b: Uint8Array): Uint8Array[] {
+  const view = new DataView(b.buffer, b.byteOffset, b.byteLength);
+  const id = (at: number) => String.fromCharCode(b[at], b[at + 1], b[at + 2], b[at + 3]);
+  const parts: Uint8Array[] = [b.subarray(0, 12)];
+  let at = 12;
+  while (at + 8 <= b.length) {
+    const cid = id(at);
+    const size = view.getUint32(at + 4, true);
+    const next = Math.min(b.length, at + 8 + size + (size & 1));
+    const drop = cid === 'id3 ' || cid === 'ID3 ' || (cid === 'LIST' && id(at + 8) === 'INFO');
+    if (!drop) parts.push(b.subarray(at, next));
+    at = next;
+  }
+  return parts;
+}
+
+/** Add tags to an exported file, replacing any it already had. */
 export async function withTags(file: Blob, kind: 'mp3' | 'wav', tags: Tags): Promise<Blob> {
   const tag = id3(tags);
-  if (kind === 'mp3') return tag ? new Blob([tag, file], { type: 'audio/mpeg' }) : file;
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  if (kind === 'mp3') {
+    const audio = stripMp3Tags(bytes);
+    return new Blob(tag ? [tag, audio] : [audio], { type: 'audio/mpeg' });
+  }
 
-  // WAV: append chunks after the audio and fix the RIFF size.
-  const extra: Uint8Array[] = [];
+  // WAV: drop the old tag chunks, append ours, and fix the RIFF size.
+  const kept = stripWavTags(bytes);
   const info: Uint8Array[] = [];
   if (tags.title) info.push(infoText('INAM', tags.title));
   if (tags.artist) info.push(infoText('IART', tags.artist));
   info.push(infoText('ISFT', 'THE REMIXITY'));
-  extra.push(chunk('LIST', concat([enc.encode('INFO'), ...info])));
+  const extra = [chunk('LIST', concat([enc.encode('INFO'), ...info]))];
   if (tag) extra.push(chunk('id3 ', tag));
-
-  const wav = new Uint8Array(await file.arrayBuffer());
-  const tail = concat(extra);
-  const out = new Uint8Array(wav.length + tail.length);
-  out.set(wav, 0);
-  out.set(tail, wav.length);
+  const out = concat([...kept, ...extra]);
   new DataView(out.buffer).setUint32(4, out.length - 8, true);
   return new Blob([out], { type: 'audio/wav' });
 }

@@ -335,6 +335,7 @@
       <input id="libSearch" class="lib-search" type="search" autocomplete="off" data-i18n-placeholder="libSearch" placeholder="Search" />
       <div id="libActions" class="lib-actions">
         <button id="libPlayAll" class="lib-pill"><svg viewBox="0 0 24 24"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.4-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z" /></svg><span data-i18n="libPlayAll"></span></button>
+        <button id="libSaveAll" class="lib-pill"><svg viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg><span id="libSaveLabel" data-i18n="saveAll"></span></button>
         <button id="libShuffle" class="lib-pill"><svg viewBox="0 0 24 24"><path d="M16 4h4v4M4 20l16-16M20 16v4h-4M15 15l5 5M4 4l5 5" /></svg><span data-i18n="libShuffle"></span></button>
       </div>
       <p id="libStatus" class="lib-status" aria-live="polite"></p>
@@ -507,6 +508,10 @@
         <p id="fixStatus" class="status" aria-live="polite"></p>
         <div id="fixList" class="fix-list"></div>
         <button id="fixApply" class="primary fix-apply" hidden></button>
+        <div id="fixOriginalsBox" class="fix-originals" hidden>
+          <button id="fixOriginals" class="ghost-btn" data-i18n="updateOriginals"></button>
+          <p class="hint" data-i18n="updateOriginalsHint"></p>
+        </div>
       </div>
     </section>
 

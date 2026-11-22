@@ -9,6 +9,7 @@
 import { t } from '../i18n';
 import { findCover, includesArtist, sameName } from '../ui/coverSearch';
 import { allTracks, updateTrack, type Track } from './db';
+import { canUseFolders, updateOriginals } from './export';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const fill = (text: string, vars: Record<string, string | number>) =>
@@ -165,6 +166,19 @@ export function initFix(ctx: FixContext) {
         : t('fixAllChecked');
     updateApply();
   }
+
+  // Desktop Chrome/Edge: rewrite the original files in your music folder.
+  $('fixOriginalsBox').hidden = !canUseFolders;
+  $('fixOriginals').addEventListener('click', async () => {
+    try {
+      const res = await updateOriginals(await allTracks(), (n, total) => {
+        status.textContent = fill(t('savePreparing'), { n: Math.min(n + 1, total), total });
+      });
+      status.textContent = fill(t('updatedOriginals'), res);
+    } catch (err) {
+      if ((err as DOMException).name !== 'AbortError') status.textContent = (err as Error).message;
+    }
+  });
 
   startBtn.addEventListener('click', () => {
     if (running) stop = true;
