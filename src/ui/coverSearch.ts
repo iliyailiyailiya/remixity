@@ -127,11 +127,18 @@ async function searchCatalogue(title: string, artist: string | null, signal: Abo
   return undefined;
 }
 
+export interface FoundCover {
+  image: Blob;
+  /** The catalogue's own names for the song, e.g. to tidy a messy file name. */
+  title: string;
+  artist: string;
+}
+
 /**
- * Look the song up and return its cover as an image Blob, or null.
+ * Look the song up and return its cover (and proper names), or null.
  * Gives up quietly after a few seconds or on any error.
  */
-export async function findCover(title: string, artist: string | null): Promise<Blob | null> {
+export async function findCover(title: string, artist: string | null): Promise<FoundCover | null> {
   const t = cleanTitle(title);
   if (!t) return null;
   const ctl = new AbortController();
@@ -143,8 +150,9 @@ export async function findCover(title: string, artist: string | null): Promise<B
     const big = hit.artworkUrl100.replace(/\/\d+x\d+bb\.(jpg|png)$/, '/1000x1000bb.$1');
     const img = await fetch(big, { signal: ctl.signal });
     if (!img.ok) return null;
-    const blob = await img.blob();
-    return blob.type.startsWith('image/') ? blob : null;
+    const image = await img.blob();
+    if (!image.type.startsWith('image/')) return null;
+    return { image, title: hit.trackName ?? '', artist: hit.artistName ?? '' };
   } catch {
     return null;
   } finally {

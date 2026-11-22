@@ -174,6 +174,7 @@ async function load(file: File) {
     };
     cover.src = coverUrl;
     setBlur(false); // blur is per song
+    hideNameSuggestion();
 
     // No cover in the file: look it up by artist and title (just the name).
     songTitle = title;
@@ -268,9 +269,13 @@ $('editInfo').addEventListener('keydown', (e) => {
 });
 
 async function saveInfo() {
-  const newTitle = infoTitleIn.value.trim() || songTitle;
-  const newArtist = infoArtistIn.value.trim() || null;
   closeSheets();
+  await applyNames(infoTitleIn.value.trim() || songTitle, infoArtistIn.value.trim() || null);
+}
+
+/** Rename the song everywhere: player, export name/tags, lock screen. */
+async function applyNames(newTitle: string, newArtist: string | null) {
+  hideNameSuggestion();
   if (newTitle === songTitle && newArtist === songArtist) return;
   songTitle = newTitle;
   songArtist = newArtist;
@@ -330,11 +335,40 @@ async function searchCover(token: number, manual: boolean) {
   const cover = $<HTMLImageElement>('cover');
   cover.onerror = null;
   URL.revokeObjectURL(coverUrl);
-  coverUrl = URL.createObjectURL(found);
+  coverUrl = URL.createObjectURL(found.image);
   cover.src = coverUrl; // onload repaints the background
   setGeneratedCover(false);
   updateMediaSession(songTitle, songArtist ?? '');
+  suggestNames(found.title, found.artist);
 }
+
+// ---------- "Use these names?" (the catalogue's names for a messy file) ----------
+
+const nameSuggest = $('nameSuggest');
+let suggestion: { title: string; artist: string } | null = null;
+
+const sameName = (a: string | null, b: string | null) =>
+  (a ?? '').trim().toLocaleLowerCase() === (b ?? '').trim().toLocaleLowerCase();
+
+function suggestNames(title: string, artist: string) {
+  if (!title || (sameName(title, songTitle) && sameName(artist, songArtist))) return;
+  suggestion = { title, artist };
+  $('suggestTitle').textContent = title;
+  $('suggestArtist').textContent = artist;
+  nameSuggest.hidden = false;
+}
+function hideNameSuggestion() {
+  suggestion = null;
+  nameSuggest.hidden = true;
+}
+$('suggestUse').addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (suggestion) void applyNames(suggestion.title, suggestion.artist || null);
+});
+$('suggestNo').addEventListener('click', (e) => {
+  e.stopPropagation();
+  hideNameSuggestion();
+});
 findCoverBtn.addEventListener('click', () => void searchCover(loadToken, true));
 
 function togglePlay() {
