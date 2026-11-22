@@ -2038,3 +2038,70 @@ input[type='range'] {
   grid-template-columns: 1fr 1fr;
   gap: 10px;
 }
+
+/* Tap the title/artist to fix them */
+.meta.editable {
+  cursor: pointer;
+  border-radius: 10px;
+}
+.meta.editable:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 4px;
+}
+.artist-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.edit-ico {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: var(--dim);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.8;
+}
+.info-hint {
+  margin: -8px 2px 14px;
+}
+
+/* Blur toggle on the cover */
+.cover-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(0, 0, 0, 0.35);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  opacity: 0.85;
+  transition: background 0.2s, opacity 0.2s;
+}
+.cover-btn:hover {
+  opacity: 1;
+}
+.cover-btn[aria-pressed='true'] {
+  background: #fff;
+  color: #120c1f;
+  opacity: 1;
+}
+.cover-btn svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}

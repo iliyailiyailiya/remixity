@@ -5,7 +5,7 @@ import { decodeData, niceName, safeFileName } from './engine/decode';
 import { Player } from './engine/player';
 import { exportAudio, Format, Stage } from './engine/render';
 import { addMarker, assemble, cut, EditState, initialEdit, keepOnly, removeMarker } from './engine/edit';
-import { readMeta, metaFromFileName } from './engine/meta';
+import { readMeta, metaFromFileName, tidyName } from './engine/meta';
 import { detectBpm } from './engine/bpm';
 import { readbackIsNoisy } from './engine/noisecheck';
 import { Waveform } from './ui/waveform';
@@ -144,7 +144,7 @@ async function load(file: File) {
     edit = initialEdit(decoded.duration);
     history = [];
     sel = null;
-    trackName = name;
+    trackName = tidyName(name) || name;
     player.setLoop(null);
     player.load(decoded);
     wave.setBuffer(decoded);
@@ -238,12 +238,66 @@ repeatBtn.addEventListener('click', () => {
   repeatBtn.setAttribute('aria-pressed', String(repeatOn));
 });
 
-const blurBox = $<HTMLInputElement>('blurCover');
+const blurBtn = $<HTMLButtonElement>('blurBtn');
 function setBlur(on: boolean) {
-  blurBox.checked = on;
+  blurBtn.setAttribute('aria-pressed', String(on));
   $('coverFrame').classList.toggle('blurred', on);
 }
-blurBox.addEventListener('change', () => setBlur(blurBox.checked));
+blurBtn.addEventListener('click', (e) => {
+  e.stopPropagation(); // not a play/pause tap on the cover
+  setBlur(blurBtn.getAttribute('aria-pressed') !== 'true');
+});
+
+// ---------- song info: fix the title/artist (names the export, finds covers) ----------
+
+const infoSheet = $('infoSheet');
+const infoTitleIn = $<HTMLInputElement>('infoTitle');
+const infoArtistIn = $<HTMLInputElement>('infoArtist');
+function openInfo() {
+  if (!buffer) return;
+  infoTitleIn.value = songTitle;
+  infoArtistIn.value = songArtist ?? '';
+  showSheet(infoSheet);
+}
+$('editInfo').addEventListener('click', openInfo);
+$('editInfo').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault();
+    openInfo();
+  }
+});
+
+async function saveInfo() {
+  const newTitle = infoTitleIn.value.trim() || songTitle;
+  const newArtist = infoArtistIn.value.trim() || null;
+  closeSheets();
+  if (newTitle === songTitle && newArtist === songArtist) return;
+  songTitle = newTitle;
+  songArtist = newArtist;
+  trackName = newArtist ? `${newArtist} - ${newTitle}` : newTitle;
+  $('title').textContent = newTitle;
+  $('artist').textContent = newArtist ?? t('yourTrack');
+  document.title = `${newTitle} · THE REMIXITY`;
+  // Export details and the SoundCloud review start over from the new names.
+  exportKey = '';
+  fileEdited = false;
+  share.trackChanged();
+  updateMediaSession(newTitle, newArtist ?? '');
+
+  // Still on a generated cover: redraw it with the new title, then search.
+  if (coverIsGenerated) {
+    const token = loadToken;
+    const blob = await generatedCover(newTitle);
+    if (token !== loadToken) return;
+    URL.revokeObjectURL(coverUrl);
+    coverUrl = URL.createObjectURL(blob);
+    $<HTMLImageElement>('cover').src = coverUrl;
+    void searchCover(token, true);
+  }
+}
+$('infoSave').addEventListener('click', () => void saveInfo());
+for (const el of [infoTitleIn, infoArtistIn])
+  el.addEventListener('keydown', (e) => e.key === 'Enter' && void saveInfo());
 
 const findBox = $<HTMLInputElement>('findCovers');
 findBox.checked = findCoversEnabled();

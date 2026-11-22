@@ -186,7 +186,25 @@ function parseFlac(b: Uint8Array): TrackMeta {
 }
 
 /** "Artist - Title" is the most common way people name files. */
+/**
+ * Clean a file name that came from a downloader: drop site tags like
+ * "KLICKAUD" or "y2mate.com", bitrate notes, "(Official Video)", and long
+ * numeric IDs, and turn underscores into spaces.
+ */
+export function tidyName(name: string): string {
+  return name
+    .replace(/_/g, ' ')
+    .replace(/[([{][^)\]}]*(official|video|audio|lyric|visuali[sz]er|kbps|\bhq\b|\bhd\b)[^)\]}]*[)\]}]/gi, '')
+    .replace(/\b(klickaud|y2mate(\.com)?|ytmp3(\.cc)?|savefrom(\.net)?|mp3juices?|spotifydown|sclouddownloader|soundcloud ?downloader|\d{2,3} ?kbps)\b/gi, '')
+    .replace(/\b\d{5,}\b/g, '')
+    .replace(/\s+[-–—]\s*$/, '')
+    .replace(/^\s*[-–—]\s+/, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
 export function metaFromFileName(name: string): TrackMeta {
+  name = tidyName(name) || name;
   const m = name.match(/^(.+?)\s+[-–—]\s+(.+)$/);
   return m ? { artist: m[1].trim(), title: m[2].trim() } : { title: name };
 }
