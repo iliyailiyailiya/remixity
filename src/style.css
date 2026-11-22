@@ -1900,6 +1900,12 @@ input[type='range'] {
   color: inherit;
   text-underline-offset: 3px;
 }
+.legal.made-by {
+  margin-top: -4px;
+}
+.legal.made-by a {
+  font-weight: 700;
+}
 
 /* Manual SoundCloud posting tip (until the API app is set up) */
 .sc-tip {
