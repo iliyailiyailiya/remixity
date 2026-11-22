@@ -176,7 +176,7 @@ async function load(file: File) {
       coverUrl = URL.createObjectURL(await generatedCover(title));
       cover.src = coverUrl;
       setGeneratedCover(true);
-      setAltCover(null);
+      setAltCover('search');
     };
     cover.onload = async () => {
       // Paint the cover itself as the background (no pixel readback, so it
@@ -192,8 +192,10 @@ async function load(file: File) {
     songTitle = title;
     songArtist = artistTag;
     setGeneratedCover(!meta.cover);
-    // The file has its own cover: leave it, but offer a search on request.
-    setAltCover(meta.cover ? 'search' : null);
+    // A file's own cover is left alone (search on request); without one,
+    // the search runs by itself. The 🔍 button is there either way.
+    setAltCover('search');
+    coverStatus(null);
     if (!meta.cover && findCoversEnabled()) void searchCover(token, false);
 
     home.hidden = true;
@@ -329,25 +331,34 @@ const findCoverLabel = $('findCoverLabel');
 
 function setGeneratedCover(generated: boolean) {
   coverIsGenerated = generated;
-  findCoverBtn.hidden = !generated;
-  findCoverBtn.disabled = false;
-  findCoverLabel.textContent = t('findCover');
+}
+
+// The pill on the cover only reports what the search is doing.
+let statusTimer = 0;
+function coverStatus(text: string | null, hideAfter = 0) {
+  clearTimeout(statusTimer);
+  findCoverBtn.hidden = !text;
+  findCoverBtn.disabled = true;
+  if (text) findCoverLabel.textContent = text;
+  if (text && hideAfter) statusTimer = window.setTimeout(() => (findCoverBtn.hidden = true), hideAfter);
 }
 
 /** Search for the current song's cover; swap it in if a real match turns up. */
 async function searchCover(token: number, manual: boolean) {
-  findCoverBtn.disabled = true;
-  findCoverLabel.textContent = t('findingCover');
+  altCoverBtn.disabled = true;
+  coverStatus(t('findingCover'));
   const found = await findCover(songTitle, songArtist);
   if (token !== loadToken) return;
+  altCoverBtn.disabled = false;
   if (!found) {
-    findCoverBtn.disabled = false;
-    findCoverLabel.textContent = manual ? t('noCoverFound') : t('findCover');
-    if (manual) setTimeout(() => token === loadToken && coverIsGenerated && (findCoverLabel.textContent = t('findCover')), 2500);
+    coverStatus(manual ? t('noCoverFound') : null, 2500);
     return;
   }
+  coverStatus(null);
   showCover(URL.createObjectURL(found.image));
   setGeneratedCover(false);
+  // A file's own cover can be brought back; a generated one isn't worth it.
+  setAltCover(fileCoverUrl ? 'restore' : 'search');
   updateMediaSession(songTitle, songArtist ?? '');
   suggestNames(found.title, found.artist);
 }
@@ -361,7 +372,7 @@ function showCover(url: string) {
   cover.src = url; // onload repaints the background
 }
 
-// ---------- another cover for files that have one ----------
+// ---------- the search button on every cover (and "restore" after a swap) ----------
 
 const altCoverBtn = $<HTMLButtonElement>('altCoverBtn');
 function setAltCover(mode: 'search' | 'restore' | null) {
@@ -372,7 +383,7 @@ function setAltCover(mode: 'search' | 'restore' | null) {
   altCoverBtn.setAttribute('aria-label', label);
   altCoverBtn.title = label;
 }
-altCoverBtn.addEventListener('click', async (e) => {
+altCoverBtn.addEventListener('click', (e) => {
   e.stopPropagation(); // not a play/pause tap on the cover
   if (altCoverBtn.classList.contains('restore')) {
     showCover(fileCoverUrl);
@@ -380,23 +391,7 @@ altCoverBtn.addEventListener('click', async (e) => {
     setAltCover('search');
     return;
   }
-  const token = loadToken;
-  altCoverBtn.disabled = true;
-  const found = await findCover(songTitle, songArtist);
-  if (token !== loadToken) return;
-  if (!found) {
-    // Say so briefly with the same pill the generated covers use.
-    findCoverLabel.textContent = t('noCoverFound');
-    findCoverBtn.hidden = false;
-    findCoverBtn.disabled = true;
-    setTimeout(() => token === loadToken && !coverIsGenerated && (findCoverBtn.hidden = true), 2500);
-    setAltCover('search');
-    return;
-  }
-  showCover(URL.createObjectURL(found.image));
-  updateMediaSession(songTitle, songArtist ?? '');
-  suggestNames(found.title, found.artist);
-  setAltCover('restore');
+  void searchCover(loadToken, true);
 });
 
 // ---------- "Use these names?" (the catalogue's names for a messy file) ----------
@@ -431,7 +426,6 @@ $('suggestNo').addEventListener('click', (e) => {
   e.stopPropagation();
   hideNameSuggestion();
 });
-findCoverBtn.addEventListener('click', () => void searchCover(loadToken, true));
 
 // Your own picture as the cover (for songs no catalogue has).
 const coverFileIn = $<HTMLInputElement>('coverFile');

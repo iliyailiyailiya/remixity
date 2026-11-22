@@ -197,6 +197,8 @@ export function tidyName(name: string): string {
     .replace(/[([{][^)\]}]*(official|video|audio|lyric|visuali[sz]er|kbps|\bhq\b|\bhd\b)[^)\]}]*[)\]}]/gi, '')
     .replace(/\b(klickaud|y2mate(\.com)?|ytmp3(\.cc)?|savefrom(\.net)?|mp3juices?|spotifydown|sclouddownloader|soundcloud ?downloader|\d{2,3} ?kbps)\b/gi, '')
     .replace(/\b\d{5,}\b/g, '')
+    // Suffixes audio apps add: "lucid-processed", "song_final", "beat mastered"
+    .replace(/[\s_-]+(processed|mastered|master|final( version)?|copy( \d+)?|exported|export|bounce|mixdown|v\d+)$/i, '')
     .replace(/\s+[-–—]\s*$/, '')
     .replace(/^\s*[-–—]\s+/, '')
     .replace(/\s{2,}/g, ' ')

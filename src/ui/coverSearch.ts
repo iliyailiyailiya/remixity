@@ -63,6 +63,7 @@ export function cleanTitle(title: string): string {
   return title
     .replace(/\s+\|\s+.*$/, '') // channel tails: "Pattern [Music Video] | GRM Daily"
     .replace(/[([{][^)\]}]*(slowed|reverb|sped|nightcore|remix|official|audio|video|lyric|visuali[sz]er|prod\.?|bass ?boost|8d|hq|hd|shot by|dir\.?|directed|filmed|performance|live)[^)\]}]*[)\]}]/gi, '')
+    .replace(/[\s_-]+(processed|mastered|master|final( version)?|copy( \d+)?|exported|export|bounce|mixdown|v\d+)$/i, '') // "lucid-processed", "song_final"
     .replace(/\b\d{5,}\b/g, '') // download/upload IDs like "Blow Me 79435477"
     .replace(/\s{2,}/g, ' ')
     .trim();

@@ -1994,7 +1994,8 @@ input[type='range'] {
   white-space: nowrap;
 }
 .find-cover:disabled {
-  opacity: 0.75;
+  opacity: 1; /* it's a status message now, not a button */
+  cursor: default;
 }
 .find-cover svg {
   width: 17px;
