@@ -12,7 +12,7 @@ import { Waveform } from './ui/waveform';
 import { EqView } from './ui/eqview';
 import { initShare } from './share/ui';
 import { initAds } from './ads';
-import { findCover, findCoversEnabled, setFindCovers } from './ui/coverSearch';
+import { findCover, findCoversEnabled, searchLog, setFindCovers } from './ui/coverSearch';
 import { withTags } from './engine/tags';
 import { Backdrop } from './ui/backdrop';
 import { defaultPalette, generatedCover, paletteFrom } from './ui/palette';
@@ -1218,3 +1218,15 @@ if (import.meta.env.DEV) {
 }
 
 initAds();
+
+// ?debug: show what the cover search did (to diagnose it on a phone).
+if (new URLSearchParams(location.search).has('debug')) {
+  const panel = document.createElement('pre');
+  panel.style.cssText =
+    'position:fixed;left:6px;right:6px;bottom:6px;z-index:99;max-height:40vh;overflow:auto;margin:0;padding:8px;' +
+    'background:rgba(0,0,0,.85);color:#9f9;font:11px/1.35 ui-monospace,monospace;white-space:pre-wrap;border-radius:8px';
+  const show = () => (panel.textContent = `cover search (${navigator.userAgent.slice(0, 60)}…)\n` + searchLog.join('\n'));
+  show();
+  document.body.append(panel);
+  window.addEventListener('coversearchlog', show);
+}

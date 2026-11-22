@@ -90,12 +90,31 @@ interface ITunesResult {
   artworkUrl100?: string;
 }
 
+/** What each request did, for the ?debug panel (no personal data, just URLs). */
+export const searchLog: string[] = [];
+const log = (line: string) => {
+  searchLog.push(line);
+  if (searchLog.length > 40) searchLog.shift();
+  window.dispatchEvent(new Event('coversearchlog'));
+};
+
 async function get(params: Record<string, string>, path: string, signal: AbortSignal): Promise<ITunesResult[]> {
   const url = new URL(`https://itunes.apple.com/${path}`);
   url.search = new URLSearchParams(params).toString();
-  const r = await fetch(url, { signal });
-  if (!r.ok) return [];
-  return ((await r.json()) as { results?: ITunesResult[] }).results ?? [];
+  const t0 = performance.now();
+  try {
+    const r = await fetch(url, { signal });
+    if (!r.ok) {
+      log(`${path} ${params.term ?? params.id} → HTTP ${r.status}`);
+      return [];
+    }
+    const results = ((await r.json()) as { results?: ITunesResult[] }).results ?? [];
+    log(`${path} ${params.term ?? params.id} → ${results.length} results, ${Math.round(performance.now() - t0)} ms`);
+    return results;
+  } catch (err) {
+    log(`${path} ${params.term ?? params.id} → ${(err as Error).name}: ${(err as Error).message}`);
+    throw err;
+  }
 }
 
 /** Pass 1: a plain song search for "artist title". */
@@ -167,7 +186,11 @@ export async function findCover(title: string, artist: string | null): Promise<F
   const timer = setTimeout(() => ctl.abort(), 20000); // generous for slow mobile data
   try {
     const hit = (await searchSongs(t, artist, ctl.signal)) ?? (await searchCatalogue(t, artist, ctl.signal));
-    if (!hit?.artworkUrl100) return null;
+    if (!hit?.artworkUrl100) {
+      log(`no match for "${t}" / "${artist ?? ''}"`);
+      return null;
+    }
+    log(`match: ${hit.artistName} – ${hit.trackName}`);
     // The API links a 100px thumbnail; the same path serves bigger sizes.
     const big = hit.artworkUrl100.replace(/\/\d+x\d+bb\.(jpg|png)$/, '/1000x1000bb.$1');
     const img = await fetch(big, { signal: ctl.signal });
@@ -175,7 +198,8 @@ export async function findCover(title: string, artist: string | null): Promise<F
     const image = await img.blob();
     if (!image.type.startsWith('image/')) return null;
     return { image, title: hit.trackName ?? '', artist: hit.artistName ?? '' };
-  } catch {
+  } catch (err) {
+    log(`gave up: ${(err as Error).name}: ${(err as Error).message}`);
     return null;
   } finally {
     clearTimeout(timer);
