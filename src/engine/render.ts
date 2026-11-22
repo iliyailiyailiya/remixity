@@ -9,35 +9,35 @@ import { createStretch } from './player';
 export type Format = 'mp3' | 'wav16' | 'wav24';
 export type Stage = 'resample' | 'render' | 'encode';
 
-export async function exportAudio(
-  buffer: AudioBuffer,
+/**
+ * Speed change + effects + limiter, in 32-bit float. With `tail`, room is
+ * added for the reverb and echo to ring out.
+ */
+async function processChannels(
+  channels: Float32Array<ArrayBuffer>[],
+  sr: number,
   p: FxParams,
-  format: Format,
+  tail: boolean,
   onProgress: (stage: Stage, fraction: number | null) => void,
-): Promise<Blob> {
-  const sr = buffer.sampleRate;
-  const copy = () =>
-    Array.from({ length: buffer.numberOfChannels }, (_, c) => buffer.getChannelData(c).slice());
-
+): Promise<Float32Array<ArrayBuffer>[]> {
   // 1. Change speed: repitch with a band-limited resampler (keeps the
   //    original sample rate), or with "keep pitch", time-stretch instead.
-  let channels: Float32Array<ArrayBuffer>[];
-  const outLength = Math.floor(buffer.length / p.ratio);
-  if (Math.abs(p.ratio - 1) < 1e-6) {
-    channels = copy();
-  } else if (p.keepPitch) {
-    onProgress('resample', null);
-    channels = await stretchOffline(copy(), sr, p.ratio, outLength);
-  } else {
-    onProgress('resample', 0);
-    channels = await resample(copy(), p.ratio, outLength, (f) => onProgress('resample', f));
+  const outLength = Math.floor(channels[0].length / p.ratio);
+  if (Math.abs(p.ratio - 1) >= 1e-6) {
+    if (p.keepPitch) {
+      onProgress('resample', null);
+      channels = await stretchOffline(channels, sr, p.ratio, outLength);
+    } else {
+      onProgress('resample', 0);
+      channels = await resample(channels, p.ratio, outLength, (f) => onProgress('resample', f));
+    }
   }
 
   // 2. Render effects offline in 32-bit float, adding room for the reverb and
   //    echo tails so nothing gets cut off at the end.
   onProgress('render', null);
-  const tail = Math.max(p.reverbMix > 0 ? p.decay : 0, delayTail(p)) + 0.1;
-  const total = channels[0].length + Math.ceil(tail * sr);
+  const ring = tail ? Math.max(p.reverbMix > 0 ? p.decay : 0, delayTail(p)) + 0.1 : 0;
+  const total = channels[0].length + Math.ceil(ring * sr);
   const off = new OfflineAudioContext(2, total, sr);
   const src = off.createBufferSource();
   const srcBuf = off.createBuffer(channels.length, channels[0].length, sr);
@@ -52,8 +52,20 @@ export async function exportAudio(
 
   // 3. Look-ahead limiter (the same algorithm live playback uses): keeps
   //    peaks under the ceiling without bending the waveform.
-  const out = [rendered.getChannelData(0), rendered.getChannelData(1)];
+  const out = [rendered.getChannelData(0), rendered.getChannelData(1)] as Float32Array<ArrayBuffer>[];
   limit(out, sr, CEILING_DB);
+  return out;
+}
+
+export async function exportAudio(
+  buffer: AudioBuffer,
+  p: FxParams,
+  format: Format,
+  onProgress: (stage: Stage, fraction: number | null) => void,
+): Promise<Blob> {
+  const sr = buffer.sampleRate;
+  const copy = Array.from({ length: buffer.numberOfChannels }, (_, c) => buffer.getChannelData(c).slice());
+  const out = await processChannels(copy, sr, p, true, onProgress);
 
   // 4. Encode.
   if (format === 'mp3') {
@@ -142,4 +154,31 @@ async function stretchOffline(
   node.connect(ctx.destination);
   const out = await ctx.startRendering();
   return [out.getChannelData(0).slice(0, outLength), out.getChannelData(1).slice(0, outLength)];
+}
+
+/**
+ * A short piece of the remix, as you hear it: `seconds` long (at the new
+ * speed), starting at `start` seconds into `buffer`. A little audio before
+ * the start goes through the effects too, so the reverb is already full when
+ * the clip begins; the clip fades in and out.
+ */
+export async function renderClip(buffer: AudioBuffer, p: FxParams, start: number, seconds: number): Promise<AudioBuffer> {
+  const sr = buffer.sampleRate;
+  const preroll = Math.min(start, 2); // seconds of source before the clip
+  const from = Math.floor((start - preroll) * sr);
+  const len = Math.min(buffer.length - from, Math.ceil((preroll + seconds * p.ratio) * sr));
+  const slice = Array.from({ length: buffer.numberOfChannels }, (_, c) => buffer.getChannelData(c).slice(from, from + len));
+  const out = await processChannels(slice, sr, p, false, () => {});
+  const skip = Math.floor((preroll / p.ratio) * sr);
+  const n = Math.max(1, Math.min(out[0].length - skip, Math.floor(seconds * sr)));
+  const clip = new AudioBuffer({ length: n, numberOfChannels: 2, sampleRate: sr });
+  const fadeIn = Math.min(n, Math.floor(0.25 * sr));
+  const fadeOut = Math.min(n, Math.floor(1.2 * sr));
+  for (let c = 0; c < 2; c++) {
+    const ch = out[c].subarray(skip, skip + n);
+    for (let i = 0; i < fadeIn; i++) ch[i] *= i / fadeIn;
+    for (let i = 0; i < fadeOut; i++) ch[n - 1 - i] *= i / fadeOut;
+    clip.copyToChannel(ch, c);
+  }
+  return clip;
 }

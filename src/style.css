@@ -2430,6 +2430,48 @@ body.lyrics-open .player {
   visibility: hidden;
 }
 
+/* Story maker */
+.story-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  margin: 0 0 14px;
+  padding: 13px 16px;
+  border-radius: 16px;
+  border: 0;
+  color: #fff;
+  font: 700 1rem system-ui, -apple-system, sans-serif;
+  background: linear-gradient(120deg, #f58529, #dd2a7b 45%, #8134af 75%, #515bd4);
+}
+.story-btn svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+}
+.story-btn:active {
+  transform: scale(0.97);
+}
+.story-preview {
+  display: flex;
+  justify-content: center;
+  margin: 4px 0 14px;
+}
+.story-preview canvas {
+  height: min(42dvh, 420px);
+  aspect-ratio: 9 / 16;
+  width: auto;
+  border-radius: 18px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+  background: #120c1f;
+}
+.story-kinds label span {
+  white-space: nowrap;
+}
+
 /* ----- Library ----- */
 
 .cta-secondary {

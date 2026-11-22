@@ -3,7 +3,9 @@ import { applyI18n, getLang, Lang, setLang, t } from './i18n';
 import { DEFAULT_PARAMS, FxParams } from './engine/chain';
 import { decodeData, niceName, safeFileName } from './engine/decode';
 import { Player } from './engine/player';
-import { exportAudio, Format, Stage } from './engine/render';
+import { exportAudio, Format, renderClip, Stage } from './engine/render';
+import { canRecordVideo, storyImage, storyVideo, type StoryInfo } from './ui/story';
+import { shareOrDownload } from './library/export';
 import { addMarker, assemble, cut, EditState, initialEdit, keepOnly, removeMarker } from './engine/edit';
 import { readMeta, songNames, tidyName } from './engine/meta';
 import { detectBpm } from './engine/bpm';
@@ -862,7 +864,9 @@ function showSheet(sheet: HTMLElement) {
   scrim.classList.add('open');
   renderEdit();
 }
+let storyAbort: AbortController | null = null; // a story video being recorded
 function closeSheets() {
+  storyAbort?.abort(); // closing the story sheet stops a recording
   for (const s of document.querySelectorAll<HTMLElement>('.sheet')) {
     s.classList.remove('open');
     s.setAttribute('aria-hidden', 'true');
@@ -873,6 +877,131 @@ function closeSheets() {
 scrim.addEventListener('click', closeSheets);
 document.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', closeSheets));
 $('openMenu').addEventListener('click', () => showSheet($('menu')));
+// ---------- story for Instagram (image or video) ----------
+
+const storyCanvas = $<HTMLCanvasElement>('storyCanvas');
+const storyStatus = $('storyStatus');
+const storyBar = $('storyProgress');
+const storyCreate = $<HTMLButtonElement>('storyCreate');
+const storyShare = $<HTMLButtonElement>('storyShare');
+let storyFile: File | null = null;
+
+const storyKind = () => document.querySelector<HTMLInputElement>('input[name="storyKind"]:checked')!.value;
+
+function storyInfo(): StoryInfo {
+  const r = params.ratio;
+  return {
+    title: $('title').textContent || trackName,
+    artist: $('artist').textContent === t('yourTrack') ? '' : $('artist').textContent || '',
+    cover: $<HTMLImageElement>('cover'),
+    badge: Math.abs(r - 1) < 0.005 ? '' : $('badge').textContent || '',
+  };
+}
+
+function updateStoryHint() {
+  const kind = storyKind();
+  const fmt = (x: number) => fmtTime(x / params.ratio);
+  $('storyHint').textContent =
+    kind === 'image'
+      ? t('storyHintImage')
+      : canRecordVideo()
+        ? t('storyHintVideo').replace('{t}', fmt(player?.position ?? 0))
+        : t('storyNoVideo');
+  storyCreate.disabled = kind !== 'image' && !canRecordVideo();
+}
+
+function storyReset() {
+  storyAbort?.abort();
+  storyAbort = null;
+  storyFile = null;
+  storyShare.hidden = true;
+  storyBar.hidden = true;
+  storyStatus.textContent = '';
+  storyCreate.disabled = false;
+  storyCreate.textContent = t('storyCreate');
+  void storyImage(storyCanvas, storyInfo()).catch(() => {}); // still preview
+  updateStoryHint();
+}
+
+$('openStory').addEventListener('click', () => {
+  showSheet($('storySheet'));
+  storyReset();
+});
+document.querySelectorAll('input[name="storyKind"]').forEach((el) => el.addEventListener('change', storyReset));
+
+storyCreate.addEventListener('click', async () => {
+  if (storyAbort) {
+    // Pressed again while recording: stop.
+    storyReset();
+    return;
+  }
+  if (!buffer || !player) return;
+  const info = storyInfo();
+  const kind = storyKind();
+  const base = safeFileName(`${info.title}${info.badge ? ` (${info.badge})` : ''} - THE REMIXITY`);
+  storyFile = null;
+  storyShare.hidden = true;
+  try {
+    if (kind === 'image') {
+      const png = await storyImage(storyCanvas, info);
+      storyFile = new File([png], `${base}.png`, { type: 'image/png' });
+    } else {
+      const seconds = Number(kind);
+      const wasPlaying = player.playing;
+      player.pause();
+      render();
+      // Start where you are; near the end, start earlier so the clip is full.
+      const span = seconds * params.ratio;
+      const start = Math.max(0, Math.min(player.position, buffer.duration - span));
+      storyStatus.textContent = t('storyPreparing');
+      storyAbort = new AbortController();
+      storyCreate.textContent = t('fixStop');
+      const clip = await renderClip(buffer, params, start, Math.min(seconds, buffer.duration / params.ratio));
+      if (!storyAbort || storyAbort.signal.aborted) return;
+      storyBar.hidden = false;
+      const fillBar = storyBar.firstElementChild as HTMLElement;
+      const video = await storyVideo(
+        storyCanvas,
+        info,
+        clip,
+        (f) => {
+          fillBar.style.width = `${Math.round(f * 100)}%`;
+          storyStatus.textContent = t('storyRecording').replace('{n}', String(Math.ceil(clip.duration * (1 - f))));
+        },
+        storyAbort.signal,
+      );
+      storyAbort = null;
+      storyBar.hidden = true;
+      storyCreate.textContent = t('storyCreate');
+      const ext = video.type.includes('mp4') ? 'mp4' : 'webm';
+      storyFile = new File([video], `${base}.${ext}`, { type: video.type });
+      if (wasPlaying) {
+        player.play();
+        render();
+      }
+    }
+    storyStatus.textContent = t('storyReady');
+    storyShare.hidden = false;
+  } catch (err) {
+    storyAbort = null;
+    storyBar.hidden = true;
+    storyCreate.textContent = t('storyCreate');
+    if ((err as DOMException).name === 'AbortError') return;
+    console.error(err);
+    storyStatus.textContent = t('storyFailed').replace('{e}', (err as Error).message);
+  }
+});
+
+// Sharing needs its own tap (the share sheet only opens right after one).
+storyShare.addEventListener('click', async () => {
+  if (!storyFile) return;
+  try {
+    await shareOrDownload([storyFile]);
+  } catch (err) {
+    storyStatus.textContent = t('storyFailed').replace('{e}', (err as Error).message);
+  }
+});
+
 $('openExport').addEventListener('click', () => {
   updateExportName();
   showSheet($('exportSheet'));

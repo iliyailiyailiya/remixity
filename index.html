@@ -571,10 +571,32 @@
       </div>
     </section>
 
+    <section id="storySheet" class="sheet compact" aria-hidden="true" aria-labelledby="storyTitle">
+      <button class="grabber" data-close aria-label="Close"></button>
+      <div class="sheet-body">
+        <h2 id="storyTitle" class="sheet-title" data-i18n="storyTitle"></h2>
+        <div class="story-preview"><canvas id="storyCanvas" width="1080" height="1920"></canvas></div>
+        <div class="formats story-kinds" role="radiogroup">
+          <label><input type="radio" name="storyKind" value="image" checked /><span data-i18n="storyImage"></span></label>
+          <label><input type="radio" name="storyKind" value="15" /><span data-i18n="storyVideo15"></span></label>
+          <label><input type="radio" name="storyKind" value="30" /><span data-i18n="storyVideo30"></span></label>
+        </div>
+        <p id="storyHint" class="hint"></p>
+        <button id="storyCreate" class="primary" data-i18n="storyCreate"></button>
+        <div id="storyProgress" class="progress" hidden><div></div></div>
+        <p id="storyStatus" class="status" aria-live="polite"></p>
+        <button id="storyShare" class="primary" hidden data-i18n="storyShare"></button>
+      </div>
+    </section>
+
     <section id="exportSheet" class="sheet compact" aria-hidden="true" aria-labelledby="exportTitle">
       <button class="grabber" data-close aria-label="Close"></button>
       <div class="sheet-body">
         <h2 id="exportTitle" class="sheet-title" data-i18n="export"></h2>
+        <button id="openStory" class="story-btn">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="2.5" width="14" height="19" rx="4" /><circle cx="12" cy="12" r="3.2" /></svg>
+          <span data-i18n="storyMake"></span>
+        </button>
         <div class="card export-details">
           <label class="field">
             <small data-i18n="fileName"></small>
