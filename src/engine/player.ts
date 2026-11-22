@@ -1,8 +1,34 @@
-// Live preview. Uses the browser's playbackRate for instant response; the
-// export path uses a high-quality resampler instead (see render.ts).
+// Live preview. Uses the browser's playbackRate for instant response (speed
+// and pitch change together, like vinyl); the export path uses a
+// high-quality resampler instead (see render.ts). With "keep pitch" on, the
+// song plays through Signalsmith Stretch (WASM, loaded on first use), which
+// changes speed without changing pitch.
 import { buildChain, CEILING_DB, Chain, FxParams } from './chain';
 import { makeImpulse } from './impulse';
 import { LIMITER_WORKLET } from './limiter';
+
+/** The parts of Signalsmith Stretch's node we use. */
+export type StretchNode = AudioWorkletNode & {
+  addBuffers(channels: Float32Array[], transfer?: Transferable[]): Promise<number>;
+  dropBuffers(): Promise<unknown>;
+  schedule(change: Record<string, number | boolean>): Promise<unknown>;
+};
+
+export async function createStretch(ctx: BaseAudioContext): Promise<StretchNode> {
+  const { default: SignalsmithStretch } = await import('signalsmith-stretch');
+  // If its audio-thread code fails to start, it would wait forever: give up.
+  return (await Promise.race([
+    SignalsmithStretch(ctx),
+    new Promise<never>((_, fail) => setTimeout(() => fail(new Error('keep pitch failed to start')), 8000)),
+  ])) as StretchNode;
+}
+
+/** Copies of a buffer's channels as stereo, ready to hand over (transfer) to the stretcher. */
+export function stereoCopies(buffer: AudioBuffer): Float32Array<ArrayBuffer>[] {
+  const l = buffer.getChannelData(0).slice();
+  const r = buffer.numberOfChannels > 1 ? buffer.getChannelData(1).slice() : l.slice();
+  return [l, r];
+}
 
 export class Player {
   ctx: AudioContext;
@@ -18,6 +44,15 @@ export class Player {
   private wallLast = 0;
   private ratio = 1;
   private irKey = '';
+  // Keep-pitch playback
+  private keepPitch = false;
+  private stretch: StretchNode | null = null;
+  private stretchLoading: Promise<StretchNode | null> | null = null;
+  private stretchHas: AudioBuffer | null = null; // which song the stretcher holds
+  private stretchRunning = false;
+  private startToken = 0; // ignores a stretched start that's no longer wanted
+  private endTimer = 0;
+  private waitingForStretch = false;
   playing = false;
   /** What you hear, for the EQ's spectrum display. */
   analyser: AnalyserNode;
@@ -141,7 +176,7 @@ export class Player {
 
   /** Current position in source seconds. */
   get position() {
-    if (!this.playing) return this.offset;
+    if (!this.playing || this.waitingForStretch) return this.offset;
     let p = this.offset + this.clock() * this.ratio;
     const region = this.loopRegion();
     if (region) {
@@ -160,6 +195,10 @@ export class Player {
     if (!this.buffer || this.playing) return;
     if (this.ctx.state !== 'running') void this.ctx.resume();
     if (this.offset >= this.duration - 0.01) this.offset = 0;
+    if (this.keepPitch) {
+      this.playStretched();
+      return;
+    }
     const src = this.ctx.createBufferSource();
     src.buffer = this.buffer;
     const region = this.loopRegion();
@@ -189,7 +228,84 @@ export class Player {
     if (!this.playing) return;
     this.offset = this.position;
     this.stopSource();
+    this.stopStretch();
     this.playing = false;
+  }
+
+  // ---------- keep pitch ----------
+
+  /** Load the stretcher once, connected into the effect chain. */
+  private loadStretch(): Promise<StretchNode | null> {
+    this.stretchLoading ??= createStretch(this.ctx).then(
+      (node) => {
+        node.connect(this.chain.input);
+        this.stretch = node;
+        return node;
+      },
+      (err) => {
+        console.warn('keep pitch unavailable', err);
+        this.stretchLoading = null;
+        return null;
+      },
+    );
+    return this.stretchLoading;
+  }
+
+  /** Start playing through the stretcher (async: it may need loading first). */
+  private playStretched() {
+    const token = ++this.startToken;
+    this.playing = true;
+    this.waitingForStretch = true;
+    void (async () => {
+      const node = await this.loadStretch();
+      if (token !== this.startToken || !this.playing || !this.buffer) return;
+      if (!node) {
+        // Couldn't load it: fall back to normal (vinyl-style) playback.
+        this.keepPitch = false;
+        this.playing = false;
+        this.waitingForStretch = false;
+        this.play();
+        return;
+      }
+      if (this.stretchHas !== this.buffer) {
+        const channels = stereoCopies(this.buffer);
+        await node.dropBuffers();
+        await node.addBuffers(channels, channels.map((c) => c.buffer));
+        this.stretchHas = this.buffer;
+        if (token !== this.startToken || !this.playing) return;
+      }
+      const region = this.loopRegion();
+      if (region && (this.offset < region[0] || this.offset >= region[1])) this.offset = region[0];
+      void node.schedule({
+        active: true,
+        input: this.offset,
+        rate: this.ratio,
+        semitones: 0,
+        loopStart: region ? region[0] : 0,
+        loopEnd: region ? region[1] : 0,
+        output: this.ctx.currentTime,
+      });
+      this.stretchRunning = true;
+      this.waitingForStretch = false;
+      this.restartClock();
+      // The stretcher has no "ended" event: watch for the end ourselves.
+      clearInterval(this.endTimer);
+      this.endTimer = window.setInterval(() => {
+        if (!this.playing || this.loopRegion() || this.position < this.duration - 0.02) return;
+        this.offset = this.duration;
+        this.stopStretch();
+        this.playing = false;
+        this.onEnded();
+      }, 150);
+    })();
+  }
+
+  private stopStretch() {
+    this.startToken++;
+    this.waitingForStretch = false;
+    clearInterval(this.endTimer);
+    if (this.stretch && this.stretchRunning) void this.stretch.schedule({ active: false, output: this.ctx.currentTime });
+    this.stretchRunning = false;
   }
 
   seek(seconds: number) {
@@ -200,12 +316,22 @@ export class Player {
   }
 
   setParams(p: FxParams) {
+    if (p.keepPitch !== this.keepPitch) {
+      // Switch engines in place, keeping the position.
+      const wasPlaying = this.playing;
+      this.pause();
+      this.keepPitch = p.keepPitch;
+      if (this.keepPitch) void this.loadStretch();
+      if (wasPlaying) this.play();
+    }
     if (p.ratio !== this.ratio) {
       // Rebase the clock so the position stays correct across speed changes.
       this.offset = this.position;
       this.restartClock();
       this.ratio = p.ratio;
       this.src?.playbackRate.setValueAtTime(p.ratio, this.ctx.currentTime);
+      if (this.stretch && this.stretchRunning)
+        void this.stretch.schedule({ rate: p.ratio, output: this.ctx.currentTime });
     }
     this.chain.set(p);
     const key = `${p.decay.toFixed(2)}|${p.tone.toFixed(2)}`;

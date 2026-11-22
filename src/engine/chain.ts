@@ -11,7 +11,7 @@
 // (player.ts) and the same algorithm offline for export (limiter.ts).
 
 export interface FxParams {
-  ratio: number; // playback speed; repitch, so pitch follows speed
+  ratio: number; // playback speed; pitch follows it unless keepPitch
   reverbMix: number; // 0..1
   decay: number; // reverb RT60 in seconds
   tone: number; // 0 = dark, 1 = bright
@@ -27,6 +27,8 @@ export interface FxParams {
   delayMix: number; // 0..1
   delayTime: number; // seconds
   delayFeedback: number; // 0..0.85
+  /** Change speed without changing pitch (time-stretch) instead of like vinyl. */
+  keepPitch: boolean;
 }
 
 export const DEFAULT_PARAMS: FxParams = {
@@ -46,6 +48,7 @@ export const DEFAULT_PARAMS: FxParams = {
   delayMix: 0,
   delayTime: 0.375,
   delayFeedback: 0.35,
+  keepPitch: false,
 };
 
 export const HEADROOM_DB = -3;

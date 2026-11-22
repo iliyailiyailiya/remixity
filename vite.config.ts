@@ -5,6 +5,12 @@ import { defineConfig, loadEnv } from 'vite';
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), 'VITE_');
   return {
+    // Modern output (Safari 15+): no down-levelled class fields. That matters
+    // for Signalsmith Stretch, which ships part of its own code to the audio
+    // thread as text, where helpers like __publicField don't exist.
+    build: { target: 'es2022' },
+    esbuild: { target: 'es2022' },
+    optimizeDeps: { exclude: ['signalsmith-stretch'], esbuildOptions: { target: 'es2022' } },
     plugins: [
       {
         name: 'ads-txt',

@@ -4,6 +4,7 @@ import { buildChain, CEILING_DB, delayTail, FxParams } from './chain';
 import { makeImpulse } from './impulse';
 import { limit } from './limiter';
 import { encodeMp3, resample } from './dsp';
+import { createStretch } from './player';
 
 export type Format = 'mp3' | 'wav16' | 'wav24';
 export type Stage = 'resample' | 'render' | 'encode';
@@ -18,11 +19,15 @@ export async function exportAudio(
   const copy = () =>
     Array.from({ length: buffer.numberOfChannels }, (_, c) => buffer.getChannelData(c).slice());
 
-  // 1. Repitch with a band-limited resampler (keeps the original sample rate).
+  // 1. Change speed: repitch with a band-limited resampler (keeps the
+  //    original sample rate), or with "keep pitch", time-stretch instead.
   let channels: Float32Array<ArrayBuffer>[];
   const outLength = Math.floor(buffer.length / p.ratio);
   if (Math.abs(p.ratio - 1) < 1e-6) {
     channels = copy();
+  } else if (p.keepPitch) {
+    onProgress('resample', null);
+    channels = await stretchOffline(copy(), sr, p.ratio, outLength);
   } else {
     onProgress('resample', 0);
     channels = await resample(copy(), p.ratio, outLength, (f) => onProgress('resample', f));
@@ -116,4 +121,25 @@ function encodeWav(channels: Float32Array<ArrayBuffer>[], sampleRate: number, bi
     }
   }
   return new Blob([buf], { type: 'audio/wav' });
+}
+
+/**
+ * Time-stretch with Signalsmith Stretch in an offline context: same speed
+ * change as the resampler, but the pitch stays where it was.
+ */
+async function stretchOffline(
+  input: Float32Array<ArrayBuffer>[],
+  sr: number,
+  ratio: number,
+  outLength: number,
+): Promise<Float32Array<ArrayBuffer>[]> {
+  const stereo = input.length > 1 ? input.slice(0, 2) : [input[0], input[0].slice()];
+  // A little extra room at the end for the stretcher's own latency.
+  const ctx = new OfflineAudioContext(2, outLength + Math.ceil(0.25 * sr), sr);
+  const node = await createStretch(ctx);
+  await node.addBuffers(stereo, stereo.map((c) => c.buffer));
+  void node.schedule({ active: true, input: 0, rate: ratio, semitones: 0, output: 0 });
+  node.connect(ctx.destination);
+  const out = await ctx.startRendering();
+  return [out.getChannelData(0).slice(0, outLength), out.getChannelData(1).slice(0, outLength)];
 }

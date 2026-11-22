@@ -129,7 +129,8 @@ async function load(file: File) {
 
     // A new song starts fresh: normal speed, its own BPM, no effects.
     player.pause();
-    Object.assign(params, DEFAULT_PARAMS);
+    // (Keep pitch is a way of listening, not a song setting: it carries over.)
+    Object.assign(params, DEFAULT_PARAMS, { keepPitch: params.keepPitch });
     autoSpace = true;
     origBpm = null;
     detectingBpm = true;
@@ -872,7 +873,7 @@ $('tap').addEventListener('click', () => {
 });
 
 function pitchText(r: number) {
-  const cents = Math.round(1200 * Math.log2(r));
+  const cents = params.keepPitch ? 0 : Math.round(1200 * Math.log2(r));
   if (cents === 0) return `0 ${t('st')}`;
   const sign = cents < 0 ? '−' : '+';
   const a = Math.abs(cents);
@@ -882,9 +883,15 @@ function pitchText(r: number) {
   return `${sign}${st} ${t('st')}${ct ? ` ${ct} ${t('ct')}` : ''}`;
 }
 
+// Keep pitch: change speed without the vinyl-style pitch change.
+$('keepPitchBtn').addEventListener('click', () => {
+  params.keepPitch = !params.keepPitch;
+  apply();
+});
+
 // ---------- sound & effects (menu) ----------
 
-type SliderKey = Exclude<keyof FxParams, 'ratio'>;
+type SliderKey = Exclude<keyof FxParams, 'ratio' | 'keepPitch'>;
 interface SliderDef {
   id: string;
   key: SliderKey;
@@ -959,7 +966,7 @@ document.querySelectorAll<HTMLButtonElement>('[data-div]').forEach((b) =>
 // Built-in presets reset everything and put the reverb back on the pedal.
 document.querySelectorAll<HTMLButtonElement>('[data-preset]').forEach((b) =>
   b.addEventListener('click', () => {
-    Object.assign(params, DEFAULT_PARAMS, PRESETS[b.dataset.preset!]);
+    Object.assign(params, DEFAULT_PARAMS, PRESETS[b.dataset.preset!], { keepPitch: params.keepPitch });
     autoSpace = true;
     apply();
   }),
@@ -1001,9 +1008,13 @@ function renderUserPresets() {
       // Only take known numeric keys from storage.
       const clean: Partial<FxParams> = {};
       for (const k of Object.keys(DEFAULT_PARAMS) as (keyof FxParams)[]) {
-        if (typeof p.params[k] === 'number' && Number.isFinite(p.params[k])) clean[k] = p.params[k];
+        const v = p.params[k];
+        if (k === 'keepPitch') {
+          if (typeof v === 'boolean') clean.keepPitch = v;
+        } else if (typeof v === 'number' && Number.isFinite(v)) clean[k] = v;
       }
-      Object.assign(params, DEFAULT_PARAMS, clean);
+      // A saved preset brings its own keep-pitch choice if it has one.
+      Object.assign(params, DEFAULT_PARAMS, { keepPitch: params.keepPitch }, clean);
       params.volume = Math.max(0, params.volume); // older presets could cut volume
       autoSpace = false; // a saved preset keeps its own reverb
       apply();
@@ -1215,6 +1226,7 @@ function render() {
   bpmBig.textContent = origBpm ? String(Math.round(origBpm * r)) : detectingBpm ? '···' : '—';
   bpmBig.classList.toggle('detecting', detectingBpm && !origBpm);
   $('gaugeSub').textContent = `×${r.toFixed(2)} · ${pitchText(r)}`;
+  $('keepPitchBtn').setAttribute('aria-pressed', String(params.keepPitch));
   const dash = $('dash');
   dash.classList.toggle('up', r > 1);
   dash.classList.toggle('down', r < 1);
