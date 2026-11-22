@@ -31,12 +31,67 @@
         <option value="ro">RO</option>
         <option value="ru">RU</option>
       </select>
-      <h1 class="brand"><span class="the">THE</span><span class="name">REMIXITY</span></h1>
-      <p class="pitch" data-i18n="dropTrack"></p>
-      <label for="file" class="cta" data-i18n="chooseSong"></label>
-      <p id="status" class="status" role="status" aria-live="polite"></p>
-      <p class="fine" data-i18n="privacy"></p>
-      <p class="fine legal"><a href="/privacy.html" data-i18n="privacyLink"></a> · <a href="/terms.html" data-i18n="termsLink"></a></p>
+      <div class="hero">
+        <h1 class="brand"><span class="the">THE</span><span class="name">REMIXITY</span></h1>
+        <p class="pitch" data-i18n="dropTrack"></p>
+        <label for="file" class="cta" data-i18n="chooseSong"></label>
+        <p id="status" class="status" role="status" aria-live="polite"></p>
+        <p class="fine" data-i18n="privacy"></p>
+        <a class="more-link" href="#about"><span data-i18n="homeMore"></span>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg></a>
+      </div>
+
+      <!-- Home screen only, never in the player. Filled by src/ads.ts once AdSense IDs exist. -->
+      <aside id="adSlot" class="ad-slot" hidden>
+        <small data-i18n="adLabel"></small>
+      </aside>
+
+      <div id="about" class="about">
+        <section class="about-card">
+          <h2 data-i18n="homeHowTitle"></h2>
+          <ol class="steps">
+            <li data-i18n="homeStep1"></li>
+            <li data-i18n="homeStep2"></li>
+            <li data-i18n="homeStep3"></li>
+          </ol>
+        </section>
+        <section class="about-card">
+          <h2 data-i18n="homeSlowedTitle"></h2>
+          <p data-i18n="homeSlowedText"></p>
+        </section>
+        <section class="about-card">
+          <h2 data-i18n="homeNightcoreTitle"></h2>
+          <p data-i18n="homeNightcoreText"></p>
+        </section>
+        <section class="about-card faq">
+          <h2 data-i18n="homeFaqTitle"></h2>
+          <details>
+            <summary data-i18n="faqFreeQ"></summary>
+            <p data-i18n="faqFreeA"></p>
+          </details>
+          <details>
+            <summary data-i18n="faqUploadQ"></summary>
+            <p data-i18n="faqUploadA"></p>
+          </details>
+          <details>
+            <summary data-i18n="faqFormatsQ"></summary>
+            <p data-i18n="faqFormatsA"></p>
+          </details>
+          <details>
+            <summary data-i18n="faqPitchQ"></summary>
+            <p data-i18n="faqPitchA"></p>
+          </details>
+          <details>
+            <summary data-i18n="faqPhoneQ"></summary>
+            <p data-i18n="faqPhoneA"></p>
+          </details>
+          <details>
+            <summary data-i18n="faqShareQ"></summary>
+            <p data-i18n="faqShareA"></p>
+          </details>
+        </section>
+        <p class="fine legal"><a href="/privacy.html" data-i18n="privacyLink"></a> · <a href="/terms.html" data-i18n="termsLink"></a></p>
+      </div>
     </section>
 
     <!-- ===== Player ===== -->

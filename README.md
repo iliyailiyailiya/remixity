@@ -43,3 +43,16 @@ from the browser to SoundCloud; only the one-time login code passes through
 4. Because the site is built on your machine, put the public client ID in a local,
    gitignored file `.env.production.local`: `VITE_SC_CLIENT_ID=<client id>`.
 5. `npm run deploy`. See `.env.example`; never commit real values.
+
+## Ads (AdSense, home screen only)
+
+One banner below "Choose a song" on the home screen; never in the player. It is off until
+both IDs are set, and the build then also emits `ads.txt`.
+
+1. Get approved on AdSense with the site's own domain.
+2. In AdSense: keep **Auto ads off** (they could place ads over the player), create one
+   display ad unit, and publish the EU/UK consent message under Privacy & messaging.
+3. Add to `.env.production.local` (gitignored):
+   `VITE_ADSENSE_CLIENT=ca-pub-…` and `VITE_ADSENSE_SLOT=…`
+4. Regenerate the legal pages with the ad wording: `python3 scripts/build-legal.py --ads`
+5. `npm run deploy`

@@ -11,6 +11,7 @@ import { readbackIsNoisy } from './engine/noisecheck';
 import { Waveform } from './ui/waveform';
 import { EqView } from './ui/eqview';
 import { initShare } from './share/ui';
+import { initAds } from './ads';
 import { Backdrop } from './ui/backdrop';
 import { defaultPalette, generatedCover, paletteFrom } from './ui/palette';
 import { Pedal, MAX_RATIO, MIN_RATIO } from './ui/pedal';
@@ -167,6 +168,7 @@ async function load(file: File) {
 
     home.hidden = true;
     playerView.hidden = false;
+    window.scrollTo(0, 0); // the home screen scrolls; the player is one screen
     status.textContent = '';
     $('downloadLink').hidden = true;
     lastExport = null;
@@ -983,3 +985,5 @@ if (import.meta.env.DEV) {
       .then((r) => r.blob())
       .then((b) => load(new File([b], url.split('/').pop()!, { type: b.type })));
 }
+
+initAds();
