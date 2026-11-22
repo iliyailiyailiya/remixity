@@ -17,6 +17,7 @@ import { withTags } from './engine/tags';
 import { findLyrics, findLyricsEnabled, LyricsView, setFindLyrics } from './ui/lyrics';
 import { getAudio, getTrack, updateTrack, type Track } from './library/db';
 import { initLibrary } from './library/ui';
+import { initFix } from './library/fix';
 import { Backdrop } from './ui/backdrop';
 import { defaultPalette, generatedCover, paletteFrom } from './ui/palette';
 import { Pedal, MAX_RATIO, MIN_RATIO } from './ui/pedal';
@@ -416,6 +417,8 @@ const library = initLibrary({
   closeSheets,
 });
 $('openLibrary').addEventListener('click', () => library.open());
+const fixer = initFix({ showSheet, closeSheets, onApplied: () => void library.refresh() });
+$('libFix').addEventListener('click', () => fixer.open());
 $('openLibraryHome').addEventListener('click', () => library.open());
 
 // ---------- lyrics (LRCLIB), synced to the original song's time ----------

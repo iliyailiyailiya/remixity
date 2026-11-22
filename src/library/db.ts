@@ -15,6 +15,8 @@ export interface Track {
   cover: Blob | null;
   /** The file's own cover was replaced (by search or by hand). */
   coverFound?: boolean;
+  /** When "Fix my library" last looked this song up. */
+  checkedAt?: number;
 }
 
 export interface Playlist {

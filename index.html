@@ -320,6 +320,9 @@
           <svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" /></svg>
         </button>
         <h2 id="libTitle" class="lib-title" data-i18n="library"></h2>
+        <button id="libFix" class="icon-btn" data-i18n-aria="fixLibrary" aria-label="Fix my library">
+          <svg viewBox="0 0 24 24"><path d="M4 20L15 9" /><path d="M15 3v3M15 12v3M18 6h3M9 6h3M17 4l1.5-1.5M17 8l1.5 1.5" /></svg>
+        </button>
         <label for="libFiles" class="icon-btn" data-i18n-aria="libAddSongs" aria-label="Add songs">
           <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>
         </label>
@@ -479,6 +482,31 @@
           </label>
         </div>
         <button id="infoSave" class="primary" data-i18n="saveInfo"></button>
+      </div>
+    </section>
+
+    <section id="fixSheet" class="sheet" aria-hidden="true" aria-labelledby="fixTitle">
+      <button class="grabber" data-close aria-label="Close"></button>
+      <div class="sheet-body">
+        <h2 id="fixTitle" class="sheet-title" data-i18n="fixLibrary"></h2>
+        <p class="hint fix-intro" data-i18n="fixIntro"></p>
+        <div class="card fix-options">
+          <label class="switch small">
+            <input id="fixReplaceCovers" type="checkbox" />
+            <span class="track"><i></i></span>
+            <span data-i18n="fixReplaceCovers"></span>
+          </label>
+          <label class="switch small">
+            <input id="fixRecheck" type="checkbox" />
+            <span class="track"><i></i></span>
+            <span data-i18n="fixRecheck"></span>
+          </label>
+        </div>
+        <button id="fixStart" class="primary" data-i18n="fixStart"></button>
+        <div id="fixProgress" class="progress" hidden><div></div></div>
+        <p id="fixStatus" class="status" aria-live="polite"></p>
+        <div id="fixList" class="fix-list"></div>
+        <button id="fixApply" class="primary fix-apply" hidden></button>
       </div>
     </section>
 
