@@ -23,7 +23,7 @@ export const onRequest = async ({ request }: { request: Request }): Promise<Resp
   const ask = () =>
     fetch(target.toString(), {
       headers: { Accept: 'application/json' },
-      cf: { cacheTtl: 86400, cacheEverything: true },
+      cf: { cacheTtlByStatus: { '200-299': 86400, '300-599': 0 }, cacheEverything: true },
     } as RequestInit);
   let r = await ask();
   if (r.status === 429) {

@@ -14,7 +14,7 @@ export const onRequest = async ({ request }: { request: Request }): Promise<Resp
   if (target.protocol !== 'https:' || !/(^|\.)mzstatic\.com$/.test(target.hostname))
     return new Response('Forbidden', { status: 403 });
 
-  const r = await fetch(target.toString(), { cf: { cacheTtl: 604800, cacheEverything: true } } as RequestInit);
+  const r = await fetch(target.toString(), { cf: { cacheTtlByStatus: { '200-299': 604800, '300-599': 0 }, cacheEverything: true } } as RequestInit);
   const type = r.headers.get('Content-Type') ?? '';
   if (!r.ok || !type.startsWith('image/')) return new Response('Not found', { status: 404 });
   return new Response(r.body, {
