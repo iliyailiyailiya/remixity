@@ -3,5 +3,5 @@
   "framework": null,
   "buildCommand": "",
   "outputDirectory": ".",
-  "redirects": [{ "source": "/(.*)", "destination": "https://remixity.pages.dev/$1", "permanent": true }]
+  "redirects": [{ "source": "/(.*)", "destination": "https://remixity.app/$1", "permanent": true }]
 }

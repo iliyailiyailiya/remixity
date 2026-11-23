@@ -9,7 +9,7 @@
 // Environment variables (Cloudflare → Pages project → Settings → Variables
 // and secrets; never committed):
 //   SC_CLIENT_ID, SC_CLIENT_SECRET   from soundcloud.com/you/apps
-//   SC_REDIRECT_URI                  e.g. https://remixity.pages.dev/sc-callback
+//   SC_REDIRECT_URI                  e.g. https://remixity.app/sc-callback
 
 interface Env {
   SC_CLIENT_ID?: string;

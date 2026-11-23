@@ -5,7 +5,7 @@ import { t } from '../i18n';
 import { makeArtwork } from './artwork';
 import * as sc from './soundcloud';
 
-const SITE = 'https://remixity.pages.dev';
+const SITE = 'https://remixity.app';
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
 export interface ShareContext {

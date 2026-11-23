@@ -233,7 +233,7 @@ export class StoryPainter {
     c.textAlign = 'center';
     c.fillStyle = 'rgba(255,255,255,0.85)';
     c.font = `600 34px ${FONT}`;
-    c.fillText('made with THE REMIXITY', W / 2, cy + ch + 80);
+    c.fillText('made with THE REMIXITY · remixity.app', W / 2, cy + ch + 80);
     c.restore();
   }
 }

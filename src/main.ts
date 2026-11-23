@@ -19,6 +19,7 @@ import { withTags } from './engine/tags';
 import { findLyrics, findLyricsEnabled, LyricsView, setFindLyrics } from './ui/lyrics';
 import { getAudio, getTrack, updateTrack, type Track } from './library/db';
 import { initLibrary } from './library/ui';
+import { initMove } from './move';
 import { initFix } from './library/fix';
 import { Backdrop } from './ui/backdrop';
 import { defaultPalette, generatedCover, paletteFrom } from './ui/palette';
@@ -90,6 +91,7 @@ for (const s of langSels) {
   });
 }
 applyI18n();
+initMove();
 
 // ---------- file loading ----------
 

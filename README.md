@@ -2,7 +2,7 @@
 
 A free slowed + reverb and nightcore maker that runs fully in the browser. No uploads, no account, no Pro tier.
 
-Live: https://remixity.pages.dev (Cloudflare Pages). Deploy with `npm run deploy`, which builds and uploads `dist/` plus the `functions/` folder. Response headers are in `public/_headers`.
+Live: https://remixity.app (Cloudflare Pages). Deploy with `npm run deploy`, which builds and uploads `dist/` plus the `functions/` folder. Response headers are in `public/_headers`.
 
 ```bash
 npm install
@@ -35,11 +35,11 @@ from the browser to SoundCloud; only the one-time login code passes through
 
 1. A SoundCloud **Artist Pro** account is required to register an API app.
 2. Register the app at https://soundcloud.com/you/apps with the redirect URI
-   `https://remixity.pages.dev/sc-callback` (use your own domain once you have one).
+   `https://remixity.app/sc-callback`.
 3. In Cloudflare → Workers & Pages → remixity → Settings → Variables and secrets (Production), add:
    - `SC_CLIENT_ID` = the client ID
    - `SC_CLIENT_SECRET` = the client secret (as a secret)
-   - `SC_REDIRECT_URI` = `https://remixity.pages.dev/sc-callback`
+   - `SC_REDIRECT_URI` = `https://remixity.app/sc-callback`
 4. Because the site is built on your machine, put the public client ID in a local,
    gitignored file `.env.production.local`: `VITE_SC_CLIENT_ID=<client id>`.
 5. `npm run deploy`. See `.env.example`; never commit real values.

@@ -194,6 +194,7 @@ def page(name, content, title_en):
           }});
         }});
         show(pick());
+        if (location.hostname === 'remixity.pages.dev') location.replace('https://remixity.app' + location.pathname + location.search);
       }})();
     </script>
   </body>
