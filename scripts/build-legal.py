@@ -116,6 +116,11 @@ def linkify(text):
     """Every mention of @iliyabarcari links to the Instagram profile."""
     return text.replace("@iliyabarcari", f'<a href="{IG}" target="_blank" rel="noopener">@iliyabarcari</a>')
 
+DESC = {
+  "privacy": "How THE REMIXITY handles your data: your audio and music library stay on your device; only song names are used to look up covers and lyrics.",
+  "terms": "Terms for using THE REMIXITY, the free in-browser music editor, player and story maker.",
+}
+
 def page(name, content, title_en):
     sections = []
     for lang in ("en", "ro", "ru"):
@@ -135,6 +140,8 @@ def page(name, content, title_en):
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#120c1f" />
     <title>{title_en} · THE REMIXITY</title>
+    <meta name="description" content="{DESC[name]}" />
+    <link rel="canonical" href="https://remixity.app/{name}" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <style>
       :root {{ color-scheme: dark; }}

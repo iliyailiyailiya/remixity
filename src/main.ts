@@ -1877,3 +1877,22 @@ if (new URLSearchParams(location.search).has('debug')) {
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => void navigator.serviceWorker.register('/sw.js').catch(() => {}));
 }
+
+// Development only (never in the live build): lets scripts/shots.mjs put the
+// app into exact states for the feature pages' screenshots.
+if (import.meta.env.DEV) {
+  (window as unknown as { __remixity: unknown }).__remixity = {
+    load,
+    lyricsView,
+    params,
+    apply,
+    render,
+    setRatio,
+    goPage,
+    showSheet,
+    library,
+    get player() {
+      return player;
+    },
+  };
+}

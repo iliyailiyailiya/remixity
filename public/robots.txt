@@ -1,0 +1,7 @@
+# THE REMIXITY: everything public may be crawled; the API relays are not pages.
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /sc-callback
+
+Sitemap: https://remixity.app/sitemap.xml

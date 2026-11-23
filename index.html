@@ -4,11 +4,70 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <meta name="theme-color" content="#120c1f" />
+    <script>
+      // Romanian and Russian readers: hide the English texts the HTML carries
+      // (for search engines) until their language is applied.
+      try {
+        var l = localStorage.getItem('lang') || (navigator.language || 'en').slice(0, 2).toLowerCase();
+        if (l === 'ro' || l === 'ru') document.documentElement.classList.add('i18n-wait');
+      } catch (e) {}
+    </script>
+    <title>THE REMIXITY · Slowed + Reverb, Music Player & Story Maker</title>
     <meta
       name="description"
-      content="THE REMIXITY: slow it down, speed it up. Free slowed + reverb and nightcore in your browser. Export MP3 320 or WAV. Nothing is uploaded."
+      content="Free online music editor: slowed + reverb, nightcore, EQ and trimming. Plus a music library with synced lyrics and an Instagram Story maker. Nothing is uploaded."
     />
-    <title>THE REMIXITY · Slowed + Reverb & Nightcore</title>
+    <link rel="canonical" href="https://remixity.app/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="THE REMIXITY" />
+    <meta property="og:url" content="https://remixity.app/" />
+    <meta property="og:title" content="THE REMIXITY · Slowed + Reverb, Music Player & Story Maker" />
+    <meta property="og:description" content="Slow down or speed up any song, add reverb, keep your music library with synced lyrics, and turn it into Instagram Stories. Free, in your browser." />
+    <meta property="og:image" content="https://remixity.app/img/og.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="THE REMIXITY: a slowed + reverb editor, music player and story maker" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="THE REMIXITY · Slowed + Reverb, Music Player & Story Maker" />
+    <meta name="twitter:description" content="Slow down or speed up any song, add reverb, keep your music library with synced lyrics, and turn it into Instagram Stories." />
+    <meta name="twitter:image" content="https://remixity.app/img/og.jpg" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebSite",
+            "@id": "https://remixity.app/#website",
+            "name": "THE REMIXITY",
+            "url": "https://remixity.app/"
+          },
+          {
+            "@type": "WebApplication",
+            "@id": "https://remixity.app/#app",
+            "name": "THE REMIXITY",
+            "url": "https://remixity.app/",
+            "description": "Free online music editor and player: slowed + reverb, nightcore, keep-pitch time stretching, EQ, trimming, a music library with synced lyrics, and an Instagram Story maker. Audio is processed on your device.",
+            "applicationCategory": "MultimediaApplication",
+            "operatingSystem": "Any (web browser)",
+            "browserRequirements": "A modern browser with Web Audio",
+            "inLanguage": ["en", "ro", "ru"],
+            "isAccessibleForFree": true,
+            "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+            "featureList": [
+              "Slowed + reverb and nightcore with one pedal",
+              "Change speed with or without changing pitch",
+              "Reverb, echo and a 5-band EQ",
+              "Trim and cut sections, loop a part",
+              "Export MP3 320 or WAV",
+              "Music library with playlists and artists",
+              "Synced lyrics that follow the music",
+              "Find missing covers and fix song names",
+              "Instagram Story videos and images with your remix"
+            ]
+          }
+        ]
+      }
+    </script>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
@@ -37,8 +96,9 @@
         <option value="ru">RU</option>
       </select>
       <div class="hero">
-        <h1 class="brand"><span class="the">THE</span><span class="name">REMIXITY</span></h1>
+        <h1 class="brand"><span class="the">THE</span> <span class="name">REMIXITY</span></h1>
         <p class="pitch" data-i18n="dropTrack"></p>
+        <p class="tagline" data-i18n="homeTagline"></p>
         <label for="file" class="cta" data-i18n="chooseSong"></label>
         <button id="openLibraryHome" class="cta-secondary"><svg viewBox="0 0 24 24"><path d="M5 4v16M9.5 4v16" /><path d="M14 4.5l5 15" /></svg><span data-i18n="openLibrary"></span></button>
         <p id="status" class="status" role="status" aria-live="polite"></p>
@@ -96,7 +156,17 @@
             <p data-i18n="faqShareA"></p>
           </details>
         </section>
-        <p class="fine legal"><a href="/privacy.html" data-i18n="privacyLink"></a> · <a href="/terms.html" data-i18n="termsLink"></a></p>
+        <nav class="about-card features" aria-labelledby="featuresTitle">
+          <h2 id="featuresTitle" data-i18n="homeFeaturesTitle"></h2>
+          <ul>
+            <li><a href="/slow-reverb/" data-i18n="featSlow"></a></li>
+            <li><a href="/audio-editor/" data-i18n="featEditor"></a></li>
+            <li><a href="/music-library/" data-i18n="featLibrary"></a></li>
+            <li><a href="/instagram-story-maker/" data-i18n="featStory"></a></li>
+            <li><a href="/music-card-maker/" data-i18n="featCard"></a></li>
+          </ul>
+        </nav>
+        <p class="fine legal"><a href="/privacy" data-i18n="privacyLink"></a> · <a href="/terms" data-i18n="termsLink"></a></p>
         <p class="fine legal made-by"><span data-i18n="madeBy"></span> <a href="https://instagram.com/iliyabarcari" target="_blank" rel="noopener">@iliyabarcari</a></p>
       </div>
     </section>
@@ -360,8 +430,8 @@
         <label for="libFolder" class="lib-folder-btn" data-i18n="libAddFolder"></label>
       </div>
     </section>
-    <input id="libFiles" class="visually-hidden" type="file" multiple accept="audio/*,.mp3,.m4a,.aac,.wav,.flac,.ogg,.opus,.aif,.aiff" />
-    <input id="libFolder" class="visually-hidden" type="file" multiple webkitdirectory />
+    <input id="libFiles" class="visually-hidden" type="file" aria-label="Add songs" multiple accept="audio/*,.mp3,.m4a,.aac,.wav,.flac,.ogg,.opus,.aif,.aiff" />
+    <input id="libFolder" class="visually-hidden" type="file" aria-label="Add a folder" multiple webkitdirectory />
 
     <!-- ===== Sheets ===== -->
     <div id="sheetScrim" class="sheet-scrim"></div>
@@ -477,7 +547,7 @@
           </select>
         </div>
         <p class="fine" data-i18n="privacy"></p>
-        <p class="fine legal"><a href="/privacy.html" data-i18n="privacyLink"></a> · <a href="/terms.html" data-i18n="termsLink"></a></p>
+        <p class="fine legal"><a href="/privacy" data-i18n="privacyLink"></a> · <a href="/terms" data-i18n="termsLink"></a></p>
         <p class="fine legal made-by"><span data-i18n="madeBy"></span> <a href="https://instagram.com/iliyabarcari" target="_blank" rel="noopener">@iliyabarcari</a></p>
       </div>
     </section>
@@ -728,7 +798,7 @@
         <div id="scProgress" class="progress" hidden><div></div></div>
         <p id="scStatus" class="status" aria-live="polite"></p>
         <a id="scResult" class="download" target="_blank" rel="noopener" hidden data-i18n="scOpenTrack"></a>
-        <p class="fine legal"><a href="/privacy.html" data-i18n="privacyLink"></a> · <a href="/terms.html" data-i18n="termsLink"></a></p>
+        <p class="fine legal"><a href="/privacy" data-i18n="privacyLink"></a> · <a href="/terms" data-i18n="termsLink"></a></p>
         <p class="fine legal made-by"><span data-i18n="madeBy"></span> <a href="https://instagram.com/iliyabarcari" target="_blank" rel="noopener">@iliyabarcari</a></p>
       </div>
     </section>

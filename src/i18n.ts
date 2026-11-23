@@ -225,6 +225,13 @@ const en = {
   undo: 'Undo',
   editHint: 'Drag on the waveform to select a part. Trim keeps it, Cut removes it.',
   clearSel: 'Clear selection',
+  homeTagline: "Free online slowed + reverb and nightcore editor, a music player with synced lyrics, and a story maker for your songs. Everything runs in your browser.",
+  homeFeaturesTitle: "What you can do",
+  featSlow: "Slowed + reverb online",
+  featEditor: "Online audio editor",
+  featLibrary: "Music library with synced lyrics",
+  featStory: "Instagram Story maker",
+  featCard: "Music card maker",
   dropTrack: 'Drop a track. Make it yours.',
   chooseSong: 'Choose a song',
   newTrack: 'New track',
@@ -506,6 +513,13 @@ const ro: Dict = {
   undo: 'Înapoi',
   editHint: 'Trage pe forma de undă ca să selectezi o parte. „Decupaj” păstrează doar selecția, „Șterge” o elimină.',
   clearSel: 'Șterge selecția',
+  homeTagline: "Editor online gratuit de slowed + reverb și nightcore, un player cu versuri sincronizate și un creator de story-uri pentru piesele tale. Totul rulează în browser.",
+  homeFeaturesTitle: "Ce poți face",
+  featSlow: "Slowed + reverb online",
+  featEditor: "Editor audio online",
+  featLibrary: "Bibliotecă muzicală cu versuri sincronizate",
+  featStory: "Creator de story-uri Instagram",
+  featCard: "Creator de carduri muzicale",
   dropTrack: 'Pune o piesă. Fă-o a ta.',
   chooseSong: 'Alege o piesă',
   newTrack: 'Piesă nouă',
@@ -785,6 +799,13 @@ const ru: Dict = {
   undo: 'Отмена',
   editHint: 'Проведите по волне, чтобы выделить часть. «Обрезать» оставит только её, «Удалить» уберёт.',
   clearSel: 'Снять выделение',
+  homeTagline: "Бесплатный онлайн-редактор slowed + reverb и nightcore, плеер с синхронным текстом и создание сторис для твоих треков. Всё работает в браузере.",
+  homeFeaturesTitle: "Что можно сделать",
+  featSlow: "Slowed + reverb онлайн",
+  featEditor: "Онлайн аудиоредактор",
+  featLibrary: "Медиатека с синхронным текстом",
+  featStory: "Сторис для Instagram",
+  featCard: "Музыкальные карточки",
   dropTrack: 'Закинь трек. Сделай его своим.',
   chooseSong: 'Выбрать трек',
   newTrack: 'Новый трек',
@@ -841,6 +862,9 @@ const ru: Dict = {
 
 const dicts: Record<Lang, Dict> = { en, ro, ru };
 
+/** The English texts (the build writes them into the HTML, for search engines and link previews). */
+export const enStrings: Dict = en;
+
 let current: Lang = detect();
 
 function detect(): Lang {
@@ -869,6 +893,7 @@ export function setLang(lang: Lang) {
 
 export function applyI18n() {
   document.documentElement.lang = current;
+  document.documentElement.classList.remove('i18n-wait'); // see the inline script in index.html
   document.querySelectorAll<HTMLElement>('[data-i18n]').forEach((el) => {
     el.textContent = t(el.dataset.i18n as keyof Dict);
   });

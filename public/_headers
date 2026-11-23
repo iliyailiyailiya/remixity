@@ -6,3 +6,10 @@
 
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
+
+# The old address and preview deployments: not for search engines (the
+# canonical site is https://remixity.app; pages there also say so).
+https://remixity.pages.dev/*
+  X-Robots-Tag: noindex
+https://:version.remixity.pages.dev/*
+  X-Robots-Tag: noindex

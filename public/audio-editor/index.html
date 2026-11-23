@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#120c1f" />
+    <title>Online Audio Editor for Songs: Speed, Reverb, EQ, Trim · THE REMIXITY</title>
+    <meta name="description" content="Edit songs online: change the speed with or without the pitch, add reverb and echo, shape the sound with a 5-band EQ, trim and cut parts, then export MP3 or WAV." />
+    <link rel="canonical" href="https://remixity.app/audio-editor/" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="THE REMIXITY" />
+    <meta property="og:url" content="https://remixity.app/audio-editor/" />
+    <meta property="og:title" content="Online Audio Editor for Songs: Speed, Reverb, EQ, Trim · THE REMIXITY" />
+    <meta property="og:description" content="Edit songs online: change the speed with or without the pitch, add reverb and echo, shape the sound with a 5-band EQ, trim and cut parts, then export MP3 or WAV." />
+    <meta property="og:image" content="https://remixity.app/img/og.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="https://remixity.app/img/og.jpg" />
+    <script type="application/ld+json">{"@context": "https://schema.org", "@graph": [{"@type": "WebPage", "@id": "https://remixity.app/audio-editor/", "url": "https://remixity.app/audio-editor/", "name": "Online Audio Editor for Songs: Speed, Reverb, EQ, Trim · THE REMIXITY", "description": "Edit songs online: change the speed with or without the pitch, add reverb and echo, shape the sound with a 5-band EQ, trim and cut parts, then export MP3 or WAV.", "inLanguage": "en", "isPartOf": {"@id": "https://remixity.app/#website"}, "about": {"@id": "https://remixity.app/#app"}, "primaryImageOfPage": "https://remixity.app/img/app-eq.webp"}, {"@type": "BreadcrumbList", "itemListElement": [{"@type": "ListItem", "position": 1, "name": "THE REMIXITY", "item": "https://remixity.app/"}, {"@type": "ListItem", "position": 2, "name": "Audio editor", "item": "https://remixity.app/audio-editor/"}]}, {"@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": "Can I add reverb to an MP3 online for free?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. Open the song, go to the reverb page and set the amount. Export as MP3 when you're done."}}, {"@type": "Question", "name": "Which file types can I edit?", "acceptedAnswer": {"@type": "Answer", "text": "MP3, WAV, FLAC, M4A, AAC, OGG, Opus and AIFF, as far as your browser can decode them (most can)."}}, {"@type": "Question", "name": "Will the quality drop?", "acceptedAnswer": {"@type": "Answer", "text": "The audio is processed in 32-bit float and exported as MP3 320 kbps or lossless WAV."}}]}]}</script>
+    <style>
+      :root { color-scheme: dark; --dim: rgba(255,255,255,.66); --line: rgba(255,255,255,.12); }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0; color: #fff; -webkit-text-size-adjust: 100%;
+        font: 400 1.0625rem/1.65 system-ui, -apple-system, "Segoe UI", sans-serif;
+        background: radial-gradient(70% 45% at 15% 0%, #4a2a8a, transparent 70%), radial-gradient(60% 40% at 95% 8%, #2a3f9a, transparent 70%),
+          radial-gradient(60% 40% at 50% 100%, #5a1e46, transparent 70%), #120c1f;
+        background-attachment: fixed;
+      }
+      a { color: #fff; text-underline-offset: 3px; }
+      .wrap { max-width: 1080px; margin: 0 auto; padding: 0 20px; }
+      header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: max(16px, env(safe-area-inset-top)) 0 8px; }
+      .brand { color: #fff; text-decoration: none; font-size: .82rem; letter-spacing: .32em; font-weight: 300; white-space: nowrap; }
+      .brand b { font-weight: 800; }
+      .cta { display: inline-block; background: #fff; color: #120c1f; text-decoration: none; font-weight: 750; border-radius: 999px; padding: 12px 22px; }
+      .cta.small { padding: 9px 16px; font-size: .92rem; }
+      .hero { display: grid; gap: 28px; align-items: center; padding: 36px 0 24px; }
+      h1 { font-size: clamp(2.1rem, 6vw, 3.4rem); line-height: 1.05; letter-spacing: -.035em; margin: 0 0 16px; }
+      .lead { font-size: 1.15rem; color: rgba(255,255,255,.85); margin: 0 0 24px; max-width: 34em; }
+      .note { color: var(--dim); font-size: .92rem; margin: 12px 0 0; }
+      img { display: block; width: 100%; height: auto; border-radius: 26px; box-shadow: 0 24px 60px rgba(0,0,0,.45); }
+      .hero img, .shot img { max-width: 320px; margin: 0 auto; }
+      .story .hero img, .story .shot img { max-width: 300px; border-radius: 22px; }
+      figure { margin: 0; }
+      figcaption { color: var(--dim); font-size: .86rem; text-align: center; margin-top: 10px; }
+      h2 { font-size: clamp(1.4rem, 3.4vw, 1.9rem); letter-spacing: -.02em; line-height: 1.15; margin: 0 0 10px; }
+      p { margin: 0 0 12px; color: rgba(255,255,255,.84); }
+      .feature { display: grid; gap: 22px; align-items: center; padding: 34px 0; border-top: 1px solid var(--line); }
+      .card { background: rgba(255,255,255,.05); border: 1px solid var(--line); border-radius: 22px; padding: 22px; margin: 26px 0; }
+      ol { margin: 0; padding-left: 1.3em; } li { margin: 6px 0; }
+      details { border-top: 1px solid var(--line); padding: 12px 0; } details:first-of-type { border-top: 0; }
+      summary { cursor: pointer; font-weight: 650; } details p { margin: 8px 0 0; }
+      .related ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
+      .related a { font-weight: 700; display: block; } .related span { color: var(--dim); font-size: .95rem; }
+      footer { border-top: 1px solid var(--line); margin-top: 30px; padding: 22px 0 40px; color: var(--dim); font-size: .92rem; }
+      footer nav { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-bottom: 14px; }
+      footer a { color: rgba(255,255,255,.85); } footer a[aria-current] { color: #fff; font-weight: 700; }
+      @media (min-width: 820px) {
+        .hero { grid-template-columns: 1.15fr .85fr; padding-top: 56px; }
+        .feature { grid-template-columns: 1fr 1fr; gap: 56px; }
+        .feature.flip > div { order: 2; }
+        .feature.solo { grid-template-columns: 1fr; max-width: 46em; }
+      }
+    </style>
+  </head>
+  <body class="">
+    <div class="wrap">
+      <header>
+        <a class="brand" href="/">THE <b>REMIXITY</b></a>
+        <a class="cta small" href="/">Open the app</a>
+      </header>
+      <main>
+        <section class="hero">
+          <div>
+            <h1>An online music editor that runs in your browser</h1>
+            <p class="lead">THE REMIXITY is made for editing songs, not podcasts. Change the speed and pitch, add reverb to an MP3, shape it with an EQ, cut out the parts you don&#x27;t want and export a clean file. All of it happens on your device.</p>
+            <a class="cta" href="/">Open THE REMIXITY, free</a>
+            <p class="note">Works in your browser on iPhone, Android and computers. Nothing to install, nothing uploaded.</p>
+          </div>
+          <figure><img src="/img/app-eq.webp" srcset="/img/app-eq-sm.webp 390w, /img/app-eq.webp 780w" sizes="(min-width: 820px) 320px, 78vw" width="780" height="1688" alt="The 5-band equalizer, with the song&#x27;s spectrum behind it" fetchpriority="high" decoding="async" /><figcaption>The 5-band equalizer, with the song&#x27;s spectrum behind it</figcaption></figure>
+        </section>
+        <section class="feature"><div><h2>Speed and pitch</h2><p>Speed up or slow down from ×0.5 to ×1.5. By default the pitch moves with the speed, like a record; with Keep pitch on, a time-stretch keeps the song in its key. The tempo (BPM) is detected for you and follows every change.</p></div><figure class="shot"><img src="/img/app-pedal.webp" srcset="/img/app-pedal-sm.webp 390w, /img/app-pedal.webp 780w" sizes="(min-width: 820px) 320px, 78vw" width="780" height="1688" alt="The pedal with the BPM and Keep pitch" loading="lazy" decoding="async" /><figcaption>The pedal with the BPM and Keep pitch</figcaption></figure></section><section class="feature flip"><div><h2>Reverb and echo</h2><p>Add reverb to an MP3 or any other song: choose how big the room is, how dark it sounds and how much of it you hear. The echo can lock to the song&#x27;s tempo (quarter, eighth, dotted eighth or sixteenth notes) or be set freely.</p></div><figure class="shot"><img src="/img/app-space.webp" srcset="/img/app-space-sm.webp 390w, /img/app-space.webp 780w" sizes="(min-width: 820px) 320px, 78vw" width="780" height="1688" alt="Reverb and echo, with the echo locked to the tempo" loading="lazy" decoding="async" /><figcaption>Reverb and echo, with the echo locked to the tempo</figcaption></figure></section><section class="feature solo"><div><h2>A 5-band EQ you can see</h2><p>Drag the points to boost or cut the bass, low mids, mids, highs and air, over a live picture of the music&#x27;s frequencies.</p></div></section><section class="feature flip"><div><h2>Trim, cut and loop</h2><p>The Chop page shows the song as a waveform. Select a part to keep only it, cut it out, drop markers, loop a section while you listen, and undo anything.</p></div><figure class="shot"><img src="/img/app-chop.webp" srcset="/img/app-chop-sm.webp 390w, /img/app-chop.webp 780w" sizes="(min-width: 820px) 320px, 78vw" width="780" height="1688" alt="The waveform editor: trim, cut, loop and undo" loading="lazy" decoding="async" /><figcaption>The waveform editor: trim, cut, loop and undo</figcaption></figure></section><section class="feature"><div><h2>Clean exports</h2><p>Export as MP3 320 kbps or WAV (16 or 24 bit) with a look-ahead limiter so nothing clips. Set the file name, title, artist and cover art before saving.</p></div><figure class="shot"><img src="/img/app-export.webp" srcset="/img/app-export-sm.webp 390w, /img/app-export.webp 780w" sizes="(min-width: 820px) 320px, 78vw" width="780" height="1688" alt="Export as MP3 or WAV with tags" loading="lazy" decoding="async" /><figcaption>Export as MP3 or WAV with tags</figcaption></figure></section>
+        <section class="card">
+          <h2>How to do it</h2>
+          <ol><li>Choose a song; nothing is uploaded.</li><li>Swipe through the pages: speed, reverb and echo, EQ, chop.</li><li>Export as MP3 or WAV, or share it from your phone.</li></ol>
+          <p class="note" style="margin-top:16px"><a class="cta small" href="/">Try it now</a></p>
+        </section>
+        <section class="card">
+          <h2>Questions</h2>
+          <details><summary>Can I add reverb to an MP3 online for free?</summary><p>Yes. Open the song, go to the reverb page and set the amount. Export as MP3 when you&#x27;re done.</p></details><details><summary>Which file types can I edit?</summary><p>MP3, WAV, FLAC, M4A, AAC, OGG, Opus and AIFF, as far as your browser can decode them (most can).</p></details><details><summary>Will the quality drop?</summary><p>The audio is processed in 32-bit float and exported as MP3 320 kbps or lossless WAV.</p></details>
+        </section>
+        <section class="card related">
+          <h2>More you can do with THE REMIXITY</h2>
+          <ul><li><a href="/slow-reverb/">Make slowed + reverb songs online</a><span>Make slowed + reverb songs online for free.</span></li><li><a href="/music-library/">A music player with synced lyrics for your own files</a><span>Keep your own music in a library on your device: artists, playlists and a real player, with synced lyrics that follow the song.</span></li><li><a href="/music-card-maker/">Make music cards for your favourite songs</a><span>Create a music card for any song: the cover, title, artist and your remix&#x27;s speed in a clean design.</span></li></ul>
+        </section>
+      </main>
+      <footer>
+        <nav aria-label="Features"><a href="/">THE REMIXITY</a><a href="/slow-reverb/">Slowed + reverb</a><a href="/audio-editor/" aria-current="page">Audio editor</a><a href="/music-library/">Music library &amp; lyrics</a><a href="/instagram-story-maker/">Instagram Story maker</a><a href="/music-card-maker/">Music card maker</a></nav>
+        <p><a href="/privacy">Privacy</a> · <a href="/terms">Terms</a> · Made by <a href="https://instagram.com/iliyabarcari" target="_blank" rel="noopener">@iliyabarcari</a></p>
+      </footer>
+    </div>
+  </body>
+</html>
