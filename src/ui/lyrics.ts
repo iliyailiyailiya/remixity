@@ -182,6 +182,11 @@ export class LyricsView {
     else this.box.scrollTop = 0;
   }
 
+  /** The loaded lyrics when they're timed (for the story's lyrics card). */
+  get synced(): Lyrics | null {
+    return this.lyrics?.synced && this.lyrics.lines.length ? this.lyrics : null;
+  }
+
   /** Show a state message instead of lyrics. */
   message(text: string) {
     this.lyrics = null;

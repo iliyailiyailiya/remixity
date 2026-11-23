@@ -15,8 +15,20 @@ export interface StoryInfo {
   cover: HTMLImageElement;
   /** "Slowed ×0.85", "Sped up ×1.25", or '' for the original. */
   badge: string;
+  /** 'lyrics': the sung lines, following along, instead of the big cover card. */
+  style?: 'card' | 'lyrics';
+  lyrics?: {
+    lines: { t: number; text: string }[];
+    /** Seconds into the story → seconds into the original song. */
+    at: (storySeconds: number) => number;
+  };
 }
 
+const PAD = 90;
+const LYRIC_W = W - PAD * 2;
+const LYRICS_TOP = 470;
+const LYRICS_BOTTOM = 1490;
+const FOCUS = 760; // where the line being sung sits
 const FONT = 'system-ui, -apple-system, "Helvetica Neue", "Segoe UI", sans-serif';
 
 /** Blur an image's pixels in place (three box-blur passes ≈ a gaussian). */
@@ -136,20 +148,174 @@ export class StoryPainter {
 
   /** Draw a frame. `t` = seconds (drift), `progress` 0–1 for a video, or null for the still. */
   draw(t: number, progress: number | null) {
-    const { c, info } = this;
-    c.save();
+    if (this.info.style === 'lyrics' && this.info.lyrics) this.drawLyrics(t, progress);
+    else this.drawCard(t, progress);
+  }
+
+  /** The blurred, slowly drifting cover behind everything. */
+  private background(t: number, shade: number) {
+    const { c } = this;
     c.fillStyle = '#120c1f';
     c.fillRect(0, 0, W, H);
-
-    // Background: the blurred cover, slowly breathing in a video.
     const zoom = 1.15 + 0.05 * Math.sin(t * 0.6);
     const bw = W * zoom;
     const bh = H * zoom;
     c.imageSmoothingEnabled = true;
     c.imageSmoothingQuality = 'high';
     c.drawImage(this.bg, (W - bw) / 2 + 20 * Math.sin(t * 0.35), (H - bh) / 2 + 30 * Math.cos(t * 0.27), bw, bh);
-    c.fillStyle = 'rgba(0,0,0,0.22)';
+    c.fillStyle = `rgba(0,0,0,${shade})`;
     c.fillRect(0, 0, W, H);
+  }
+
+  // ---- lyrics style ----
+  private wrapped = new Map<number, string[]>();
+  private scroll: number | null = null;
+  private lastT = 0;
+
+  private linesOf(i: number): string[] {
+    let w = this.wrapped.get(i);
+    if (!w) {
+      const text = this.info.lyrics!.lines[i]?.text.trim() || '♪';
+      this.c.font = `800 74px ${FONT}`;
+      w = wrap(this.c, text, LYRIC_W, 3);
+      this.wrapped.set(i, w);
+    }
+    return w;
+  }
+
+  private drawLyrics(t: number, progress: number | null) {
+    const { c, info } = this;
+    const ly = info.lyrics!;
+    c.save();
+    this.background(t, 0.42);
+
+    // Header: small cover, title, artist (below Instagram's own top bar).
+    const top = 250;
+    const size = 132;
+    c.save();
+    roundRect(c, PAD, top, size, size, 20);
+    c.clip();
+    const iw = info.cover.naturalWidth || 1;
+    const ih = info.cover.naturalHeight || 1;
+    const s = Math.max(size / iw, size / ih);
+    c.drawImage(info.cover, PAD + (size - iw * s) / 2, top + (size - ih * s) / 2, iw * s, ih * s);
+    c.restore();
+    const tx = PAD + size + 30;
+    const tw = W - tx - PAD;
+    c.textBaseline = 'top';
+    c.fillStyle = '#fff';
+    c.font = `800 50px ${FONT}`;
+    c.fillText(wrap(c, info.title, tw, 1)[0] ?? '', tx, top + 14);
+    if (info.artist) {
+      c.fillStyle = 'rgba(255,255,255,0.75)';
+      c.font = `500 40px ${FONT}`;
+      c.fillText(wrap(c, info.artist, tw, 1)[0] ?? '', tx, top + 78);
+    }
+
+    // Which line is being sung.
+    const orig = ly.at(t);
+    let cur = -1;
+    let lo = 0;
+    let hi = ly.lines.length - 1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (ly.lines[mid].t <= orig + 0.15) {
+        cur = mid;
+        lo = mid + 1;
+      } else hi = mid - 1;
+    }
+
+    // Lay the lines out from the current one; scroll smoothly between them.
+    const LINE = 88;
+    const GAP = 34;
+    const blockH = (i: number) => this.linesOf(i).length * LINE + GAP;
+    const anchor = Math.max(0, cur);
+    // y of each line's top, relative to the anchor line's top
+    const from = Math.max(0, anchor - 4);
+    const to = Math.min(ly.lines.length - 1, anchor + 8);
+    const rel = new Map<number, number>();
+    let y = 0;
+    for (let i = anchor; i <= to; i++) {
+      rel.set(i, y);
+      y += blockH(i);
+    }
+    y = 0;
+    for (let i = anchor - 1; i >= from; i--) {
+      y -= blockH(i);
+      rel.set(i, y);
+    }
+    // The current line sits at FOCUS. When the next line starts, keep every
+    // line where it was on screen, then glide up to the new one.
+    const target = cur < 0 ? FOCUS + 120 : FOCUS;
+    const dt = Math.max(0, Math.min(0.1, t - this.lastT));
+    this.lastT = t;
+    if (this.scroll === null || progress === null) this.scroll = target;
+    else if (this.prevAnchor !== null && this.prevAnchor !== anchor && rel.has(this.prevAnchor))
+      this.scroll -= rel.get(this.prevAnchor)!;
+    this.prevAnchor = anchor;
+    this.scroll += (target - this.scroll) * (1 - Math.exp(-dt * 9));
+
+    c.save();
+    c.beginPath();
+    c.rect(0, LYRICS_TOP, W, LYRICS_BOTTOM - LYRICS_TOP);
+    c.clip();
+    c.font = `800 74px ${FONT}`;
+    for (let i = from; i <= to; i++) {
+      const top0 = this.scroll + (rel.get(i) ?? 0);
+      const lines = this.linesOf(i);
+      if (top0 > LYRICS_BOTTOM || top0 + lines.length * LINE < LYRICS_TOP) continue;
+      const now = i === cur;
+      c.fillStyle = now ? '#fff' : i < cur ? 'rgba(255,255,255,0.38)' : 'rgba(255,255,255,0.45)';
+      lines.forEach((l, k) => {
+        // Fade lines out softly toward the top and bottom edges.
+        const ly0 = top0 + k * LINE;
+        const edge = Math.min((ly0 - LYRICS_TOP) / 170, (LYRICS_BOTTOM - (ly0 + LINE)) / 220);
+        c.globalAlpha = Math.max(0, Math.min(1, edge));
+        c.fillText(l, PAD, ly0);
+      });
+      c.globalAlpha = 1;
+    }
+    c.restore();
+
+    // Footer: progress, THE REMIXITY, the speed badge.
+    let fy = 1540;
+    if (progress !== null) {
+      c.fillStyle = 'rgba(255,255,255,0.25)';
+      roundRect(c, PAD, fy, W - PAD * 2, 8, 4);
+      c.fill();
+      c.fillStyle = '#fff';
+      roundRect(c, PAD, fy, Math.max(8, (W - PAD * 2) * Math.min(1, progress)), 8, 4);
+      c.fill();
+    }
+    fy += 64;
+    c.textBaseline = 'middle';
+    c.fillStyle = 'rgba(255,255,255,0.8)';
+    c.font = `300 30px ${FONT}`;
+    const x = spaced(c, 'THE', PAD, fy, 9);
+    c.font = `800 30px ${FONT}`;
+    spaced(c, 'REMIXITY', x + 14, fy, 9);
+    if (info.badge) {
+      c.font = `700 30px ${FONT}`;
+      const bw = c.measureText(info.badge).width + 40;
+      const bx = W - PAD - bw;
+      c.fillStyle = '#fff';
+      roundRect(c, bx, fy - 26, bw, 52, 26);
+      c.fill();
+      c.fillStyle = '#111';
+      c.fillText(info.badge, bx + 20, fy + 1);
+    }
+    c.textAlign = 'center';
+    c.fillStyle = 'rgba(255,255,255,0.7)';
+    c.font = `600 30px ${FONT}`;
+    c.fillText('remixity.app', W / 2, fy + 70);
+    c.restore();
+  }
+  private prevAnchor: number | null = null;
+
+  private drawCard(t: number, progress: number | null) {
+    const { c, info } = this;
+    c.save();
+    this.background(t, 0.22);
 
     // The card.
     const cw = 760;

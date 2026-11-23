@@ -890,13 +890,20 @@ let storyFile: File | null = null;
 
 const storyKind = () => document.querySelector<HTMLInputElement>('input[name="storyKind"]:checked')!.value;
 
-function storyInfo(): StoryInfo {
+/** The story's details. `start` = where in the song the video begins (the still uses "now"). */
+function storyInfo(start = player?.position ?? 0): StoryInfo {
   const r = params.ratio;
+  const synced = lyricsView.synced;
+  const style = synced && document.querySelector<HTMLInputElement>('input[name="storyStyle"]:checked')?.value === 'lyrics' ? 'lyrics' : 'card';
   return {
     title: $('title').textContent || trackName,
     artist: $('artist').textContent === t('yourTrack') ? '' : $('artist').textContent || '',
     cover: $<HTMLImageElement>('cover'),
     badge: Math.abs(r - 1) < 0.005 ? '' : $('badge').textContent || '',
+    style,
+    lyrics: synced
+      ? { lines: synced.lines, at: (s: number) => toOriginal(Math.min(start + s * r, buffer?.duration ?? 0)) }
+      : undefined,
   };
 }
 
@@ -913,6 +920,7 @@ function updateStoryHint() {
 }
 
 function storyReset() {
+  $('storyStyles').hidden = !lyricsView.synced;
   storyAbort?.abort();
   storyAbort = null;
   storyFile = null;
@@ -929,7 +937,7 @@ $('openStory').addEventListener('click', () => {
   showSheet($('storySheet'));
   storyReset();
 });
-document.querySelectorAll('input[name="storyKind"]').forEach((el) => el.addEventListener('change', storyReset));
+document.querySelectorAll('input[name="storyKind"], input[name="storyStyle"]').forEach((el) => el.addEventListener('change', storyReset));
 
 storyCreate.addEventListener('click', async () => {
   if (storyAbort) {
@@ -938,8 +946,11 @@ storyCreate.addEventListener('click', async () => {
     return;
   }
   if (!buffer || !player) return;
-  const info = storyInfo();
   const kind = storyKind();
+  // Videos start where you are; near the end, earlier so the clip is full.
+  const seconds = kind === 'image' ? 0 : Number(kind);
+  const start = Math.max(0, Math.min(player.position, buffer.duration - seconds * params.ratio));
+  const info = storyInfo(start);
   const base = safeFileName(`${info.title}${info.badge ? ` (${info.badge})` : ''} - THE REMIXITY`);
   storyFile = null;
   storyShare.hidden = true;
@@ -948,13 +959,9 @@ storyCreate.addEventListener('click', async () => {
       const png = await storyImage(storyCanvas, info);
       storyFile = new File([png], `${base}.png`, { type: 'image/png' });
     } else {
-      const seconds = Number(kind);
       const wasPlaying = player.playing;
       player.pause();
       render();
-      // Start where you are; near the end, start earlier so the clip is full.
-      const span = seconds * params.ratio;
-      const start = Math.max(0, Math.min(player.position, buffer.duration - span));
       storyStatus.textContent = t('storyPreparing');
       storyAbort = new AbortController();
       storyCreate.textContent = t('fixStop');

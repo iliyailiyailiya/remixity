@@ -576,6 +576,10 @@
       <div class="sheet-body">
         <h2 id="storyTitle" class="sheet-title" data-i18n="storyTitle"></h2>
         <div class="story-preview"><canvas id="storyCanvas" width="1080" height="1920"></canvas></div>
+        <div id="storyStyles" class="formats story-kinds" role="radiogroup" hidden>
+          <label><input type="radio" name="storyStyle" value="card" checked /><span data-i18n="storyStyleCard"></span></label>
+          <label><input type="radio" name="storyStyle" value="lyrics" /><span data-i18n="storyStyleLyrics"></span></label>
+        </div>
         <div class="formats story-kinds" role="radiogroup">
           <label><input type="radio" name="storyKind" value="image" checked /><span data-i18n="storyImage"></span></label>
           <label><input type="radio" name="storyKind" value="15" /><span data-i18n="storyVideo15"></span></label>
