@@ -4,7 +4,7 @@ import { DEFAULT_PARAMS, FxParams } from './engine/chain';
 import { decodeData, niceName, safeFileName } from './engine/decode';
 import { Player } from './engine/player';
 import { exportAudio, Format, renderClip, Stage } from './engine/render';
-import { canRecordVideo, storyImage, storyVideo, type StoryInfo } from './ui/story';
+import { canRecordVideo, levelsOf, storyImage, storyVideo, type StoryInfo, type StoryStyle } from './ui/story';
 import { shareOrDownload } from './library/export';
 import { addMarker, assemble, cut, EditState, initialEdit, keepOnly, removeMarker } from './engine/edit';
 import { readMeta, songNames, tidyName } from './engine/meta';
@@ -890,17 +890,42 @@ let storyFile: File | null = null;
 
 const storyKind = () => document.querySelector<HTMLInputElement>('input[name="storyKind"]:checked')!.value;
 
-/** The story's details. `start` = where in the song the video begins (the still uses "now"). */
-function storyInfo(start = player?.position ?? 0): StoryInfo {
+const storyStart = $<HTMLInputElement>('storyStart');
+let storyColors: StoryInfo['colors'];
+const picked = (name: string) => document.querySelector<HTMLInputElement>(`input[name="${name}"]:checked`)?.value ?? '';
+
+/** Where in the song the story begins: the slider (it starts where you are). */
+function storyStartAt(seconds: number): number {
+  if (!buffer) return 0;
+  return Math.max(0, Math.min(Number(storyStart.value), buffer.duration - seconds * params.ratio));
+}
+
+/** A short piece of the song as it is, for the still's "Waves" bars. */
+function sliceOf(b: AudioBuffer, start: number, seconds: number): AudioBuffer {
+  const from = Math.floor(start * b.sampleRate);
+  const n = Math.max(1, Math.min(b.length - from, Math.floor(seconds * b.sampleRate)));
+  const out = new AudioBuffer({ length: n, numberOfChannels: b.numberOfChannels, sampleRate: b.sampleRate });
+  for (let c = 0; c < b.numberOfChannels; c++) out.copyToChannel(b.getChannelData(c).subarray(from, from + n), c);
+  return out;
+}
+
+/** The story's details. `start` = where in the song (buffer seconds) it begins. */
+function storyInfo(start: number): StoryInfo {
   const r = params.ratio;
   const synced = lyricsView.synced;
-  const style = synced && document.querySelector<HTMLInputElement>('input[name="storyStyle"]:checked')?.value === 'lyrics' ? 'lyrics' : 'card';
+  let style = picked('storyStyle') as StoryStyle;
+  if (style === 'lyrics' && !synced) style = 'card';
   return {
     title: $('title').textContent || trackName,
     artist: $('artist').textContent === t('yourTrack') ? '' : $('artist').textContent || '',
     cover: $<HTMLImageElement>('cover'),
-    badge: Math.abs(r - 1) < 0.005 ? '' : $('badge').textContent || '',
+    badge: !$<HTMLInputElement>('storyBadge').checked || Math.abs(r - 1) < 0.005 ? '' : $('badge').textContent || '',
     style,
+    bg: picked('storyBg') as StoryInfo['bg'],
+    colors: storyColors,
+    subtitles: $<HTMLInputElement>('storySubs').checked,
+    ratio: r,
+    levels: style === 'waves' && buffer ? levelsOf(sliceOf(buffer, start, 2)) : undefined,
     lyrics: synced
       ? { lines: synced.lines, at: (s: number) => toOriginal(Math.min(start + s * r, buffer?.duration ?? 0)) }
       : undefined,
@@ -909,18 +934,17 @@ function storyInfo(start = player?.position ?? 0): StoryInfo {
 
 function updateStoryHint() {
   const kind = storyKind();
-  const fmt = (x: number) => fmtTime(x / params.ratio);
   $('storyHint').textContent =
-    kind === 'image'
-      ? t('storyHintImage')
-      : canRecordVideo()
-        ? t('storyHintVideo').replace('{t}', fmt(player?.position ?? 0))
-        : t('storyNoVideo');
+    kind === 'image' ? t('storyHintImage') : canRecordVideo() ? t('storyHintVideo').replace('{t}', $('storyStartTime').textContent ?? '') : t('storyNoVideo');
   storyCreate.disabled = kind !== 'image' && !canRecordVideo();
 }
 
+/** Redraw the still preview (and forget a story made with older settings). */
 function storyReset() {
-  $('storyStyles').hidden = !lyricsView.synced;
+  const synced = !!lyricsView.synced;
+  document.querySelectorAll<HTMLElement>('#storyStyles [data-needs-lyrics]').forEach((el) => (el.hidden = !synced));
+  if (!synced && picked('storyStyle') === 'lyrics') document.querySelector<HTMLInputElement>('input[name="storyStyle"][value="card"]')!.checked = true;
+  $('storySubsRow').hidden = !synced || picked('storyStyle') === 'lyrics';
   storyAbort?.abort();
   storyAbort = null;
   storyFile = null;
@@ -929,15 +953,31 @@ function storyReset() {
   storyStatus.textContent = '';
   storyCreate.disabled = false;
   storyCreate.textContent = t('storyCreate');
-  void storyImage(storyCanvas, storyInfo()).catch(() => {}); // still preview
+  const kind = storyKind();
+  const start = storyStartAt(kind === 'image' ? 0 : Number(kind));
+  $('storyStartTime').textContent = fmtTime(start / params.ratio);
+  void storyImage(storyCanvas, storyInfo(start)).catch(() => {}); // still preview
   updateStoryHint();
 }
 
-$('openStory').addEventListener('click', () => {
+$('openStory').addEventListener('click', async () => {
   showSheet($('storySheet'));
+  // Starts where you are; the slider can move it.
+  storyStart.max = String(buffer?.duration ?? 1);
+  storyStart.value = String(player?.position ?? 0);
   storyReset();
+  storyColors = await paletteFrom($<HTMLImageElement>('cover')).catch(() => undefined);
+  if (picked('storyBg') === 'color') storyReset();
 });
-document.querySelectorAll('input[name="storyKind"], input[name="storyStyle"]').forEach((el) => el.addEventListener('change', storyReset));
+document
+  .querySelectorAll('input[name="storyKind"], input[name="storyStyle"], input[name="storyBg"], #storySubs, #storyBadge')
+  .forEach((el) => el.addEventListener('change', storyReset));
+let startTimer = 0;
+storyStart.addEventListener('input', () => {
+  $('storyStartTime').textContent = fmtTime(Number(storyStart.value) / params.ratio);
+  clearTimeout(startTimer);
+  startTimer = window.setTimeout(storyReset, 120);
+});
 
 storyCreate.addEventListener('click', async () => {
   if (storyAbort) {
@@ -947,9 +987,9 @@ storyCreate.addEventListener('click', async () => {
   }
   if (!buffer || !player) return;
   const kind = storyKind();
-  // Videos start where you are; near the end, earlier so the clip is full.
+  // Near the end, the video starts earlier so the clip is full.
   const seconds = kind === 'image' ? 0 : Number(kind);
-  const start = Math.max(0, Math.min(player.position, buffer.duration - seconds * params.ratio));
+  const start = storyStartAt(seconds);
   const info = storyInfo(start);
   const base = safeFileName(`${info.title}${info.badge ? ` (${info.badge})` : ''} - THE REMIXITY`);
   storyFile = null;
@@ -967,6 +1007,7 @@ storyCreate.addEventListener('click', async () => {
       storyCreate.textContent = t('fixStop');
       const clip = await renderClip(buffer, params, start, Math.min(seconds, buffer.duration / params.ratio));
       if (!storyAbort || storyAbort.signal.aborted) return;
+      if (info.style === 'waves') info.levels = levelsOf(clip); // the bars follow what you hear
       storyBar.hidden = false;
       const fillBar = storyBar.firstElementChild as HTMLElement;
       const video = await storyVideo(

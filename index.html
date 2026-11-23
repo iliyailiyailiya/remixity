@@ -576,15 +576,33 @@
       <div class="sheet-body">
         <h2 id="storyTitle" class="sheet-title" data-i18n="storyTitle"></h2>
         <div class="story-preview"><canvas id="storyCanvas" width="1080" height="1920"></canvas></div>
-        <div id="storyStyles" class="formats story-kinds" role="radiogroup" hidden>
+        <div id="storyStyles" class="story-styles" role="radiogroup">
           <label><input type="radio" name="storyStyle" value="card" checked /><span data-i18n="storyStyleCard"></span></label>
-          <label><input type="radio" name="storyStyle" value="lyrics" /><span data-i18n="storyStyleLyrics"></span></label>
+          <label data-needs-lyrics><input type="radio" name="storyStyle" value="lyrics" /><span data-i18n="storyStyleLyrics"></span></label>
+          <label><input type="radio" name="storyStyle" value="vinyl" /><span data-i18n="storyStyleVinyl"></span></label>
+          <label><input type="radio" name="storyStyle" value="full" /><span data-i18n="storyStyleFull"></span></label>
+          <label><input type="radio" name="storyStyle" value="waves" /><span data-i18n="storyStyleWaves"></span></label>
         </div>
         <div class="formats story-kinds" role="radiogroup">
           <label><input type="radio" name="storyKind" value="image" checked /><span data-i18n="storyImage"></span></label>
           <label><input type="radio" name="storyKind" value="15" /><span data-i18n="storyVideo15"></span></label>
           <label><input type="radio" name="storyKind" value="30" /><span data-i18n="storyVideo30"></span></label>
         </div>
+        <details class="card story-custom">
+          <summary data-i18n="storyCustomise"></summary>
+          <small class="story-label" data-i18n="storyBackground"></small>
+          <div class="story-styles" role="radiogroup">
+            <label><input type="radio" name="storyBg" value="blur" checked /><span data-i18n="storyBgBlur"></span></label>
+            <label><input type="radio" name="storyBg" value="color" /><span data-i18n="storyBgColor"></span></label>
+            <label><input type="radio" name="storyBg" value="dark" /><span data-i18n="storyBgDark"></span></label>
+          </div>
+          <label class="check" id="storySubsRow"><input id="storySubs" type="checkbox" /><span data-i18n="storySubs"></span></label>
+          <label class="check"><input id="storyBadge" type="checkbox" checked /><span data-i18n="storyBadge"></span></label>
+          <label class="field story-start">
+            <small><span data-i18n="storyStart"></span> <b id="storyStartTime">0:00</b></small>
+            <input id="storyStart" type="range" min="0" max="1" step="0.25" value="0" />
+          </label>
+        </details>
         <p id="storyHint" class="hint"></p>
         <button id="storyCreate" class="primary" data-i18n="storyCreate"></button>
         <div id="storyProgress" class="progress" hidden><div></div></div>

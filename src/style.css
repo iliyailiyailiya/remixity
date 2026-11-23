@@ -2471,6 +2471,74 @@ body.lyrics-open .player {
 .story-kinds label span {
   white-space: nowrap;
 }
+/* Style and background chips: one scrollable row */
+.story-styles {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin: 0 -2px 10px;
+  padding: 2px;
+}
+.story-styles::-webkit-scrollbar {
+  display: none;
+}
+.story-styles label {
+  flex: none;
+}
+.story-styles label[hidden] {
+  display: none;
+}
+.story-styles input {
+  position: absolute;
+  opacity: 0;
+}
+.story-styles span {
+  display: block;
+  padding: 9px 15px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.07);
+  font-size: 0.88rem;
+  font-weight: 650;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.story-styles input:checked + span {
+  background: #fff;
+  border-color: #fff;
+  color: #120c1f;
+}
+.story-styles input:focus-visible + span {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+.story-custom {
+  margin: 0 0 12px;
+  padding: 12px 14px;
+}
+.story-custom summary {
+  font-weight: 700;
+  cursor: pointer;
+}
+.story-custom[open] summary {
+  margin-bottom: 10px;
+}
+.story-label {
+  display: block;
+  color: var(--dim);
+  margin-bottom: 6px;
+}
+.story-custom .check {
+  margin: 6px 0;
+}
+.story-start {
+  margin-top: 8px;
+}
+.story-start input {
+  width: 100%;
+  accent-color: #fff;
+}
 
 /* "We moved" (old address only) */
 .move-overlay {

@@ -9,14 +9,27 @@
 export const W = 1080;
 export const H = 1920;
 
+/** card: the cover in a white card · lyrics: sung lines · vinyl: a spinning record ·
+ *  full: the cover fills the screen · waves: cover + bars moving with the music */
+export type StoryStyle = 'card' | 'lyrics' | 'vinyl' | 'full' | 'waves';
+
 export interface StoryInfo {
   title: string;
   artist: string;
   cover: HTMLImageElement;
   /** "Slowed ×0.85", "Sped up ×1.25", or '' for the original. */
   badge: string;
-  /** 'lyrics': the sung lines, following along, instead of the big cover card. */
-  style?: 'card' | 'lyrics';
+  style?: StoryStyle;
+  /** Behind the design: the cover blurred, its colours, or plain dark. */
+  bg?: 'blur' | 'color' | 'dark';
+  /** The cover's main colours (for bg 'color'). */
+  colors?: [number, number, number][];
+  /** Show the line being sung as a subtitle (styles other than 'lyrics'). */
+  subtitles?: boolean;
+  /** Playback speed: the record spins slower when slowed. */
+  ratio?: number;
+  /** Loudness over the story, for the 'waves' bars. */
+  levels?: { data: Float32Array; fps: number };
   lyrics?: {
     lines: { t: number; text: string }[];
     /** Seconds into the story → seconds into the original song. */
@@ -148,15 +161,41 @@ export class StoryPainter {
 
   /** Draw a frame. `t` = seconds (drift), `progress` 0–1 for a video, or null for the still. */
   draw(t: number, progress: number | null) {
-    if (this.info.style === 'lyrics' && this.info.lyrics) this.drawLyrics(t, progress);
+    const st = this.info.style ?? 'card';
+    if (st === 'lyrics' && this.info.lyrics) this.drawLyrics(t, progress);
+    else if (st === 'vinyl') this.drawVinyl(t, progress);
+    else if (st === 'full') this.drawFull(t, progress);
+    else if (st === 'waves') this.drawWaves(t, progress);
     else this.drawCard(t, progress);
   }
 
-  /** The blurred, slowly drifting cover behind everything. */
+  /** What's behind the design: the blurred, slowly drifting cover, its colours, or dark. */
   private background(t: number, shade: number) {
-    const { c } = this;
+    const { c, info } = this;
     c.fillStyle = '#120c1f';
     c.fillRect(0, 0, W, H);
+    if (info.bg === 'dark') {
+      const g = c.createRadialGradient(W / 2, H * 0.4, 0, W / 2, H * 0.4, H * 0.7);
+      g.addColorStop(0, '#24203a');
+      g.addColorStop(1, '#07060c');
+      c.fillStyle = g;
+      c.fillRect(0, 0, W, H);
+      return;
+    }
+    if (info.bg === 'color' && info.colors?.length) {
+      const [a, b = a, d = b] = info.colors;
+      const rgb = (x: number[]) => `rgb(${x.join(',')})`;
+      const ang = t * 0.15;
+      const g = c.createLinearGradient(W / 2 + Math.cos(ang) * W, 0, W / 2 - Math.cos(ang) * W, H);
+      g.addColorStop(0, rgb(a));
+      g.addColorStop(0.55, rgb(b));
+      g.addColorStop(1, rgb(d));
+      c.fillStyle = g;
+      c.fillRect(0, 0, W, H);
+      c.fillStyle = `rgba(0,0,0,${shade + 0.08})`;
+      c.fillRect(0, 0, W, H);
+      return;
+    }
     const zoom = 1.15 + 0.05 * Math.sin(t * 0.6);
     const bw = W * zoom;
     const bh = H * zoom;
@@ -312,6 +351,255 @@ export class StoryPainter {
   }
   private prevAnchor: number | null = null;
 
+  /** The line being sung right now, or '' (for the subtitles option). */
+  private sungLine(t: number): { text: string; since: number } {
+    const ly = this.info.lyrics;
+    if (!ly || !this.info.subtitles) return { text: '', since: 0 };
+    const orig = ly.at(t);
+    let cur = -1;
+    let lo = 0;
+    let hi = ly.lines.length - 1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (ly.lines[mid].t <= orig + 0.15) {
+        cur = mid;
+        lo = mid + 1;
+      } else hi = mid - 1;
+    }
+    if (cur < 0) return { text: '', since: 0 };
+    return { text: ly.lines[cur].text.trim(), since: orig - ly.lines[cur].t };
+  }
+
+  /** The sung line as a centred subtitle; fades in as each line starts. */
+  private subtitle(t: number, y: number, progress: number | null) {
+    const { text, since } = this.sungLine(t);
+    if (!text) return;
+    const { c } = this;
+    c.save();
+    c.font = `800 56px ${FONT}`;
+    c.textAlign = 'center';
+    c.textBaseline = 'top';
+    c.globalAlpha = progress === null ? 1 : Math.max(0, Math.min(1, since / 0.25 + 0.15));
+    c.shadowColor = 'rgba(0,0,0,0.5)';
+    c.shadowBlur = 24;
+    c.fillStyle = '#fff';
+    wrap(c, text, W - PAD * 2, 2).forEach((l, i) => c.fillText(l, W / 2, y + i * 68));
+    c.restore();
+  }
+
+  /** Progress bar, THE REMIXITY, the speed badge and remixity.app, in white. */
+  private footer(y: number, progress: number | null) {
+    const { c, info } = this;
+    c.save();
+    if (progress !== null) {
+      c.fillStyle = 'rgba(255,255,255,0.25)';
+      roundRect(c, PAD, y, W - PAD * 2, 8, 4);
+      c.fill();
+      c.fillStyle = '#fff';
+      roundRect(c, PAD, y, Math.max(8, (W - PAD * 2) * Math.min(1, progress)), 8, 4);
+      c.fill();
+    }
+    const fy = y + 64;
+    c.textBaseline = 'middle';
+    c.fillStyle = 'rgba(255,255,255,0.85)';
+    c.font = `300 30px ${FONT}`;
+    const x = spaced(c, 'THE', PAD, fy, 9);
+    c.font = `800 30px ${FONT}`;
+    spaced(c, 'REMIXITY', x + 14, fy, 9);
+    if (info.badge) {
+      c.font = `700 30px ${FONT}`;
+      const bw = c.measureText(info.badge).width + 40;
+      const bx = W - PAD - bw;
+      c.fillStyle = '#fff';
+      roundRect(c, bx, fy - 26, bw, 52, 26);
+      c.fill();
+      c.fillStyle = '#111';
+      c.fillText(info.badge, bx + 20, fy + 1);
+    }
+    c.textAlign = 'center';
+    c.fillStyle = 'rgba(255,255,255,0.7)';
+    c.font = `600 30px ${FONT}`;
+    c.fillText('remixity.app', W / 2, fy + 70);
+    c.restore();
+  }
+
+  /** The cover, cropped to fill a w×h box at x,y. */
+  private coverAt(x: number, y: number, w: number, h: number) {
+    const img = this.info.cover;
+    const iw = img.naturalWidth || 1;
+    const ih = img.naturalHeight || 1;
+    const s = Math.max(w / iw, h / ih);
+    this.c.drawImage(img, x + (w - iw * s) / 2, y + (h - ih * s) / 2, iw * s, ih * s);
+  }
+
+  /** Title and artist, centred, in white. Returns the y below them. */
+  private names(y: number, align: 'center' | 'left' = 'center', size = 64): number {
+    const { c, info } = this;
+    const x = align === 'center' ? W / 2 : PAD;
+    c.save();
+    c.textAlign = align;
+    c.textBaseline = 'top';
+    c.fillStyle = '#fff';
+    c.shadowColor = 'rgba(0,0,0,0.35)';
+    c.shadowBlur = 20;
+    c.font = `800 ${size}px ${FONT}`;
+    for (const l of wrap(c, info.title, W - PAD * 2, 2)) {
+      c.fillText(l, x, y);
+      y += size * 1.15;
+    }
+    if (info.artist) {
+      c.fillStyle = 'rgba(255,255,255,0.8)';
+      c.font = `500 ${Math.round(size * 0.72)}px ${FONT}`;
+      for (const l of wrap(c, info.artist, W - PAD * 2, 2)) {
+        c.fillText(l, x, y + 6);
+        y += size * 0.86;
+      }
+    }
+    c.restore();
+    return y + 6;
+  }
+
+  // ---- vinyl: the cover as the label of a spinning record ----
+  private drawVinyl(t: number, progress: number | null) {
+    const { c } = this;
+    c.save();
+    this.background(t, 0.3);
+    const cx = W / 2;
+    const cy = 720;
+    const R = 400;
+    // 33⅓ rpm, at the remix's speed (slowed spins slower).
+    const angle = t * ((33.3 / 60) * Math.PI * 2) * (this.info.ratio ?? 1);
+    c.save();
+    c.shadowColor = 'rgba(0,0,0,0.55)';
+    c.shadowBlur = 70;
+    c.shadowOffsetY = 24;
+    c.fillStyle = '#0b0b0d';
+    c.beginPath();
+    c.arc(cx, cy, R, 0, Math.PI * 2);
+    c.fill();
+    c.restore();
+    // Grooves
+    c.strokeStyle = 'rgba(255,255,255,0.045)';
+    c.lineWidth = 2;
+    for (let r = R - 14; r > 175; r -= 9) {
+      c.beginPath();
+      c.arc(cx, cy, r, 0, Math.PI * 2);
+      c.stroke();
+    }
+    // Label: the cover, turning
+    c.save();
+    c.translate(cx, cy);
+    c.rotate(angle);
+    c.beginPath();
+    c.arc(0, 0, 170, 0, Math.PI * 2);
+    c.clip();
+    this.coverAt(-170, -170, 340, 340);
+    c.restore();
+    // Spindle hole
+    c.fillStyle = '#0b0b0d';
+    c.beginPath();
+    c.arc(cx, cy, 12, 0, Math.PI * 2);
+    c.fill();
+    // Light sheen across the vinyl (doesn't turn, like a real reflection)
+    const g = c.createLinearGradient(cx - R, cy - R, cx + R, cy + R);
+    g.addColorStop(0.3, 'rgba(255,255,255,0)');
+    g.addColorStop(0.48, 'rgba(255,255,255,0.10)');
+    g.addColorStop(0.52, 'rgba(255,255,255,0.10)');
+    g.addColorStop(0.7, 'rgba(255,255,255,0)');
+    c.fillStyle = g;
+    c.beginPath();
+    c.arc(cx, cy, R, 0, Math.PI * 2);
+    c.arc(cx, cy, 172, 0, Math.PI * 2, true);
+    c.fill();
+
+    const y = this.names(cy + R + 70);
+    this.subtitle(t, y + 30, progress);
+    this.footer(1540, progress);
+    c.restore();
+  }
+
+  // ---- full: the cover fills the story ----
+  private drawFull(t: number, progress: number | null) {
+    const { c } = this;
+    c.save();
+    c.fillStyle = '#000';
+    c.fillRect(0, 0, W, H);
+    // Slow push-in on the cover
+    const z = progress === null ? 1 : 1 + 0.08 * Math.min(1, progress);
+    const w = H * z;
+    this.coverAt((W - w) / 2, (H - H * z) / 2, w, H * z);
+    const g = c.createLinearGradient(0, 900, 0, H);
+    g.addColorStop(0, 'rgba(0,0,0,0)');
+    g.addColorStop(0.55, 'rgba(0,0,0,0.75)');
+    g.addColorStop(1, 'rgba(0,0,0,0.92)');
+    c.fillStyle = g;
+    c.fillRect(0, 900, W, H - 900);
+    const top = this.info.subtitles && this.info.lyrics ? 1080 : 1230;
+    const y = this.names(top, 'left', 80);
+    this.subtitleLeft(t, y + 20, progress);
+    this.footer(1540, progress);
+    c.restore();
+  }
+
+  private subtitleLeft(t: number, y: number, progress: number | null) {
+    const { text, since } = this.sungLine(t);
+    if (!text) return;
+    const { c } = this;
+    c.save();
+    c.font = `700 50px ${FONT}`;
+    c.textBaseline = 'top';
+    c.globalAlpha = progress === null ? 1 : Math.max(0, Math.min(1, since / 0.25 + 0.15));
+    c.fillStyle = '#fff';
+    wrap(c, text, W - PAD * 2, 2).forEach((l, i) => c.fillText(`${i === 0 ? '“' : ''}${l}`, PAD, y + i * 62));
+    c.restore();
+  }
+
+  // ---- waves: the cover with bars that move with the music ----
+  private drawWaves(t: number, progress: number | null) {
+    const { c, info } = this;
+    c.save();
+    this.background(t, 0.35);
+    const size = 620;
+    const x = (W - size) / 2;
+    const y0 = 330;
+    c.save();
+    c.shadowColor = 'rgba(0,0,0,0.5)';
+    c.shadowBlur = 60;
+    c.shadowOffsetY = 20;
+    c.fillStyle = '#000';
+    roundRect(c, x, y0, size, size, 36);
+    c.fill();
+    c.restore();
+    c.save();
+    roundRect(c, x, y0, size, size, 36);
+    c.clip();
+    this.coverAt(x, y0, size, size);
+    c.restore();
+
+    const y = this.names(y0 + size + 56, 'center', 60);
+    // Bars: loudness around now, mirrored from the centre outwards.
+    const bars = 31;
+    const bw = 16;
+    const gap = (W - PAD * 2 - bars * bw) / (bars - 1);
+    const mid = Math.max(y + 150, 1330);
+    const lv = info.levels;
+    c.fillStyle = '#fff';
+    for (let i = 0; i < bars; i++) {
+      const d = Math.abs(i - (bars - 1) / 2); // distance from centre
+      let v = 0.15;
+      if (lv) {
+        const k = Math.round((t - d * 0.045) * lv.fps);
+        v = lv.data[Math.max(0, Math.min(lv.data.length - 1, k))] ?? 0;
+      } else v = 0.25 + 0.2 * Math.sin(i * 1.7);
+      const h = Math.max(14, Math.min(220, v * 260 * (1 - d / bars * 0.6)));
+      roundRect(c, PAD + i * (bw + gap), mid - h / 2, bw, h, bw / 2);
+      c.fill();
+    }
+    this.subtitle(t, mid + 140, progress);
+    this.footer(1540 + (this.info.subtitles && this.info.lyrics ? 60 : 0), progress);
+    c.restore();
+  }
+
   private drawCard(t: number, progress: number | null) {
     const { c, info } = this;
     c.save();
@@ -396,11 +684,15 @@ export class StoryPainter {
     }
 
     // A small line under the card (Instagram's own buttons cover the very bottom).
+    c.restore();
+    const sub = this.sungLine(t).text;
+    c.save();
     c.textAlign = 'center';
     c.fillStyle = 'rgba(255,255,255,0.85)';
     c.font = `600 34px ${FONT}`;
-    c.fillText('made with THE REMIXITY · remixity.app', W / 2, cy + ch + 80);
+    c.fillText('made with THE REMIXITY · remixity.app', W / 2, sub ? cy + ch + 230 : cy + ch + 80);
     c.restore();
+    if (sub) this.subtitle(t, cy + ch + 50, progress);
   }
 }
 
@@ -490,4 +782,31 @@ export async function storyVideo(
   } finally {
     void ac.close();
   }
+}
+
+/** Loudness (0–1, a little emphasised) of `buffer`, `fps` values a second. */
+export function levelsOf(buffer: AudioBuffer, fps = 30): { data: Float32Array; fps: number } {
+  const step = Math.max(1, Math.floor(buffer.sampleRate / fps));
+  const n = Math.ceil(buffer.length / step);
+  const data = new Float32Array(n);
+  const chans = Array.from({ length: buffer.numberOfChannels }, (_, i) => buffer.getChannelData(i));
+  let peak = 1e-6;
+  for (let k = 0; k < n; k++) {
+    let sum = 0;
+    let cnt = 0;
+    for (let i = k * step, e = Math.min(buffer.length, i + step); i < e; i += 4) {
+      for (const ch of chans) sum += ch[i] * ch[i];
+      cnt += chans.length;
+    }
+    data[k] = Math.sqrt(sum / Math.max(1, cnt));
+    peak = Math.max(peak, data[k]);
+  }
+  // Normalise, then smooth a little so the bars don't flicker.
+  let prev = 0;
+  for (let k = 0; k < n; k++) {
+    const v = Math.pow(data[k] / peak, 0.8);
+    prev = v > prev ? v : prev * 0.8 + v * 0.2;
+    data[k] = prev;
+  }
+  return { data, fps };
 }
