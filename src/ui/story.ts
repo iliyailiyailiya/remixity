@@ -759,8 +759,12 @@ export function storyImage(canvas: HTMLCanvasElement, info: StoryInfo): Promise<
   );
 }
 
+// For the real-time recorder (browsers without WebCodecs): H.264 levels that
+// fit 1080×1920 (4.0+). Baseline 3.0 tops out around 720×576, which made
+// Safari squeeze stories badly.
 const VIDEO_TYPES = [
-  'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+  'video/mp4;codecs=avc1.640028,mp4a.40.2',
+  'video/mp4;codecs=avc1.4d0028,mp4a.40.2',
   'video/mp4;codecs=avc1,mp4a',
   'video/mp4',
   'video/webm;codecs=vp9,opus',
@@ -769,9 +773,10 @@ const VIDEO_TYPES = [
 ];
 
 export const canRecordVideo = () =>
-  typeof MediaRecorder !== 'undefined' &&
+  (typeof VideoEncoder !== 'undefined' && typeof AudioEncoder !== 'undefined') ||
+  (typeof MediaRecorder !== 'undefined' &&
   typeof HTMLCanvasElement.prototype.captureStream === 'function' &&
-  VIDEO_TYPES.some((t) => MediaRecorder.isTypeSupported(t));
+  VIDEO_TYPES.some((t) => MediaRecorder.isTypeSupported(t)));
 
 /**
  * Record the story as a video with `clip` as its sound. Runs in real time
@@ -788,6 +793,18 @@ export async function storyVideo(
   canvas.height = H;
   const painter = new StoryPainter(canvas.getContext('2d')!, info);
   painter.draw(0, 0);
+
+  // Best: encode frame by frame at a fixed high quality (faster than real time).
+  const { encodePlan, encodeStory } = await import('./storyEncode');
+  const plan = await encodePlan(W, H, clip.sampleRate);
+  if (plan) {
+    try {
+      return await encodeStory(plan, canvas, new StoryPainter(canvas.getContext('2d')!, info), clip, onProgress, signal);
+    } catch (err) {
+      if ((err as DOMException).name === 'AbortError') throw err;
+      console.warn('story encoder failed, recording instead', err);
+    }
+  }
 
   const mimeType = VIDEO_TYPES.find((t) => MediaRecorder.isTypeSupported(t))!;
   // Bigger audio buffers ("playback") ride out busy moments without crackles;
@@ -806,7 +823,7 @@ export async function storyVideo(
     src.connect(dest);
     src.connect(ac.destination); // hear it while it records
     const stream = new MediaStream([...canvas.captureStream(30).getVideoTracks(), ...dest.stream.getAudioTracks()]);
-    const rec = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 8_000_000, audioBitsPerSecond: 192_000 });
+    const rec = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 10_000_000, audioBitsPerSecond: 192_000 });
     const chunks: Blob[] = [];
     rec.ondataavailable = (e) => e.data.size && chunks.push(e.data);
     const stopped = new Promise<void>((r) => (rec.onstop = () => r()));

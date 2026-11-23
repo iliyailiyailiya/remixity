@@ -1097,7 +1097,7 @@ storyCreate.addEventListener('click', async () => {
         clip,
         (f) => {
           fillBar.style.width = `${Math.round(f * 100)}%`;
-          storyStatus.textContent = t('storyRecording').replace('{n}', String(Math.ceil(clip.duration * (1 - f))));
+          storyStatus.textContent = t('storyRecording').replace('{n}', String(Math.round(f * 100)));
         },
         storyAbort.signal,
       );
