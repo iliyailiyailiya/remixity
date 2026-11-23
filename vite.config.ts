@@ -13,6 +13,20 @@ export default defineConfig(({ mode }) => {
     optimizeDeps: { exclude: ['signalsmith-stretch'], esbuildOptions: { target: 'es2022' } },
     plugins: [
       {
+        // With a publisher ID, the page carries AdSense's code in its HTML
+        // (how Google checks the site during review) and its account meta tag.
+        name: 'adsense-head',
+        transformIndexHtml(html) {
+          const client = env.VITE_ADSENSE_CLIENT;
+          if (!client) return html;
+          return html.replace(
+            '</head>',
+            `    <meta name="google-adsense-account" content="${client}" />\n` +
+              `    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${client}" crossorigin="anonymous"></script>\n  </head>`,
+          );
+        },
+      },
+      {
         name: 'ads-txt',
         generateBundle() {
           const client = env.VITE_ADSENSE_CLIENT;
