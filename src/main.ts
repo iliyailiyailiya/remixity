@@ -850,6 +850,23 @@ function announcePlaying() {
   }
 }
 
+// The site was updated after this page opened, and a piece it loads later
+// (like the story encoder) isn't there any more: reload to the new version,
+// unless music is playing (then say so instead of cutting the song off).
+let staleApp = false;
+addEventListener('vite:preloadError', (e) => {
+  staleApp = true;
+  if (player?.playing) return; // the error goes on to whatever asked; it shows a message
+  try {
+    if (Date.now() - Number(sessionStorage.getItem('staleReload') || 0) < 30_000) return; // no loops
+    sessionStorage.setItem('staleReload', String(Date.now()));
+  } catch {
+    /* storage blocked: reload anyway */
+  }
+  e.preventDefault();
+  location.reload();
+});
+
 // Leaving or reloading the page: silence it for good. (On iPhone, with the
 // "playback" audio session, the old page's sound could otherwise keep going
 // after a reload, unseen, and play on top of the next song.)
@@ -1121,7 +1138,7 @@ storyCreate.addEventListener('click', async () => {
     storyCreate.textContent = t('storyCreate');
     if ((err as DOMException).name === 'AbortError') return;
     console.error(err);
-    storyStatus.textContent = t('storyFailed').replace('{e}', (err as Error).message);
+    storyStatus.textContent = staleApp ? t('appUpdated') : t('storyFailed').replace('{e}', (err as Error).message);
   }
 });
 

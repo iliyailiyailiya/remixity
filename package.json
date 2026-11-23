@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "deploy": "npm run build && rm -rf dist/_test && npx wrangler@4 pages deploy dist --project-name remixity --branch main"
+    "deploy": "sh scripts/deploy.sh"
   },
   "devDependencies": {
     "typescript": "^5.9.3",

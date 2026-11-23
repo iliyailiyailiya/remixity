@@ -7,3 +7,6 @@ public/_test
 # Local env files (SoundCloud keys etc.) are never committed
 .env*
 !.env.example
+
+# Earlier versions' built files, kept online by scripts/deploy.sh
+.deploy-assets
