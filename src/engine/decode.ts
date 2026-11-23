@@ -131,3 +131,33 @@ export function niceName(raw: string): string {
 export function safeFileName(name: string) {
   return name.replace(/[\\/:*?"<>|\u0000-\u001f]/g, '').replace(/\s+/g, ' ').trim().slice(0, 180);
 }
+
+// ---------- quick start ----------
+// A whole song takes a moment to decode (seconds on a phone). For MP3s, the
+// first ~20 seconds are decoded first so playback can start right away while
+// the rest decodes; the player then swaps in the whole song without a gap.
+
+const QUICK_AUDIO_BYTES = 768 * 1024; // ≈ 20 s at 320 kbps, more at lower bitrates
+
+/** The start of an MP3 big enough to be worth it (tags + first audio), or null. */
+export function quickPart(data: ArrayBuffer): { part: ArrayBuffer; fraction: number } | null {
+  const b = new Uint8Array(data);
+  let start = 0;
+  // Skip ID3v2 tags (they can hold a big cover image).
+  while (start + 10 < b.length && b[start] === 0x49 && b[start + 1] === 0x44 && b[start + 2] === 0x33) {
+    const size = ((b[start + 6] & 0x7f) << 21) | ((b[start + 7] & 0x7f) << 14) | ((b[start + 8] & 0x7f) << 7) | (b[start + 9] & 0x7f);
+    start += 10 + size + (b[start + 5] & 0x10 ? 10 : 0);
+  }
+  // The first MPEG audio frame (allowing a little padding after the tag).
+  let sync = -1;
+  for (let i = start; i < Math.min(b.length - 1, start + 8192); i++) {
+    if (b[i] === 0xff && (b[i + 1] & 0xe0) === 0xe0) {
+      sync = i;
+      break;
+    }
+  }
+  if (sync < 0) return null;
+  const audio = b.length - sync;
+  if (audio < QUICK_AUDIO_BYTES * 3) return null; // short file: decoding it all is quick anyway
+  return { part: data.slice(0, sync + QUICK_AUDIO_BYTES), fraction: QUICK_AUDIO_BYTES / audio };
+}

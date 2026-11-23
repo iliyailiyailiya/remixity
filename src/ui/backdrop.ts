@@ -109,7 +109,20 @@ export class Backdrop {
   set speed(v: number) {
     if (Math.abs(v - this.rate) < 0.005) return;
     this.rate = v;
-    for (const a of this.anims) a.playbackRate = v;
+    this.applyRate();
+  }
+
+  private hidden = false;
+  /** Something covers the screen (a sheet, the library): hold still, no GPU work. */
+  set covered(v: boolean) {
+    if (v === this.hidden) return;
+    this.hidden = v;
+    this.applyRate();
+  }
+
+  private applyRate() {
+    const r = this.hidden ? 0 : this.rate;
+    for (const a of this.anims) a.playbackRate = r;
   }
 
   /** Paint this cover as the background (cross-fades from the previous one). */
@@ -179,7 +192,7 @@ export class Backdrop {
       const a = img.animate(frames, { duration: LOOP_S[i] * 1000, iterations: Infinity, easing: 'linear' });
       // Carry on from where the previous drift was, so a resize doesn't jump.
       a.currentTime = (old[i]?.currentTime as number | null) ?? Math.random() * LOOP_S[i] * 1000;
-      a.playbackRate = this.rate;
+      a.playbackRate = this.hidden ? 0 : this.rate;
       return a;
     }).filter((a): a is Animation => !!a);
     for (const a of old) a.cancel();

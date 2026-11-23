@@ -1,7 +1,7 @@
 import './style.css';
 import { applyI18n, getLang, Lang, setLang, t } from './i18n';
 import { DEFAULT_PARAMS, FxParams } from './engine/chain';
-import { decodeData, niceName, safeFileName } from './engine/decode';
+import { decodeData, niceName, quickPart, safeFileName } from './engine/decode';
 import { Player } from './engine/player';
 import { exportAudio, Format, renderClip, Stage } from './engine/render';
 import { canRecordVideo, levelsOf, storyImage, storyVideo, type StoryInfo, type StoryStyle } from './ui/story';
@@ -37,6 +37,10 @@ let original: AudioBuffer | null = null; // as decoded, never modified
 let buffer: AudioBuffer | null = null; // after trims and cuts; what plays and exports
 let edit: EditState = initialEdit(0);
 let history: EditState[] = [];
+// Quick start: while only the start of the song is decoded, the whole one is
+// on its way. Export, stories and chop wait for it (a moment).
+let fullReady: Promise<void> | null = null;
+let estDuration: number | null = null; // the whole song's length meanwhile (estimated)
 let sel: [number, number] | null = null; // selection in buffer seconds
 let trackName = '';
 // The song's own title/artist (for tags and the cover search).
@@ -165,7 +169,29 @@ async function load(file: File, known?: Track, ready?: Promise<Prepared>) {
     apply();
 
     const name = niceName(file.name);
-    const { meta, decoded } = await (ready ?? prepare(file));
+    let meta: ReturnType<typeof readMeta>;
+    let decoded: AudioBuffer;
+    let rest: Promise<AudioBuffer> | null = null; // the whole song, when `decoded` is just its start
+    let fraction = 1;
+    if (ready) ({ meta, decoded } = await ready);
+    else {
+      const data = await file.arrayBuffer();
+      meta = readMeta(data);
+      // Keep pitch copies the whole song into the stretcher, so it skips quick start.
+      const quick = params.keepPitch ? null : quickPart(data);
+      if (quick) {
+        const first = decodeData(quick.part).catch(() => null); // started first: it's small
+        rest = decodeData(data);
+        const head = await first;
+        if (head) {
+          decoded = head;
+          fraction = quick.fraction;
+        } else {
+          decoded = await rest;
+          rest = null;
+        }
+      } else decoded = await decodeData(data);
+    }
     if (token !== loadToken) return;
 
     original = buffer = decoded;
@@ -175,7 +201,43 @@ async function load(file: File, known?: Track, ready?: Promise<Prepared>) {
     trackName = tidyName(name) || name;
     player.setLoop(null);
     player.load(decoded);
-    wave.setBuffer(decoded);
+    estDuration = null;
+    fullReady = null;
+    $('dash').classList.remove('decoding');
+    if (rest) {
+      // Playing from the start of the song; the rest arrives in a moment.
+      player.provisional = true;
+      estDuration = decoded.duration / fraction;
+      $('dash').classList.add('decoding');
+      const whole = rest;
+      fullReady = whole.then(
+        (full) => {
+          if (token !== loadToken) return;
+          player!.extend(full);
+          original = buffer = full;
+          edit = initialEdit(full.duration);
+          history = [];
+          sel = null;
+          wave.setBuffer(full);
+          estDuration = null;
+          fullReady = null;
+          $('dash').classList.remove('decoding');
+          if (page === 'chop') renderEdit();
+          void loadLyrics(token);
+          startBpm(token, full);
+          render();
+        },
+        (err) => {
+          console.error(err);
+          if (token !== loadToken) return;
+          player!.provisional = false;
+          estDuration = null;
+          fullReady = null;
+          $('dash').classList.remove('decoding');
+          status.textContent = t('loadError');
+        },
+      );
+    } else wave.setBuffer(decoded);
 
     // Tags from download sites are often wrong; songNames() sorts that out.
     const names = songNames(meta, name);
@@ -223,7 +285,7 @@ async function load(file: File, known?: Track, ready?: Promise<Prepared>) {
     setAltCover('search');
     coverStatus(null);
     if (!hasCover && findCoversEnabled()) void searchCover(token, false);
-    void loadLyrics(token);
+    if (!rest) void loadLyrics(token); // (with quick start: once the whole song is in, for its length)
 
     home.hidden = true;
     playerView.hidden = false;
@@ -240,24 +302,28 @@ async function load(file: File, known?: Track, ready?: Promise<Prepared>) {
     updateMediaSession(title, artistTag ?? '');
     if (lyricsOpen) fillLyricsHead();
     setTimeout(showSwipeHint, 700);
-    // Tempo detection waits a moment so it doesn't compete with starting playback.
-    wait(1200)
-      .then(() => (token === loadToken ? detectBpm(decoded) : null))
-      .then((bpm) => {
-        if (token === loadToken) origBpm = bpm;
-      })
-      .catch((err) => console.warn('bpm', err))
-      .finally(() => {
-        if (token !== loadToken) return;
-        detectingBpm = false;
-        render();
-      });
+    if (!rest) startBpm(token, decoded);
   } catch (err) {
     console.error(err);
     status.textContent = t('loadError');
     home.hidden = false;
     playerView.hidden = true;
   }
+}
+
+/** Tempo detection, a moment after playback starts so it doesn't compete with it. */
+function startBpm(token: number, decoded: AudioBuffer) {
+  wait(1200)
+    .then(() => (token === loadToken ? detectBpm(decoded) : null))
+    .then((bpm) => {
+      if (token === loadToken) origBpm = bpm;
+    })
+    .catch((err) => console.warn('bpm', err))
+    .finally(() => {
+      if (token !== loadToken) return;
+      detectingBpm = false;
+      render();
+    });
 }
 
 // ---------- pedal ----------
@@ -455,6 +521,17 @@ async function prevInQueue() {
 
 prevBtn.addEventListener('click', () => void prevInQueue());
 nextBtn.addEventListener('click', () => void nextInQueue(false));
+
+// While the library is open, it covers everything: hide what's under it
+// (no blur needed on top) and hold the background still.
+function libraryOpen() {
+  return !document.getElementById('library')!.hidden;
+}
+new MutationObserver(() => {
+  const open = libraryOpen();
+  document.body.classList.toggle('library-open', open);
+  if (!openSheet) backdrop.covered = open;
+}).observe(document.getElementById('library')!, { attributes: true, attributeFilter: ['hidden'] });
 
 const library = initLibrary({
   play: (ids, index) => {
@@ -816,7 +893,7 @@ barEl.addEventListener('pointermove', (e) => {
 });
 const endScrub = () => {
   if (scrubbing === null || !player) return;
-  player.seek(scrubbing * player.duration);
+  player.seek(scrubbing * (estDuration ?? player.duration));
   scrubbing = null;
   barEl.classList.remove('active');
   render();
@@ -861,6 +938,7 @@ let openSheet: HTMLElement | null = null;
 function showSheet(sheet: HTMLElement) {
   closeSheets();
   openSheet = sheet;
+  backdrop.covered = true; // the sheet covers the screen: hold the background still
   sheet.classList.add('open');
   sheet.setAttribute('aria-hidden', 'false');
   scrim.classList.add('open');
@@ -875,6 +953,7 @@ function closeSheets() {
   }
   scrim.classList.remove('open');
   openSheet = null;
+  backdrop.covered = libraryOpen();
 }
 scrim.addEventListener('click', closeSheets);
 document.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', closeSheets));
@@ -961,6 +1040,7 @@ function storyReset() {
 }
 
 $('openStory').addEventListener('click', async () => {
+  if (fullReady) await fullReady; // quick start: the whole song first
   showSheet($('storySheet'));
   // Starts where you are; the slider can move it.
   storyStart.max = String(buffer?.duration ?? 1);
@@ -980,6 +1060,7 @@ storyStart.addEventListener('input', () => {
 });
 
 storyCreate.addEventListener('click', async () => {
+  if (fullReady) await fullReady;
   if (storyAbort) {
     // Pressed again while recording: stop.
     storyReset();
@@ -1603,6 +1684,7 @@ function updateExportName() {
 }
 
 exportBtn.addEventListener('click', async () => {
+  if (fullReady) await fullReady; // quick start: wait for the whole song
   if (!buffer || exporting) return;
   exporting = true;
   exportBtn.disabled = true;
@@ -1659,11 +1741,11 @@ const tLeft = $('tLeft');
 
 function renderTransport() {
   if (!player) return;
-  const dur = player.duration || 1;
+  const dur = estDuration ?? (player.duration || 1);
   const pos = scrubbing !== null ? scrubbing * dur : player.position;
   const r = params.ratio;
-  const bar = `${((pos / dur) * 100).toFixed(2)}%`;
-  if (bar !== shown.bar) barFill.style.width = shown.bar = bar;
+  const bar = `translateX(${((pos / dur) * 100 - 100).toFixed(2)}%)`;
+  if (bar !== shown.bar) barFill.style.transform = shown.bar = bar;
   const now = fmtTime(pos / r);
   if (now !== shown.now) tNow.textContent = shown.now = now;
   const left = `−${fmtTime((dur - pos) / r)}`;

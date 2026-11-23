@@ -459,34 +459,63 @@ export class StoryPainter {
     return y + 6;
   }
 
+  // ---- cached layers ----
+  // Parts of a design that don't change from frame to frame (soft shadows,
+  // the cover, names, the record's grooves) are drawn once into a layer and
+  // pasted each frame: recording stays light, so the sound doesn't crackle.
+  private layers = new Map<string, HTMLCanvasElement>();
+  private layer(key: string, paint: () => void): HTMLCanvasElement {
+    let cv = this.layers.get(key);
+    if (!cv) {
+      cv = document.createElement('canvas');
+      cv.width = W;
+      cv.height = H;
+      const real = this.c;
+      this.c = cv.getContext('2d')!;
+      try {
+        paint();
+      } finally {
+        this.c = real;
+      }
+      this.layers.set(key, cv);
+    }
+    return cv;
+  }
+
   // ---- vinyl: the cover as the label of a spinning record ----
   private drawVinyl(t: number, progress: number | null) {
     const { c } = this;
-    c.save();
-    this.background(t, 0.3);
     const cx = W / 2;
     const cy = 720;
     const R = 400;
-    // 33⅓ rpm, at the remix's speed (slowed spins slower).
-    const angle = t * ((33.3 / 60) * Math.PI * 2) * (this.info.ratio ?? 1);
     c.save();
-    c.shadowColor = 'rgba(0,0,0,0.55)';
-    c.shadowBlur = 70;
-    c.shadowOffsetY = 24;
-    c.fillStyle = '#0b0b0d';
-    c.beginPath();
-    c.arc(cx, cy, R, 0, Math.PI * 2);
-    c.fill();
-    c.restore();
-    // Grooves
-    c.strokeStyle = 'rgba(255,255,255,0.045)';
-    c.lineWidth = 2;
-    for (let r = R - 14; r > 175; r -= 9) {
-      c.beginPath();
-      c.arc(cx, cy, r, 0, Math.PI * 2);
-      c.stroke();
-    }
-    // Label: the cover, turning
+    this.background(t, 0.3);
+    // The record and its grooves (still)
+    c.drawImage(
+      this.layer('vinyl-disc', () => {
+        const d = this.c;
+        d.save();
+        d.shadowColor = 'rgba(0,0,0,0.55)';
+        d.shadowBlur = 70;
+        d.shadowOffsetY = 24;
+        d.fillStyle = '#0b0b0d';
+        d.beginPath();
+        d.arc(cx, cy, R, 0, Math.PI * 2);
+        d.fill();
+        d.restore();
+        d.strokeStyle = 'rgba(255,255,255,0.045)';
+        d.lineWidth = 2;
+        for (let r = R - 14; r > 175; r -= 9) {
+          d.beginPath();
+          d.arc(cx, cy, r, 0, Math.PI * 2);
+          d.stroke();
+        }
+      }),
+      0,
+      0,
+    );
+    // Label: the cover, turning at 33⅓ rpm at the remix's speed (slowed spins slower).
+    const angle = t * ((33.3 / 60) * Math.PI * 2) * (this.info.ratio ?? 1);
     c.save();
     c.translate(cx, cy);
     c.rotate(angle);
@@ -495,28 +524,34 @@ export class StoryPainter {
     c.clip();
     this.coverAt(-170, -170, 340, 340);
     c.restore();
-    // Spindle hole
-    c.fillStyle = '#0b0b0d';
-    c.beginPath();
-    c.arc(cx, cy, 12, 0, Math.PI * 2);
-    c.fill();
-    // Light sheen across the vinyl (doesn't turn, like a real reflection)
-    const g = c.createLinearGradient(cx - R, cy - R, cx + R, cy + R);
-    g.addColorStop(0.3, 'rgba(255,255,255,0)');
-    g.addColorStop(0.48, 'rgba(255,255,255,0.10)');
-    g.addColorStop(0.52, 'rgba(255,255,255,0.10)');
-    g.addColorStop(0.7, 'rgba(255,255,255,0)');
-    c.fillStyle = g;
-    c.beginPath();
-    c.arc(cx, cy, R, 0, Math.PI * 2);
-    c.arc(cx, cy, 172, 0, Math.PI * 2, true);
-    c.fill();
-
-    const y = this.names(cy + R + 70);
-    this.subtitle(t, y + 30, progress);
+    // Spindle hole, light sheen (doesn't turn, like a real reflection), names
+    c.drawImage(
+      this.layer('vinyl-top', () => {
+        const d = this.c;
+        d.fillStyle = '#0b0b0d';
+        d.beginPath();
+        d.arc(cx, cy, 12, 0, Math.PI * 2);
+        d.fill();
+        const g = d.createLinearGradient(cx - R, cy - R, cx + R, cy + R);
+        g.addColorStop(0.3, 'rgba(255,255,255,0)');
+        g.addColorStop(0.48, 'rgba(255,255,255,0.10)');
+        g.addColorStop(0.52, 'rgba(255,255,255,0.10)');
+        g.addColorStop(0.7, 'rgba(255,255,255,0)');
+        d.fillStyle = g;
+        d.beginPath();
+        d.arc(cx, cy, R, 0, Math.PI * 2);
+        d.arc(cx, cy, 172, 0, Math.PI * 2, true);
+        d.fill();
+        this.namesBottom = this.names(cy + R + 70);
+      }),
+      0,
+      0,
+    );
+    this.subtitle(t, this.namesBottom + 30, progress);
     this.footer(1540, progress);
     c.restore();
   }
+  private namesBottom = 0;
 
   // ---- full: the cover fills the story ----
   private drawFull(t: number, progress: number | null) {
@@ -528,15 +563,22 @@ export class StoryPainter {
     const z = progress === null ? 1 : 1 + 0.08 * Math.min(1, progress);
     const w = H * z;
     this.coverAt((W - w) / 2, (H - H * z) / 2, w, H * z);
-    const g = c.createLinearGradient(0, 900, 0, H);
-    g.addColorStop(0, 'rgba(0,0,0,0)');
-    g.addColorStop(0.55, 'rgba(0,0,0,0.75)');
-    g.addColorStop(1, 'rgba(0,0,0,0.92)');
-    c.fillStyle = g;
-    c.fillRect(0, 900, W, H - 900);
     const top = this.info.subtitles && this.info.lyrics ? 1080 : 1230;
-    const y = this.names(top, 'left', 80);
-    this.subtitleLeft(t, y + 20, progress);
+    c.drawImage(
+      this.layer('full-text', () => {
+        const d = this.c;
+        const g = d.createLinearGradient(0, 900, 0, H);
+        g.addColorStop(0, 'rgba(0,0,0,0)');
+        g.addColorStop(0.55, 'rgba(0,0,0,0.75)');
+        g.addColorStop(1, 'rgba(0,0,0,0.92)');
+        d.fillStyle = g;
+        d.fillRect(0, 900, W, H - 900);
+        this.namesBottom = this.names(top, 'left', 80);
+      }),
+      0,
+      0,
+    );
+    this.subtitleLeft(t, this.namesBottom + 20, progress);
     this.footer(1540, progress);
     c.restore();
   }
@@ -562,36 +604,42 @@ export class StoryPainter {
     const size = 620;
     const x = (W - size) / 2;
     const y0 = 330;
-    c.save();
-    c.shadowColor = 'rgba(0,0,0,0.5)';
-    c.shadowBlur = 60;
-    c.shadowOffsetY = 20;
-    c.fillStyle = '#000';
-    roundRect(c, x, y0, size, size, 36);
-    c.fill();
-    c.restore();
-    c.save();
-    roundRect(c, x, y0, size, size, 36);
-    c.clip();
-    this.coverAt(x, y0, size, size);
-    c.restore();
-
-    const y = this.names(y0 + size + 56, 'center', 60);
+    c.drawImage(
+      this.layer('waves-cover', () => {
+        const d = this.c;
+        d.save();
+        d.shadowColor = 'rgba(0,0,0,0.5)';
+        d.shadowBlur = 60;
+        d.shadowOffsetY = 20;
+        d.fillStyle = '#000';
+        roundRect(d, x, y0, size, size, 36);
+        d.fill();
+        d.restore();
+        d.save();
+        roundRect(d, x, y0, size, size, 36);
+        d.clip();
+        this.coverAt(x, y0, size, size);
+        d.restore();
+        this.namesBottom = this.names(y0 + size + 56, 'center', 60);
+      }),
+      0,
+      0,
+    );
     // Bars: loudness around now, mirrored from the centre outwards.
     const bars = 31;
     const bw = 16;
     const gap = (W - PAD * 2 - bars * bw) / (bars - 1);
-    const mid = Math.max(y + 150, 1330);
+    const mid = Math.max(this.namesBottom + 150, 1330);
     const lv = info.levels;
     c.fillStyle = '#fff';
     for (let i = 0; i < bars; i++) {
       const d = Math.abs(i - (bars - 1) / 2); // distance from centre
-      let v = 0.15;
+      let v: number;
       if (lv) {
         const k = Math.round((t - d * 0.045) * lv.fps);
         v = lv.data[Math.max(0, Math.min(lv.data.length - 1, k))] ?? 0;
       } else v = 0.25 + 0.2 * Math.sin(i * 1.7);
-      const h = Math.max(14, Math.min(220, v * 260 * (1 - d / bars * 0.6)));
+      const h = Math.max(14, Math.min(220, v * 260 * (1 - (d / bars) * 0.6)));
       roundRect(c, PAD + i * (bw + gap), mid - h / 2, bw, h, bw / 2);
       c.fill();
     }
@@ -600,94 +648,99 @@ export class StoryPainter {
     c.restore();
   }
 
+  // ---- card: the cover in a white card ----
+  private cardBox = { cx: 0, cy: 0, ch: 0, cw: 760, pad: 44, barY: 0 };
+
   private drawCard(t: number, progress: number | null) {
     const { c, info } = this;
     c.save();
     this.background(t, 0.22);
+    const video = progress !== null;
+    c.drawImage(
+      this.layer(video ? 'card-video' : 'card', () => {
+        const d = this.c;
+        const cw = 760;
+        const pad = 44;
+        const art = cw - pad * 2;
+        d.font = `800 62px ${FONT}`;
+        const titleLines = wrap(d, info.title, art, 2);
+        d.font = `500 52px ${FONT}`;
+        const artistLines = info.artist ? wrap(d, info.artist, art, 2) : [];
+        const textH = titleLines.length * 72 + artistLines.length * 64;
+        const ch = pad + art + 34 + textH + 26 + 52 + (video ? 40 : 0) + pad;
+        const cx = (W - cw) / 2;
+        const cy = Math.round((H - ch) / 2 - 40);
 
-    // The card.
-    const cw = 760;
-    const pad = 44;
-    const art = cw - pad * 2;
-    c.font = `800 62px ${FONT}`;
-    const titleLines = wrap(c, info.title, art, 2);
-    c.font = `500 52px ${FONT}`;
-    const artistLines = info.artist ? wrap(c, info.artist, art, 2) : [];
-    const textH = titleLines.length * 72 + artistLines.length * 64;
-    const ch = pad + art + 34 + textH + 26 + 52 + (progress !== null ? 40 : 0) + pad;
-    const cx = (W - cw) / 2;
-    const cy = Math.round((H - ch) / 2 - 40);
+        d.save();
+        d.shadowColor = 'rgba(0,0,0,0.35)';
+        d.shadowBlur = 60;
+        d.shadowOffsetY = 20;
+        d.fillStyle = '#fff';
+        roundRect(d, cx, cy, cw, ch, 46);
+        d.fill();
+        d.restore();
 
-    c.shadowColor = 'rgba(0,0,0,0.35)';
-    c.shadowBlur = 60;
-    c.shadowOffsetY = 20;
-    c.fillStyle = '#fff';
-    roundRect(c, cx, cy, cw, ch, 46);
-    c.fill();
-    c.shadowColor = 'transparent';
+        d.save();
+        roundRect(d, cx + pad, cy + pad, art, art, 22);
+        d.clip();
+        this.coverAt(cx + pad, cy + pad, art, art);
+        d.restore();
 
-    // Cover
-    c.save();
-    roundRect(c, cx + pad, cy + pad, art, art, 22);
-    c.clip();
-    const iw = info.cover.naturalWidth || 1;
-    const ih = info.cover.naturalHeight || 1;
-    const s = Math.max(art / iw, art / ih);
-    c.drawImage(info.cover, cx + pad + (art - iw * s) / 2, cy + pad + (art - ih * s) / 2, iw * s, ih * s);
-    c.restore();
+        let y = cy + pad + art + 34;
+        d.textBaseline = 'top';
+        d.fillStyle = '#111';
+        d.font = `800 62px ${FONT}`;
+        for (const l of titleLines) {
+          d.fillText(l, cx + pad, y);
+          y += 72;
+        }
+        d.fillStyle = '#222';
+        d.font = `500 52px ${FONT}`;
+        for (const l of artistLines) {
+          d.fillText(l, cx + pad, y);
+          y += 64;
+        }
+        y += 26;
+        const barY = y;
+        if (video) y += 40;
 
-    // Title + artist
-    let y = cy + pad + art + 34;
-    c.textBaseline = 'top';
-    c.fillStyle = '#111';
-    c.font = `800 62px ${FONT}`;
-    for (const l of titleLines) {
-      c.fillText(l, cx + pad, y);
-      y += 72;
-    }
-    c.fillStyle = '#222';
-    c.font = `500 52px ${FONT}`;
-    for (const l of artistLines) {
-      c.fillText(l, cx + pad, y);
-      y += 64;
-    }
-
-    // Progress bar (video)
-    y += 26;
-    if (progress !== null) {
+        d.textBaseline = 'middle';
+        const my = y + 26;
+        d.fillStyle = '#6b6b6b';
+        d.font = `300 30px ${FONT}`;
+        const x = spaced(d, 'THE', cx + pad, my, 9);
+        d.font = `800 30px ${FONT}`;
+        spaced(d, 'REMIXITY', x + 14, my, 9);
+        if (info.badge) {
+          d.font = `700 30px ${FONT}`;
+          const bw2 = d.measureText(info.badge).width + 40;
+          const bx = cx + cw - pad - bw2;
+          d.fillStyle = '#111';
+          roundRect(d, bx, my - 26, bw2, 52, 26);
+          d.fill();
+          d.fillStyle = '#fff';
+          d.fillText(info.badge, bx + 20, my + 1);
+        }
+        this.cardBox = { cx, cy, ch, cw, pad, barY };
+      }),
+      0,
+      0,
+    );
+    const { cx, cy, ch, cw, pad, barY } = this.cardBox;
+    if (video) {
+      const art = cw - pad * 2;
       c.fillStyle = 'rgba(0,0,0,0.12)';
-      roundRect(c, cx + pad, y, art, 10, 5);
+      roundRect(c, cx + pad, barY, art, 10, 5);
       c.fill();
       c.fillStyle = '#111';
-      roundRect(c, cx + pad, y, Math.max(10, art * Math.min(1, progress)), 10, 5);
+      roundRect(c, cx + pad, barY, Math.max(10, art * Math.min(1, progress)), 10, 5);
       c.fill();
-      y += 40;
     }
-
-    // THE REMIXITY + the speed badge
-    c.textBaseline = 'middle';
-    const my = y + 26;
-    c.fillStyle = '#6b6b6b';
-    c.font = `300 30px ${FONT}`;
-    let x = spaced(c, 'THE', cx + pad, my, 9);
-    c.font = `800 30px ${FONT}`;
-    spaced(c, 'REMIXITY', x + 14, my, 9);
-    if (info.badge) {
-      c.font = `700 30px ${FONT}`;
-      const bw2 = c.measureText(info.badge).width + 40;
-      x = cx + cw - pad - bw2;
-      c.fillStyle = '#111';
-      roundRect(c, x, my - 26, bw2, 52, 26);
-      c.fill();
-      c.fillStyle = '#fff';
-      c.fillText(info.badge, x + 20, my + 1);
-    }
-
-    // A small line under the card (Instagram's own buttons cover the very bottom).
-    c.restore();
+    // A small line under the card (Instagram's own buttons cover the very bottom),
+    // and the sung line between them when that's on.
     const sub = this.sungLine(t).text;
-    c.save();
     c.textAlign = 'center';
+    c.textBaseline = 'alphabetic';
     c.fillStyle = 'rgba(255,255,255,0.85)';
     c.font = `600 34px ${FONT}`;
     c.fillText('made with THE REMIXITY · remixity.app', W / 2, sub ? cy + ch + 230 : cy + ch + 80);
@@ -737,7 +790,14 @@ export async function storyVideo(
   painter.draw(0, 0);
 
   const mimeType = VIDEO_TYPES.find((t) => MediaRecorder.isTypeSupported(t))!;
-  const ac = new AudioContext();
+  // Bigger audio buffers ("playback") ride out busy moments without crackles;
+  // the clip's own rate means no resampling while recording.
+  let ac: AudioContext;
+  try {
+    ac = new AudioContext({ latencyHint: 'playback', sampleRate: clip.sampleRate });
+  } catch {
+    ac = new AudioContext({ latencyHint: 'playback' });
+  }
   try {
     await ac.resume();
     const dest = ac.createMediaStreamDestination();
@@ -756,11 +816,17 @@ export async function storyVideo(
     src.start(t0);
     let raf = 0;
     await new Promise<void>((resolve, reject) => {
-      const frame = () => {
+      // The video is 30 fps: drawing more often (phones run at 60–120 Hz)
+      // would only burn time the audio and the encoder need.
+      let lastDraw = -1;
+      const frame = (now: number) => {
         const t = Math.max(0, ac.currentTime - t0);
         const p = Math.min(1, t / clip.duration);
-        painter.draw(t, p);
-        onProgress(p);
+        if (now - lastDraw >= 1000 / 30 - 2 || p >= 1) {
+          lastDraw = now;
+          painter.draw(t, p);
+          onProgress(p);
+        }
         if (p >= 1) return resolve();
         raf = requestAnimationFrame(frame);
       };

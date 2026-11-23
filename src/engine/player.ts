@@ -35,6 +35,17 @@ export class Player {
   private chain: Chain;
   private buffer: AudioBuffer | null = null;
   private src: AudioBufferSourceNode | null = null;
+  // Where the current source is, in the audio engine's own time: at engine
+  // time srcCtx0 it was at buffer second srcOff0 (moving at `ratio`).
+  private srcCtx0 = 0;
+  private srcOff0 = 0;
+  /**
+   * The buffer is only the start of the song (decoded first so playback can
+   * begin right away); extend() swaps in the whole song. Until then, the end
+   * of this buffer isn't the end of the song.
+   */
+  provisional = false;
+  private stalled = false; // reached the end of a provisional buffer
   private offset = 0; // position in source seconds when last (re)started
   // Seconds of playback since the last (re)start. Counted with the system
   // clock while the audio engine runs, not with ctx.currentTime: on iOS
@@ -122,6 +133,8 @@ export class Player {
   load(buffer: AudioBuffer, keepAt?: number) {
     const wasPlaying = this.playing && keepAt !== undefined;
     this.stopSource();
+    this.stalled = false;
+    this.provisional = false; // (the caller marks a provisional buffer after loading it)
     this.buffer = buffer;
     this.playing = false;
     this.offset = keepAt !== undefined ? Math.min(Math.max(0, keepAt), buffer.duration) : 0;
@@ -195,6 +208,7 @@ export class Player {
    */
   play() {
     if (!this.buffer || this.playing) return;
+    if (this.stalled) return; // waiting for the rest of the song (extend() resumes)
     if (this.ctx.state !== 'running') void this.ctx.resume();
     this.onPlay();
     if (this.offset >= this.duration - 0.01) this.offset = 0;
@@ -219,12 +233,77 @@ export class Player {
       this.offset = this.duration;
       this.playing = false;
       this.src = null;
-      this.onEnded();
+      // Only the start of the song is decoded yet: wait for the rest.
+      if (this.provisional) this.stalled = true;
+      else this.onEnded();
     };
     src.start(0, this.offset);
     this.src = src;
+    this.srcCtx0 = this.ctx.currentTime;
+    this.srcOff0 = this.offset;
     this.restartClock();
     this.playing = true;
+  }
+
+  /**
+   * Swap the provisional start of the song for the whole song, without a gap:
+   * the new source picks up at the exact sample the old one reaches.
+   */
+  extend(buffer: AudioBuffer) {
+    const old = this.src;
+    const wasStalled = this.stalled;
+    this.provisional = false;
+    this.stalled = false;
+    if (wasStalled) {
+      // It ran out before the rest arrived: carry on from there.
+      this.load(buffer, this.offset);
+      this.play();
+      return;
+    }
+    if (!this.playing || !old || this.keepPitch || this.waitingForStretch) {
+      // Not playing a plain source: just swap, keeping the position (and playing).
+      this.load(buffer, this.position);
+      return;
+    }
+    const at = this.ctx.currentTime + 0.05;
+    let offset = this.srcOff0 + (at - this.srcCtx0) * this.ratio;
+    if (old.loop && old.loopEnd > old.loopStart) {
+      const [a, b] = [old.loopStart, old.loopEnd];
+      if (offset >= b) offset = a + ((offset - a) % (b - a));
+    }
+    if (offset >= (old.buffer?.duration ?? 0) - 0.08) {
+      this.load(buffer, this.position);
+      return;
+    }
+    this.buffer = buffer;
+    const src = this.ctx.createBufferSource();
+    src.buffer = buffer;
+    const region = this.loopRegion();
+    if (region) {
+      src.loop = true;
+      src.loopStart = region[0];
+      src.loopEnd = region[1];
+    }
+    src.playbackRate.value = this.ratio;
+    src.connect(this.chain.input);
+    src.onended = () => {
+      if (this.src !== src) return;
+      this.offset = this.duration;
+      this.playing = false;
+      this.src = null;
+      this.onEnded();
+    };
+    src.start(at, offset);
+    old.onended = null;
+    try {
+      old.stop(at);
+    } catch {
+      /* already stopped */
+    }
+    setTimeout(() => old.disconnect(), 300);
+    this.src = src;
+    this.srcCtx0 = at;
+    this.srcOff0 = offset;
   }
 
   pause() {
@@ -314,7 +393,9 @@ export class Player {
   seek(seconds: number) {
     const wasPlaying = this.playing;
     this.pause();
-    this.offset = Math.max(0, Math.min(seconds, this.duration));
+    // While only the start is decoded, stay inside it (the rest comes in a moment).
+    const end = this.provisional ? Math.max(0, this.duration - 0.5) : this.duration;
+    this.offset = Math.max(0, Math.min(seconds, end));
     if (wasPlaying) this.play();
   }
 
@@ -331,8 +412,11 @@ export class Player {
       // Rebase the clock so the position stays correct across speed changes.
       this.offset = this.position;
       this.restartClock();
+      const now = this.ctx.currentTime;
+      this.srcOff0 += (now - this.srcCtx0) * this.ratio;
+      this.srcCtx0 = now;
       this.ratio = p.ratio;
-      this.src?.playbackRate.setValueAtTime(p.ratio, this.ctx.currentTime);
+      this.src?.playbackRate.setValueAtTime(p.ratio, now);
       if (this.stretch && this.stretchRunning)
         void this.stretch.schedule({ rate: p.ratio, output: this.ctx.currentTime });
     }
