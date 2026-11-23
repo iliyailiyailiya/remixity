@@ -1,6 +1,9 @@
 // Lyrics from LRCLIB (lrclib.net): a free, open database of song lyrics,
-// many with per-line timestamps ("synced"). The browser asks it directly
-// (it allows that); only the artist, title and length are sent.
+// many with per-line timestamps ("synced"). Searches go through our relay
+// (functions/api/lyrics.ts), which shares one cache between everyone, so a
+// popular song is fetched from LRCLIB about once, not once per listener. If
+// the relay can't be reached, the browser asks LRCLIB directly. Only the
+// artist and title are sent (the length only picks between results, here).
 //
 // Timestamps are in the original song's time, which is what the player's
 // position is in too, so the highlight stays in sync at any speed.
@@ -61,16 +64,37 @@ export function parseLrc(lrc: string): LyricLine[] {
   return out.sort((a, b) => a.t - b.t);
 }
 
+// Searches already done in this visit (replays, the next song's lookups): in
+// memory only, gone when the page closes.
+const seen = new Map<string, unknown>();
+
 async function get<T>(path: string, params: Record<string, string>, signal: AbortSignal): Promise<T | null> {
+  const query = new URLSearchParams(params).toString();
+  if (seen.has(query)) return seen.get(query) as T;
+  // Our relay first (shared cache), then LRCLIB itself.
+  try {
+    const r = await fetch(`/api/lyrics?${query}`, { signal });
+    if (r.ok && (r.headers.get('content-type') ?? '').includes('json')) {
+      const data = (await r.json()) as T;
+      seen.set(query, data);
+      return data;
+    }
+    log(`lyrics relay → HTTP ${r.status}, asking LRCLIB directly`);
+  } catch (err) {
+    if (signal.aborted) throw err;
+    log(`lyrics relay → ${(err as Error).message}, asking LRCLIB directly`);
+  }
   const url = new URL(`${API}/${path}`);
-  url.search = new URLSearchParams(params).toString();
+  url.search = query;
   try {
     const r = await fetch(url, { signal });
     if (!r.ok) {
       log(`lyrics ${path} ${params.track_name ?? params.q} → HTTP ${r.status}`);
       return null;
     }
-    return (await r.json()) as T;
+    const data = (await r.json()) as T;
+    seen.set(query, data);
+    return data;
   } catch (err) {
     if (signal.aborted) throw err;
     log(`lyrics ${path} → ${(err as Error).message}`);
