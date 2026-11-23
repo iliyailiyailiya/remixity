@@ -818,6 +818,9 @@ const VIDEO_TYPES = [
   'video/webm',
 ];
 
+/** How the last video was made (shown briefly while we track down a Safari issue). */
+export let videoNote = '';
+
 export const canRecordVideo = () =>
   (typeof VideoEncoder !== 'undefined' && typeof AudioEncoder !== 'undefined') ||
   (typeof MediaRecorder !== 'undefined' &&
@@ -841,14 +844,18 @@ export async function storyVideo(
   painter.draw(0, 0);
 
   // Best: encode frame by frame at a fixed high quality (faster than real time).
-  const { encodePlan, encodeStory } = await import('./storyEncode');
-  const plan = await encodePlan(W, H, clip.sampleRate);
+  const enc = await import('./storyEncode');
+  const plan = await enc.encodePlan(W, H, clip.sampleRate);
+  let why = enc.planProblem;
   if (plan) {
     try {
-      return await encodeStory(plan, canvas, new StoryPainter(canvas.getContext('2d')!, info), clip, onProgress, signal);
+      const blob = await enc.encodeStory(plan, canvas, new StoryPainter(canvas.getContext('2d')!, info), clip, onProgress, signal);
+      videoNote = `HQ ${plan.video.codec}`;
+      return blob;
     } catch (err) {
       if ((err as DOMException).name === 'AbortError') throw err;
       console.warn('story encoder failed, recording instead', err);
+      why = `${(err as Error).name}: ${(err as Error).message}`.slice(0, 120);
     }
   }
 
@@ -869,6 +876,8 @@ export async function storyVideo(
     src.connect(dest);
     src.connect(ac.destination); // hear it while it records
     const stream = new MediaStream([...canvas.captureStream(30).getVideoTracks(), ...dest.stream.getAudioTracks()]);
+    const vs = stream.getVideoTracks()[0]?.getSettings();
+    videoNote = `recorder ${mimeType.split(';')[0]} ${vs?.width ?? '?'}x${vs?.height ?? '?'} (${why || 'no reason'})`;
     const rec = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 10_000_000, audioBitsPerSecond: 192_000 });
     const chunks: Blob[] = [];
     rec.ondataavailable = (e) => e.data.size && chunks.push(e.data);

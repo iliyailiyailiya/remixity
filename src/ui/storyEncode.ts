@@ -18,28 +18,47 @@ interface Plan {
   audio: AudioEncoderConfig;
 }
 
+/** Why the last plan couldn't be made (for the diagnostics note). */
+export let planProblem = '';
+
+const supported = async (check: Promise<{ supported?: boolean }>) => {
+  try {
+    return !!(await check).supported;
+  } catch {
+    return false;
+  }
+};
+
 /** The encoder settings this browser can do for a w×h story with this sound, or null. */
 export async function encodePlan(w: number, h: number, sampleRate: number): Promise<Plan | null> {
-  if (typeof VideoEncoder === 'undefined' || typeof AudioEncoder === 'undefined' || typeof VideoFrame === 'undefined') return null;
-  const rate = [44100, 48000].includes(sampleRate) ? sampleRate : 48000;
-  const audio: AudioEncoderConfig = { codec: 'mp4a.40.2', sampleRate: rate, numberOfChannels: 2, bitrate: AUDIO_BITRATE };
-  try {
-    if (!(await AudioEncoder.isConfigSupported(audio)).supported) return null;
-    for (const codec of AVC_CODECS) {
-      const video: VideoEncoderConfig = {
-        codec,
-        width: w,
-        height: h,
-        bitrate: VIDEO_BITRATE,
-        framerate: FPS,
-        latencyMode: 'quality',
-        avc: { format: 'avc' },
-      };
-      if ((await VideoEncoder.isConfigSupported(video)).supported) return { video, audio };
+  planProblem = '';
+  if (typeof VideoEncoder === 'undefined') return (planProblem = 'no VideoEncoder'), null;
+  if (typeof AudioEncoder === 'undefined') return (planProblem = 'no AudioEncoder'), null;
+  if (typeof VideoFrame === 'undefined') return (planProblem = 'no VideoFrame'), null;
+  // Try the best settings first, then simpler ones (browsers differ in what they accept).
+  let audio: AudioEncoderConfig | null = null;
+  for (const rate of [...new Set([[44100, 48000].includes(sampleRate) ? sampleRate : 48000, 48000, 44100])]) {
+    for (const bitrate of [AUDIO_BITRATE, 128_000, undefined]) {
+      const cfg: AudioEncoderConfig = { codec: 'mp4a.40.2', sampleRate: rate, numberOfChannels: 2, ...(bitrate ? { bitrate } : {}) };
+      if (await supported(AudioEncoder.isConfigSupported(cfg))) {
+        audio = cfg;
+        break;
+      }
     }
-  } catch {
-    /* not supported */
+    if (audio) break;
   }
+  if (!audio) return (planProblem = 'AAC not supported'), null;
+  for (const codec of AVC_CODECS) {
+    const base: VideoEncoderConfig = { codec, width: w, height: h, bitrate: VIDEO_BITRATE, framerate: FPS };
+    for (const video of [
+      { ...base, latencyMode: 'quality', avc: { format: 'avc' } } as VideoEncoderConfig,
+      { ...base, avc: { format: 'avc' } } as VideoEncoderConfig,
+      base,
+    ]) {
+      if (await supported(VideoEncoder.isConfigSupported(video))) return { video, audio };
+    }
+  }
+  planProblem = 'H.264 1080x1920 not supported';
   return null;
 }
 
@@ -110,13 +129,33 @@ export async function encodeStory(
     }
 
     // Then the pictures, one frame at a time.
+    let viaBitmap = false;
     const frames = Math.max(1, Math.round(clip.duration * FPS));
     for (let i = 0; i < frames; i++) {
       if (signal.aborted) throw new DOMException('Stopped', 'AbortError');
       if (failure) throw failure;
       const t = i / FPS;
       painter.draw(t, Math.min(1, t / clip.duration));
-      const frame = new VideoFrame(canvas, { timestamp: Math.round(t * 1e6), duration: Math.round(1e6 / FPS) });
+      const ts = { timestamp: Math.round(t * 1e6), duration: Math.round(1e6 / FPS) };
+      let frame: VideoFrame | null = null;
+      if (!viaBitmap) {
+        try {
+          frame = new VideoFrame(canvas, ts);
+          // Some browsers hand over a smaller picture than the canvas: then go via a full-size bitmap.
+          if (frame.codedWidth !== plan.video.width || frame.codedHeight !== plan.video.height) {
+            frame.close();
+            frame = null;
+            viaBitmap = true;
+          }
+        } catch {
+          viaBitmap = true;
+        }
+      }
+      if (!frame) {
+        const bmp = await createImageBitmap(canvas, { resizeWidth: plan.video.width, resizeHeight: plan.video.height, resizeQuality: 'high' });
+        frame = new VideoFrame(bmp, ts);
+        bmp.close();
+      }
       venc.encode(frame, { keyFrame: i % (FPS * 2) === 0 });
       frame.close();
       // Don't run ahead of the encoder (keeps memory flat), and let the page breathe.

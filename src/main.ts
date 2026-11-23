@@ -4,7 +4,7 @@ import { DEFAULT_PARAMS, FxParams } from './engine/chain';
 import { decodeData, niceName, quickPart, safeFileName } from './engine/decode';
 import { Player } from './engine/player';
 import { exportAudio, Format, renderClip, Stage } from './engine/render';
-import { canRecordVideo, levelsOf, storyImage, storyVideo, type StoryInfo, type StoryStyle } from './ui/story';
+import { canRecordVideo, levelsOf, storyImage, storyVideo, videoNote, type StoryInfo, type StoryStyle } from './ui/story';
 import { shareOrDownload } from './library/export';
 import { addMarker, assemble, cut, EditState, initialEdit, keepOnly, removeMarker } from './engine/edit';
 import { readMeta, songNames, tidyName } from './engine/meta';
@@ -1112,6 +1112,8 @@ storyCreate.addEventListener('click', async () => {
       }
     }
     storyStatus.textContent = t('storyReady');
+    // Temporary: which encoder made the video (tracking down low-res videos on iPhone).
+    if (kind !== 'image' && videoNote) storyStatus.textContent += ` [${videoNote}]`;
     storyShare.hidden = false;
   } catch (err) {
     storyAbort = null;
