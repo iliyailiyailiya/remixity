@@ -139,6 +139,8 @@ function newSide() {
 }
 
 export function initMove() {
+  // One address for everyone (each address keeps its own library).
+  if (location.hostname === 'www.remixity.app') return location.replace(NEW_ORIGIN + location.pathname + location.search + location.hash);
   if (DEV && !localStorage.getItem('moveTest')) return; // dev: only when testing the move
   if (location.origin === OLD_ORIGIN) void oldSide();
   else if (location.origin === NEW_ORIGIN && new URLSearchParams(location.search).has('receive-library')) newSide();
