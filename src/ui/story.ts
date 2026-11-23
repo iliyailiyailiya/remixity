@@ -818,7 +818,7 @@ const VIDEO_TYPES = [
   'video/webm',
 ];
 
-/** How the last video was made (shown briefly while we track down a Safari issue). */
+/** How the last video was made (encoder, or recorder and why): for debugging. */
 export let videoNote = '';
 
 export const canRecordVideo = () =>
