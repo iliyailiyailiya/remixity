@@ -54,5 +54,5 @@ both IDs are set, and the build then also emits `ads.txt`.
    display ad unit, and publish the EU/UK consent message under Privacy & messaging.
 3. Add to `.env.production.local` (gitignored):
    `VITE_ADSENSE_CLIENT=ca-pub-…` and `VITE_ADSENSE_SLOT=…`
-4. Regenerate the legal pages with the ad wording: `python3 scripts/build-legal.py --ads`
+4. The legal pages include the ad wording by default (`python3 scripts/build-legal.py`; `--no-ads` drops it).
 5. `npm run deploy`

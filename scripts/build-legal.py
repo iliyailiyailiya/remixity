@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Builds public/privacy.html and public/terms.html (EN/RO/RU).
 
-    python3 scripts/build-legal.py          # current site: no ads
-    python3 scripts/build-legal.py --ads    # once the AdSense banner is live
+    python3 scripts/build-legal.py             # the site with AdSense (current)
+    python3 scripts/build-legal.py --no-ads    # if AdSense is ever removed
 """
 import sys
-ADS = "--ads" in sys.argv
+ADS = "--no-ads" not in sys.argv
 import html
 UPDATED = {"en": "Last updated: 23 November 2026", "ro": "Ultima actualizare: 23 noiembrie 2026", "ru": "Обновлено: 23 ноября 2026"}
 BACK = {"en": "Back to THE REMIXITY", "ro": "Înapoi la THE REMIXITY", "ru": "Назад в THE REMIXITY"}
