@@ -35,13 +35,15 @@ interface LrcRecord {
 /** Same search, same cache entry: case, spacing and accents don't matter. */
 const norm = (s: string) => s.normalize('NFKC').toLowerCase().replace(/\s+/g, ' ').trim();
 
-const toClient = (body: string, status = 200) =>
+const toClient = (body: string, status = 200, cache = 'MISS') =>
   new Response(body, {
     status,
     headers: {
       'Content-Type': 'application/json; charset=utf-8',
       // The browser keeps nothing: lyrics are only shown while the song is loaded.
       'Cache-Control': 'no-store',
+      // Whether the shared cache answered (HIT) or LRCLIB was asked (MISS).
+      'X-Lyrics-Cache': cache,
     },
   });
 
@@ -63,7 +65,7 @@ export const onRequest = async ({ request, waitUntil }: Ctx): Promise<Response> 
   const keyReq = new Request(key.toString());
   const cache = caches.default;
   const hit = await cache.match(keyReq);
-  if (hit) return toClient(await hit.text());
+  if (hit) return toClient(await hit.text(), 200, 'HIT');
 
   const target = new URL(LRCLIB);
   target.search = key.search;
