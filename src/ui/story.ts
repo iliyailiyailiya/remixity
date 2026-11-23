@@ -234,10 +234,7 @@ export class StoryPainter {
     c.save();
     roundRect(c, PAD, top, size, size, 20);
     c.clip();
-    const iw = info.cover.naturalWidth || 1;
-    const ih = info.cover.naturalHeight || 1;
-    const s = Math.max(size / iw, size / ih);
-    c.drawImage(info.cover, PAD + (size - iw * s) / 2, top + (size - ih * s) / 2, iw * s, ih * s);
+    this.coverAt(PAD, top, size, size);
     c.restore();
     const tx = PAD + size + 30;
     const tw = W - tx - PAD;
@@ -423,13 +420,59 @@ export class StoryPainter {
     c.restore();
   }
 
-  /** The cover, cropped to fill a w×h box at x,y. */
+  /** The cover, cropped to fill a w×h box at x,y, scaled in high quality. */
   private coverAt(x: number, y: number, w: number, h: number) {
+    const c = this.c;
+    c.imageSmoothingEnabled = true;
+    c.imageSmoothingQuality = 'high';
+    c.drawImage(this.coverSized(Math.round(w), Math.round(h)), x, y, w, h);
+  }
+
+  /**
+   * The cover cropped and scaled to exactly w×h, made once per size. Shrinking
+   * a big cover in one step comes out grainy (most browsers, Safari above
+   * all, scale cheaply by default), so it's halved step by step instead.
+   */
+  private sized = new Map<string, HTMLCanvasElement>();
+  private coverSized(w: number, h: number): HTMLCanvasElement {
+    const key = `${w}x${h}`;
+    const hit = this.sized.get(key);
+    if (hit) return hit;
     const img = this.info.cover;
     const iw = img.naturalWidth || 1;
     const ih = img.naturalHeight || 1;
-    const s = Math.max(w / iw, h / ih);
-    this.c.drawImage(img, x + (w - iw * s) / 2, y + (h - ih * s) / 2, iw * s, ih * s);
+    // Crop to the box's shape first.
+    let sw = iw;
+    let sh = ih;
+    if (iw / ih > w / h) sw = (ih * w) / h;
+    else sh = (iw * h) / w;
+    let src: CanvasImageSource = img;
+    let sx = (iw - sw) / 2;
+    let sy = (ih - sh) / 2;
+    let cw = sw;
+    let ch = sh;
+    while (cw / 2 >= w && ch / 2 >= h) {
+      const step = document.createElement('canvas');
+      step.width = Math.round(cw / 2);
+      step.height = Math.round(ch / 2);
+      const k = step.getContext('2d')!;
+      k.imageSmoothingEnabled = true;
+      k.imageSmoothingQuality = 'high';
+      k.drawImage(src, sx, sy, cw, ch, 0, 0, step.width, step.height);
+      src = step;
+      sx = sy = 0;
+      cw = step.width;
+      ch = step.height;
+    }
+    const out = document.createElement('canvas');
+    out.width = w;
+    out.height = h;
+    const k = out.getContext('2d')!;
+    k.imageSmoothingEnabled = true;
+    k.imageSmoothingQuality = 'high';
+    k.drawImage(src, sx, sy, cw, ch, 0, 0, w, h);
+    this.sized.set(key, out);
+    return out;
   }
 
   /** Title and artist, centred, in white. Returns the y below them. */
@@ -562,7 +605,10 @@ export class StoryPainter {
     // Slow push-in on the cover
     const z = progress === null ? 1 : 1 + 0.08 * Math.min(1, progress);
     const w = H * z;
-    this.coverAt((W - w) / 2, (H - H * z) / 2, w, H * z);
+    // One high-quality copy at full height, zoomed per frame (not re-scaled each time).
+    c.imageSmoothingEnabled = true;
+    c.imageSmoothingQuality = 'high';
+    c.drawImage(this.coverSized(H, H), (W - w) / 2, (H - H * z) / 2, w, H * z);
     const top = this.info.subtitles && this.info.lyrics ? 1080 : 1230;
     c.drawImage(
       this.layer('full-text', () => {
