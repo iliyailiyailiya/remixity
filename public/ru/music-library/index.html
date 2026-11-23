@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#120c1f" />
+    <title>Музыкальный плеер с синхронным текстом песен онлайн · THE REMIXITY</title>
+    <meta name="description" content="Держи свою музыку в медиатеке на устройстве: исполнители, плейлисты и настоящий плеер с текстом, который идёт вместе с песней. Исправь названия и обложки разом." />
+    <link rel="canonical" href="https://remixity.app/ru/music-library/" />
+    <link rel="alternate" hreflang="en" href="https://remixity.app/music-library/" />
+    <link rel="alternate" hreflang="ru" href="https://remixity.app/ru/music-library/" />
+    <link rel="alternate" hreflang="ro" href="https://remixity.app/ro/music-library/" />
+    <link rel="alternate" hreflang="x-default" href="https://remixity.app/music-library/" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="THE REMIXITY" />
+    <meta property="og:locale" content="ru_RU" />
+    <meta property="og:url" content="https://remixity.app/ru/music-library/" />
+    <meta property="og:title" content="Музыкальный плеер с синхронным текстом песен онлайн · THE REMIXITY" />
+    <meta property="og:description" content="Держи свою музыку в медиатеке на устройстве: исполнители, плейлисты и настоящий плеер с текстом, который идёт вместе с песней. Исправь названия и обложки разом." />
+    <meta property="og:image" content="https://remixity.app/img/og.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="https://remixity.app/img/og.jpg" />
+    <script type="application/ld+json">{"@context": "https://schema.org", "@graph": [{"@type": "WebPage", "@id": "https://remixity.app/ru/music-library/", "url": "https://remixity.app/ru/music-library/", "name": "Музыкальный плеер с синхронным текстом песен онлайн · THE REMIXITY", "description": "Держи свою музыку в медиатеке на устройстве: исполнители, плейлисты и настоящий плеер с текстом, который идёт вместе с песней. Исправь названия и обложки разом.", "inLanguage": "ru", "isPartOf": {"@id": "https://remixity.app/#website"}, "about": {"@id": "https://remixity.app/#app"}, "primaryImageOfPage": "https://remixity.app/img/app-lyrics-full-ru.webp"}, {"@type": "BreadcrumbList", "itemListElement": [{"@type": "ListItem", "position": 1, "name": "THE REMIXITY", "item": "https://remixity.app/"}, {"@type": "ListItem", "position": 2, "name": "Медиатека и тексты", "item": "https://remixity.app/ru/music-library/"}]}, {"@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": "Мои песни куда-то загружаются?", "acceptedAnswer": {"@type": "Answer", "text": "Нет. Медиатека хранится в браузере на твоём устройстве. Оригиналы файлов тоже сохраняй: браузеры могут очищать данные сайтов."}}, {"@type": "Question", "name": "Откуда берутся тексты?", "acceptedAnswer": {"@type": "Answer", "text": "Из LRCLIB, открытой базы текстов, которую ведёт сообщество. Для поиска используются только исполнитель и название."}}, {"@type": "Question", "name": "Можно пользоваться на компьютере?", "acceptedAnswer": {"@type": "Answer", "text": "Да, в Chrome, Edge, Safari или Firefox. В Chrome и Edge на компьютере можно даже перезаписать оригинальные файлы в папке с музыкой, с исправленными названиями, тегами и обложками."}}]}]}</script>
+    <style>
+      :root { color-scheme: dark; --dim: rgba(255,255,255,.66); --line: rgba(255,255,255,.12); }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0; color: #fff; -webkit-text-size-adjust: 100%;
+        font: 400 1.0625rem/1.65 system-ui, -apple-system, "Segoe UI", sans-serif;
+        background: radial-gradient(70% 45% at 15% 0%, #4a2a8a, transparent 70%), radial-gradient(60% 40% at 95% 8%, #2a3f9a, transparent 70%),
+          radial-gradient(60% 40% at 50% 100%, #5a1e46, transparent 70%), #120c1f;
+        background-attachment: fixed;
+      }
+      a { color: #fff; text-underline-offset: 3px; }
+      .wrap { max-width: 1080px; margin: 0 auto; padding: 0 20px; }
+      header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: max(16px, env(safe-area-inset-top)) 0 8px; }
+      .brand { color: #fff; text-decoration: none; font-size: .82rem; letter-spacing: .32em; font-weight: 300; white-space: nowrap; }
+      .brand b { font-weight: 800; }
+      .cta { display: inline-block; background: #fff; color: #120c1f; text-decoration: none; font-weight: 750; border-radius: 999px; padding: 12px 22px; }
+      .cta.small { padding: 9px 16px; font-size: .92rem; }
+      .hero { display: grid; gap: 28px; align-items: center; padding: 36px 0 24px; }
+      h1 { font-size: clamp(2.1rem, 6vw, 3.4rem); line-height: 1.05; letter-spacing: -.035em; margin: 0 0 16px; }
+      .lead { font-size: 1.15rem; color: rgba(255,255,255,.85); margin: 0 0 24px; max-width: 34em; }
+      .note { color: var(--dim); font-size: .92rem; margin: 12px 0 0; }
+      img { display: block; width: 100%; height: auto; border-radius: 26px; box-shadow: 0 24px 60px rgba(0,0,0,.45); }
+      .hero img, .shot img { max-width: 320px; margin: 0 auto; }
+      .story .hero img, .story .shot img { max-width: 300px; border-radius: 22px; }
+      figure { margin: 0; }
+      figcaption { color: var(--dim); font-size: .86rem; text-align: center; margin-top: 10px; }
+      h2 { font-size: clamp(1.4rem, 3.4vw, 1.9rem); letter-spacing: -.02em; line-height: 1.15; margin: 0 0 10px; }
+      p { margin: 0 0 12px; color: rgba(255,255,255,.84); }
+      .feature { display: grid; gap: 22px; align-items: center; padding: 34px 0; border-top: 1px solid var(--line); }
+      .card { background: rgba(255,255,255,.05); border: 1px solid var(--line); border-radius: 22px; padding: 22px; margin: 26px 0; }
+      ol { margin: 0; padding-left: 1.3em; } li { margin: 6px 0; }
+      details { border-top: 1px solid var(--line); padding: 12px 0; } details:first-of-type { border-top: 0; }
+      summary { cursor: pointer; font-weight: 650; } details p { margin: 8px 0 0; }
+      .related ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
+      .related a { font-weight: 700; display: block; } .related span { color: var(--dim); font-size: .95rem; }
+      footer { border-top: 1px solid var(--line); margin-top: 30px; padding: 22px 0 40px; color: var(--dim); font-size: .92rem; }
+      footer nav { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-bottom: 14px; }
+      footer a { color: rgba(255,255,255,.85); } footer a[aria-current] { color: #fff; font-weight: 700; }
+      .langs { display: flex; gap: 4px; } .langs a { font-size: .8rem; font-weight: 650; text-decoration: none; padding: 6px 9px; border-radius: 999px; border: 1px solid var(--line); color: rgba(255,255,255,.8); }
+      .langs a[aria-current] { background: #fff; color: #120c1f; border-color: #fff; }
+      .top { display: flex; align-items: center; gap: 10px; }
+      @media (max-width: 560px) { header .cta.small { display: none; } } /* the big button is right below */
+      @media (min-width: 820px) {
+        .hero { grid-template-columns: 1.15fr .85fr; padding-top: 56px; }
+        .feature { grid-template-columns: 1fr 1fr; gap: 56px; }
+        .feature.flip > div { order: 2; }
+        .feature.solo { grid-template-columns: 1fr; max-width: 46em; }
+      }
+    </style>
+  </head>
+  <body class="">
+    <div class="wrap">
+      <header>
+        <a class="brand" href="/?lang=ru">THE <b>REMIXITY</b></a>
+        <div class="top">
+          <nav class="langs" aria-label="Язык"><a href="/music-library/" hreflang="en" lang="en">EN</a><a href="/ru/music-library/" hreflang="ru" lang="ru" aria-current="true">RU</a><a href="/ro/music-library/" hreflang="ro" lang="ro">RO</a></nav>
+          <a class="cta small" href="/?lang=ru">Открыть приложение</a>
+        </div>
+      </header>
+      <main>
+        <section class="hero">
+          <div>
+            <h1>Плеер с синхронным текстом для твоих файлов</h1>
+            <p class="lead">Добавь песни или целую папку, и THE REMIXITY станет твоим плеером: исполнители, плейлисты и очередь, а текст подсвечивается строка за строкой, пока песня играет. Медиатека хранится в браузере, на твоём устройстве.</p>
+            <a class="cta" href="/?lang=ru">Открыть THE REMIXITY бесплатно</a>
+            <p class="note">Работает в браузере на iPhone, Android и компьютерах. Ничего не нужно устанавливать, ничего не загружается.</p>
+          </div>
+          <figure><img src="/img/app-lyrics-full-ru.webp" srcset="/img/app-lyrics-full-ru-sm.webp 390w, /img/app-lyrics-full-ru.webp 780w" sizes="(min-width: 820px) 320px, 78vw" width="780" height="1688" alt="Текст на весь экран: подсвечена строка, которая звучит" fetchpriority="high" decoding="async" /><figcaption>Текст на весь экран: подсвечена строка, которая звучит</figcaption></figure>
+        </section>
+        <section class="feature"><div><h2>Текст идёт вместе с музыкой</h2><p>Для песен с синхронным текстом звучащая строка подсвечивается, а остальные прокручиваются сами. Нажми на текст, чтобы открыть его на весь экран, и нажми на любую строку, чтобы перейти к ней. Синхронность сохраняется, даже если песню замедлить или ускорить.</p><p>Тексты берутся из LRCLIB, открытой базы текстов песен, и показываются, только пока песня загружена.</p></div><figure class="shot"><img src="/img/app-lyrics-ru.webp" srcset="/img/app-lyrics-ru-sm.webp 390w, /img/app-lyrics-ru.webp 780w" sizes="(min-width: 820px) 320px, 78vw" width="780" height="1688" alt="Страница текста в плеере" loading="lazy" decoding="async" /><figcaption>Страница текста в плеере</figcaption></figure></section><section class="feature flip"><div><h2>Твоя медиатека на твоём устройстве</h2><p>Добавь песни из «Файлов» или целую папку. Они хранятся в браузере на этом устройстве и разложены по песням, исполнителям (с их фото) и твоим плейлистам. Играй, перемешивай, ставь следующей, а очередь сама переходит к следующей песне.</p></div><figure class="shot"><img src="/img/app-library-ru.webp" srcset="/img/app-library-ru-sm.webp 390w, /img/app-library-ru.webp 780w" sizes="(min-width: 820px) 320px, 78vw" width="780" height="1688" alt="Медиатека: песни с обложками" loading="lazy" decoding="async" /><figcaption>Медиатека: песни с обложками</figcaption></figure></section><section class="feature"><div><h2>Порядок в названиях и обложках</h2><p>У скачанных файлов часто названия вроде «Artist - Song (Official Video) 320kbps». «Привести в порядок» ищет каждую песню в открытых музыкальных каталогах, предлагает правильные название, исполнителя и обложку и ничего не меняет, пока ты не подтвердишь список.</p><p>Потом сохрани исправленные копии, с новыми названиями, тегами и обложками, обратно в «Файлы».</p></div><figure class="shot"><img src="/img/app-artists-ru.webp" srcset="/img/app-artists-ru-sm.webp 390w, /img/app-artists-ru.webp 780w" sizes="(min-width: 820px) 320px, 78vw" width="780" height="1688" alt="Исполнители в медиатеке" loading="lazy" decoding="async" /><figcaption>Исполнители в медиатеке</figcaption></figure></section><section class="feature flip solo"><div><h2>Работает как приложение</h2><p>Добавь THE REMIXITY на экран «Домой». Музыка играет и при заблокированном экране, а кнопки на экране блокировки и в наушниках работают: пауза, следующая и предыдущая.</p></div></section>
+        <section class="card">
+          <h2>Как это сделать</h2>
+          <ol><li>Открой медиатеку и добавь песни или папку.</li><li>Включи песню и перелистни на страницу текста.</li><li>Запусти «Привести в порядок», чтобы исправить названия и обложки.</li></ol>
+          <p class="note" style="margin-top:16px"><a class="cta small" href="/?lang=ru">Попробовать</a></p>
+        </section>
+        <section class="card">
+          <h2>Вопросы</h2>
+          <details><summary>Мои песни куда-то загружаются?</summary><p>Нет. Медиатека хранится в браузере на твоём устройстве. Оригиналы файлов тоже сохраняй: браузеры могут очищать данные сайтов.</p></details><details><summary>Откуда берутся тексты?</summary><p>Из LRCLIB, открытой базы текстов, которую ведёт сообщество. Для поиска используются только исполнитель и название.</p></details><details><summary>Можно пользоваться на компьютере?</summary><p>Да, в Chrome, Edge, Safari или Firefox. В Chrome и Edge на компьютере можно даже перезаписать оригинальные файлы в папке с музыкой, с исправленными названиями, тегами и обложками.</p></details>
+        </section>
+        <section class="card related">
+          <h2>Что ещё умеет THE REMIXITY</h2>
+          <ul><li><a href="/ru/instagram-story-maker/">Сторис для Instagram из твоей музыки</a><span>Сделай из песни сторис для Instagram: видео с твоим ремиксом, текстом, который идёт в такт, крутящейся пластинкой или волнами.</span></li><li><a href="/ru/slow-reverb/">Slowed + reverb онлайн: замедли любую песню</a><span>Сделай slowed + reverb онлайн бесплатно: сдвинь педаль вниз, песня замедлится, а реверб добавится сам.</span></li><li><a href="/ru/audio-editor/">Онлайн-редактор музыки прямо в браузере</a><span>Редактируй песни онлайн: меняй скорость с тоном или без, добавляй реверб и эхо, настраивай 5-полосный эквалайзер, обрезай лишнее и сохраняй в MP3 или WAV..</span></li></ul>
+        </section>
+      </main>
+      <footer>
+        <nav aria-label="Возможности"><a href="/?lang=ru">THE REMIXITY</a><a href="/ru/slow-reverb/">Slowed + reverb</a><a href="/ru/audio-editor/">Аудиоредактор</a><a href="/ru/music-library/" aria-current="page">Медиатека и тексты</a><a href="/ru/instagram-story-maker/">Сторис для Instagram</a><a href="/ru/music-card-maker/">Музыкальные карточки</a></nav>
+        <p><a href="/privacy?lang=ru">Конфиденциальность</a> · <a href="/terms?lang=ru">Условия</a> · Сделал <a href="https://instagram.com/iliyabarcari" target="_blank" rel="noopener">@iliyabarcari</a></p>
+      </footer>
+    </div>
+  </body>
+</html>

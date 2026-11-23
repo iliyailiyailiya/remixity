@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="ro">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#120c1f" />
+    <title>Editor audio online pentru melodii: viteză, reverb, EQ · THE REMIXITY</title>
+    <meta name="description" content="Editează melodii online: schimbă viteza cu sau fără ton, adaugă reverb și ecou, modelează sunetul cu un EQ cu 5 benzi, taie bucăți, apoi exportă MP3 sau WAV." />
+    <link rel="canonical" href="https://remixity.app/ro/audio-editor/" />
+    <link rel="alternate" hreflang="en" href="https://remixity.app/audio-editor/" />
+    <link rel="alternate" hreflang="ru" href="https://remixity.app/ru/audio-editor/" />
+    <link rel="alternate" hreflang="ro" href="https://remixity.app/ro/audio-editor/" />
+    <link rel="alternate" hreflang="x-default" href="https://remixity.app/audio-editor/" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="THE REMIXITY" />
+    <meta property="og:locale" content="ro_RO" />
+    <meta property="og:url" content="https://remixity.app/ro/audio-editor/" />
+    <meta property="og:title" content="Editor audio online pentru melodii: viteză, reverb, EQ · THE REMIXITY" />
+    <meta property="og:description" content="Editează melodii online: schimbă viteza cu sau fără ton, adaugă reverb și ecou, modelează sunetul cu un EQ cu 5 benzi, taie bucăți, apoi exportă MP3 sau WAV." />
+    <meta property="og:image" content="https://remixity.app/img/og.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="https://remixity.app/img/og.jpg" />
+    <script type="application/ld+json">{"@context": "https://schema.org", "@graph": [{"@type": "WebPage", "@id": "https://remixity.app/ro/audio-editor/", "url": "https://remixity.app/ro/audio-editor/", "name": "Editor audio online pentru melodii: viteză, reverb, EQ · THE REMIXITY", "description": "Editează melodii online: schimbă viteza cu sau fără ton, adaugă reverb și ecou, modelează sunetul cu un EQ cu 5 benzi, taie bucăți, apoi exportă MP3 sau WAV.", "inLanguage": "ro", "isPartOf": {"@id": "https://remixity.app/#website"}, "about": {"@id": "https://remixity.app/#app"}, "primaryImageOfPage": "https://remixity.app/img/app-eq-ro.webp"}, {"@type": "BreadcrumbList", "itemListElement": [{"@type": "ListItem", "position": 1, "name": "THE REMIXITY", "item": "https://remixity.app/"}, {"@type": "ListItem", "position": 2, "name": "Editor audio", "item": "https://remixity.app/ro/audio-editor/"}]}, {"@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": "Pot adăuga reverb unui MP3 online, gratuit?", "acceptedAnswer": {"@type": "Answer", "text": "Da. Deschide melodia, mergi la pagina de reverb și setează cât vrei. Exportă ca MP3 când ai terminat."}}, {"@type": "Question", "name": "Ce tipuri de fișiere pot edita?", "acceptedAnswer": {"@type": "Answer", "text": "MP3, WAV, FLAC, M4A, AAC, OGG, Opus și AIFF, atât cât le poate deschide browserul tău (majoritatea pot)."}}, {"@type": "Question", "name": "Scade calitatea?", "acceptedAnswer": {"@type": "Answer", "text": "Sunetul e procesat cu precizie de 32 de biți și exportat ca MP3 320 kbps sau WAV fără pierderi."}}]}]}</script>
+    <style>
+      :root { color-scheme: dark; --dim: rgba(255,255,255,.66); --line: rgba(255,255,255,.12); }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0; color: #fff; -webkit-text-size-adjust: 100%;
+        font: 400 1.0625rem/1.65 system-ui, -apple-system, "Segoe UI", sans-serif;
+        background: radial-gradient(70% 45% at 15% 0%, #4a2a8a, transparent 70%), radial-gradient(60% 40% at 95% 8%, #2a3f9a, transparent 70%),
+          radial-gradient(60% 40% at 50% 100%, #5a1e46, transparent 70%), #120c1f;
+        background-attachment: fixed;
+      }
+      a { color: #fff; text-underline-offset: 3px; }
+      .wrap { max-width: 1080px; margin: 0 auto; padding: 0 20px; }
+      header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: max(16px, env(safe-area-inset-top)) 0 8px; }
+      .brand { color: #fff; text-decoration: none; font-size: .82rem; letter-spacing: .32em; font-weight: 300; white-space: nowrap; }
+      .brand b { font-weight: 800; }
+      .cta { display: inline-block; background: #fff; color: #120c1f; text-decoration: none; font-weight: 750; border-radius: 999px; padding: 12px 22px; }
+      .cta.small { padding: 9px 16px; font-size: .92rem; }
+      .hero { display: grid; gap: 28px; align-items: center; padding: 36px 0 24px; }
+      h1 { font-size: clamp(2.1rem, 6vw, 3.4rem); line-height: 1.05; letter-spacing: -.035em; margin: 0 0 16px; }
+      .lead { font-size: 1.15rem; color: rgba(255,255,255,.85); margin: 0 0 24px; max-width: 34em; }
+      .note { color: var(--dim); font-size: .92rem; margin: 12px 0 0; }
+      img { display: block; width: 100%; height: auto; border-radius: 26px; box-shadow: 0 24px 60px rgba(0,0,0,.45); }
+      .hero img, .shot img { max-width: 320px; margin: 0 auto; }
+      .story .hero img, .story .shot img { max-width: 300px; border-radius: 22px; }
+      figure { margin: 0; }
+      figcaption { color: var(--dim); font-size: .86rem; text-align: center; margin-top: 10px; }
+      h2 { font-size: clamp(1.4rem, 3.4vw, 1.9rem); letter-spacing: -.02em; line-height: 1.15; margin: 0 0 10px; }
+      p { margin: 0 0 12px; color: rgba(255,255,255,.84); }
+      .feature { display: grid; gap: 22px; align-items: center; padding: 34px 0; border-top: 1px solid var(--line); }
+      .card { background: rgba(255,255,255,.05); border: 1px solid var(--line); border-radius: 22px; padding: 22px; margin: 26px 0; }
+      ol { margin: 0; padding-left: 1.3em; } li { margin: 6px 0; }
+      details { border-top: 1px solid var(--line); padding: 12px 0; } details:first-of-type { border-top: 0; }
+      summary { cursor: pointer; font-weight: 650; } details p { margin: 8px 0 0; }
+      .related ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
+      .related a { font-weight: 700; display: block; } .related span { color: var(--dim); font-size: .95rem; }
+      footer { border-top: 1px solid var(--line); margin-top: 30px; padding: 22px 0 40px; color: var(--dim); font-size: .92rem; }
+      footer nav { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-bottom: 14px; }
+      footer a { color: rgba(255,255,255,.85); } footer a[aria-current] { color: #fff; font-weight: 700; }
+      .langs { display: flex; gap: 4px; } .langs a { font-size: .8rem; font-weight: 650; text-decoration: none; padding: 6px 9px; border-radius: 999px; border: 1px solid var(--line); color: rgba(255,255,255,.8); }
+      .langs a[aria-current] { background: #fff; color: #120c1f; border-color: #fff; }
+      .top { display: flex; align-items: center; gap: 10px; }
+      @media (max-width: 560px) { header .cta.small { display: none; } } /* the big button is right below */
+      @media (min-width: 820px) {
+        .hero { grid-template-columns: 1.15fr .85fr; padding-top: 56px; }
+        .feature { grid-template-columns: 1fr 1fr; gap: 56px; }
+        .feature.flip > div { order: 2; }
+        .feature.solo { grid-template-columns: 1fr; max-width: 46em; }
+      }
+    </style>
+  </head>
+  <body class="">
+    <div class="wrap">
+      <header>
+        <a class="brand" href="/?lang=ro">THE <b>REMIXITY</b></a>
+        <div class="top">
+          <nav class="langs" aria-label="Limbă"><a href="/audio-editor/" hreflang="en" lang="en">EN</a><a href="/ru/audio-editor/" hreflang="ru" lang="ru">RU</a><a href="/ro/audio-editor/" hreflang="ro" lang="ro" aria-current="true">RO</a></nav>
+          <a class="cta small" href="/?lang=ro">Deschide aplicația</a>
+        </div>
+      </header>
+      <main>
+        <section class="hero">
+          <div>
+            <h1>Un editor muzical online, direct în browser</h1>
+            <p class="lead">THE REMIXITY e făcut pentru melodii, nu pentru podcasturi. Schimbă viteza și tonul, adaugă reverb unui MP3, modelează-l cu un egalizator, taie ce nu-ți place și exportă un fișier curat. Totul se întâmplă pe dispozitivul tău.</p>
+            <a class="cta" href="/?lang=ro">Deschide THE REMIXITY, gratuit</a>
+            <p class="note">Merge în browser pe iPhone, Android și calculatoare. Nimic de instalat, nimic încărcat.</p>
+          </div>
+          <figure><img src="/img/app-eq-ro.webp" srcset="/img/app-eq-ro-sm.webp 390w, /img/app-eq-ro.webp 780w" sizes="(min-width: 820px) 320px, 78vw" width="780" height="1688" alt="Egalizatorul cu 5 benzi, cu spectrul melodiei în spate" fetchpriority="high" decoding="async" /><figcaption>Egalizatorul cu 5 benzi, cu spectrul melodiei în spate</figcaption></figure>
+        </section>
+        <section class="feature"><div><h2>Viteză și ton</h2><p>Accelerează sau încetinește de la ×0.5 la ×1.5. Implicit tonul se mișcă odată cu viteza, ca la un disc; cu «Păstrează tonul», melodia rămâne în tonalitatea ei. Tempoul (BPM) e detectat pentru tine și urmează fiecare schimbare.</p></div><figure class="shot"><img src="/img/app-pedal-ro.webp" srcset="/img/app-pedal-ro-sm.webp 390w, /img/app-pedal-ro.webp 780w" sizes="(min-width: 820px) 320px, 78vw" width="780" height="1688" alt="Pedala cu BPM și păstrarea tonului" loading="lazy" decoding="async" /><figcaption>Pedala cu BPM și păstrarea tonului</figcaption></figure></section><section class="feature flip"><div><h2>Reverb și ecou</h2><p>Adaugă reverb unui MP3 sau oricărei melodii: alege cât de mare e sala, cât de întunecat sună și cât din el se aude. Ecoul se poate lega de tempoul melodiei (pătrimi, optimi, optimi cu punct sau șaisprezecimi) sau se setează liber.</p></div><figure class="shot"><img src="/img/app-space-ro.webp" srcset="/img/app-space-ro-sm.webp 390w, /img/app-space-ro.webp 780w" sizes="(min-width: 820px) 320px, 78vw" width="780" height="1688" alt="Reverb și ecou, cu ecoul legat de tempo" loading="lazy" decoding="async" /><figcaption>Reverb și ecou, cu ecoul legat de tempo</figcaption></figure></section><section class="feature solo"><div><h2>Un EQ cu 5 benzi pe care îl vezi</h2><p>Trage punctele ca să crești sau să tai basul, mediile joase, mediile, înaltele și „aerul”, peste o imagine live a frecvențelor muzicii.</p></div></section><section class="feature flip"><div><h2>Taie, decupează, repetă în buclă</h2><p>Pagina «Tăiere» arată melodia ca formă de undă. Selectează o parte ca s-o păstrezi doar pe ea sau s-o tai, pune marcaje, repetă o secțiune în buclă cât asculți și anulează orice.</p></div><figure class="shot"><img src="/img/app-chop-ro.webp" srcset="/img/app-chop-ro-sm.webp 390w, /img/app-chop-ro.webp 780w" sizes="(min-width: 820px) 320px, 78vw" width="780" height="1688" alt="Editorul de formă de undă: tăiere, buclă și anulare" loading="lazy" decoding="async" /><figcaption>Editorul de formă de undă: tăiere, buclă și anulare</figcaption></figure></section><section class="feature"><div><h2>Exporturi curate</h2><p>Exportă ca MP3 320 kbps sau WAV (16 ori 24 de biți) cu un limitator care previne distorsiunea. Setează numele fișierului, titlul, artistul și coperta înainte de salvare.</p></div><figure class="shot"><img src="/img/app-export-ro.webp" srcset="/img/app-export-ro-sm.webp 390w, /img/app-export-ro.webp 780w" sizes="(min-width: 820px) 320px, 78vw" width="780" height="1688" alt="Export MP3 sau WAV cu etichete" loading="lazy" decoding="async" /><figcaption>Export MP3 sau WAV cu etichete</figcaption></figure></section>
+        <section class="card">
+          <h2>Cum se face</h2>
+          <ol><li>Alege o melodie; nu se încarcă nimic.</li><li>Glisează prin pagini: viteză, reverb și ecou, EQ, tăiere.</li><li>Exportă ca MP3 sau WAV sau distribuie de pe telefon.</li></ol>
+          <p class="note" style="margin-top:16px"><a class="cta small" href="/?lang=ro">Încearcă acum</a></p>
+        </section>
+        <section class="card">
+          <h2>Întrebări</h2>
+          <details><summary>Pot adăuga reverb unui MP3 online, gratuit?</summary><p>Da. Deschide melodia, mergi la pagina de reverb și setează cât vrei. Exportă ca MP3 când ai terminat.</p></details><details><summary>Ce tipuri de fișiere pot edita?</summary><p>MP3, WAV, FLAC, M4A, AAC, OGG, Opus și AIFF, atât cât le poate deschide browserul tău (majoritatea pot).</p></details><details><summary>Scade calitatea?</summary><p>Sunetul e procesat cu precizie de 32 de biți și exportat ca MP3 320 kbps sau WAV fără pierderi.</p></details>
+        </section>
+        <section class="card related">
+          <h2>Ce mai poți face cu THE REMIXITY</h2>
+          <ul><li><a href="/ro/slow-reverb/">Fă melodii slowed + reverb online</a><span>Fă slowed + reverb online gratuit: trage pedala în jos, melodia se încetinește, iar reverbul vine singur.</span></li><li><a href="/ro/music-library/">Un player cu versuri sincronizate pentru fișierele tale</a><span>Ține-ți muzica într-o bibliotecă pe dispozitiv: artiști, playlisturi și un player adevărat, cu versuri care urmează melodia.</span></li><li><a href="/ro/music-card-maker/">Fă carduri muzicale pentru melodiile preferate</a><span>Fă un card muzical pentru orice melodie: coperta, titlul, artistul și viteza remixului într-un design curat.</span></li></ul>
+        </section>
+      </main>
+      <footer>
+        <nav aria-label="Funcții"><a href="/?lang=ro">THE REMIXITY</a><a href="/ro/slow-reverb/">Slowed + reverb</a><a href="/ro/audio-editor/" aria-current="page">Editor audio</a><a href="/ro/music-library/">Bibliotecă și versuri</a><a href="/ro/instagram-story-maker/">Story-uri Instagram</a><a href="/ro/music-card-maker/">Carduri muzicale</a></nav>
+        <p><a href="/privacy?lang=ro">Confidențialitate</a> · <a href="/terms?lang=ro">Termeni</a> · Făcut de <a href="https://instagram.com/iliyabarcari" target="_blank" rel="noopener">@iliyabarcari</a></p>
+      </footer>
+    </div>
+  </body>
+</html>

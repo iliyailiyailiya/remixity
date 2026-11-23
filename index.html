@@ -8,7 +8,7 @@
       // Romanian and Russian readers: hide the English texts the HTML carries
       // (for search engines) until their language is applied.
       try {
-        var l = localStorage.getItem('lang') || (navigator.language || 'en').slice(0, 2).toLowerCase();
+        var l = new URLSearchParams(location.search).get('lang') || localStorage.getItem('lang') || (navigator.language || 'en').slice(0, 2).toLowerCase();
         if (l === 'ro' || l === 'ru') document.documentElement.classList.add('i18n-wait');
       } catch (e) {}
     </script>
@@ -160,11 +160,11 @@
         <nav class="about-card features" aria-labelledby="featuresTitle">
           <h2 id="featuresTitle" data-i18n="homeFeaturesTitle"></h2>
           <ul>
-            <li><a href="/slow-reverb/" data-i18n="featSlow"></a></li>
-            <li><a href="/audio-editor/" data-i18n="featEditor"></a></li>
-            <li><a href="/music-library/" data-i18n="featLibrary"></a></li>
-            <li><a href="/instagram-story-maker/" data-i18n="featStory"></a></li>
-            <li><a href="/music-card-maker/" data-i18n="featCard"></a></li>
+            <li><a href="/slow-reverb/" data-feature="slow-reverb" data-i18n="featSlow"></a></li>
+            <li><a href="/audio-editor/" data-feature="audio-editor" data-i18n="featEditor"></a></li>
+            <li><a href="/music-library/" data-feature="music-library" data-i18n="featLibrary"></a></li>
+            <li><a href="/instagram-story-maker/" data-feature="instagram-story-maker" data-i18n="featStory"></a></li>
+            <li><a href="/music-card-maker/" data-feature="music-card-maker" data-i18n="featCard"></a></li>
           </ul>
         </nav>
         <p class="fine legal"><a href="/privacy" data-i18n="privacyLink"></a> · <a href="/terms" data-i18n="termsLink"></a></p>

@@ -7,10 +7,15 @@
     <title>Slowed + Reverb Online: Free, No Download · THE REMIXITY</title>
     <meta name="description" content="Make slowed + reverb songs online for free. Slide one pedal to slow a song down, the reverb follows, then export MP3 320 or WAV. Nothing is uploaded." />
     <link rel="canonical" href="https://remixity.app/slow-reverb/" />
+    <link rel="alternate" hreflang="en" href="https://remixity.app/slow-reverb/" />
+    <link rel="alternate" hreflang="ru" href="https://remixity.app/ru/slow-reverb/" />
+    <link rel="alternate" hreflang="ro" href="https://remixity.app/ro/slow-reverb/" />
+    <link rel="alternate" hreflang="x-default" href="https://remixity.app/slow-reverb/" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="THE REMIXITY" />
+    <meta property="og:locale" content="en_US" />
     <meta property="og:url" content="https://remixity.app/slow-reverb/" />
     <meta property="og:title" content="Slowed + Reverb Online: Free, No Download · THE REMIXITY" />
     <meta property="og:description" content="Make slowed + reverb songs online for free. Slide one pedal to slow a song down, the reverb follows, then export MP3 320 or WAV. Nothing is uploaded." />
@@ -58,6 +63,10 @@
       footer { border-top: 1px solid var(--line); margin-top: 30px; padding: 22px 0 40px; color: var(--dim); font-size: .92rem; }
       footer nav { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-bottom: 14px; }
       footer a { color: rgba(255,255,255,.85); } footer a[aria-current] { color: #fff; font-weight: 700; }
+      .langs { display: flex; gap: 4px; } .langs a { font-size: .8rem; font-weight: 650; text-decoration: none; padding: 6px 9px; border-radius: 999px; border: 1px solid var(--line); color: rgba(255,255,255,.8); }
+      .langs a[aria-current] { background: #fff; color: #120c1f; border-color: #fff; }
+      .top { display: flex; align-items: center; gap: 10px; }
+      @media (max-width: 560px) { header .cta.small { display: none; } } /* the big button is right below */
       @media (min-width: 820px) {
         .hero { grid-template-columns: 1.15fr .85fr; padding-top: 56px; }
         .feature { grid-template-columns: 1fr 1fr; gap: 56px; }
@@ -70,7 +79,10 @@
     <div class="wrap">
       <header>
         <a class="brand" href="/">THE <b>REMIXITY</b></a>
-        <a class="cta small" href="/">Open the app</a>
+        <div class="top">
+          <nav class="langs" aria-label="Language"><a href="/slow-reverb/" hreflang="en" lang="en" aria-current="true">EN</a><a href="/ru/slow-reverb/" hreflang="ru" lang="ru">RU</a><a href="/ro/slow-reverb/" hreflang="ro" lang="ro">RO</a></nav>
+          <a class="cta small" href="/">Open the app</a>
+        </div>
       </header>
       <main>
         <section class="hero">

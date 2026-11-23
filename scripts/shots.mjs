@@ -13,6 +13,11 @@ import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 
 const APP = 'http://localhost:5179/';
+// The app's language for the screenshots: en (default), ru or ro, e.g.
+//   UI_LANG=ru node scripts/shots.mjs   → public/img/*-ru.webp
+const LANG = process.env.UI_LANG || 'en';
+const SUF = LANG === 'en' ? '' : `-${LANG}`;
+const BADGE = { en: 'Slowed ×0.85', ru: 'Замедлено ×0.85', ro: 'Încetinit ×0.85' }[LANG];
 const DEBUG = 'http://127.0.0.1:9333';
 const OUT = new URL('../public/img/', import.meta.url).pathname;
 const TMP = join(OUT, '.tmp');
@@ -61,6 +66,7 @@ const webp = (png, name, width) => {
   writeFileSync(tmp, png);
   const args = ['-quiet', '-q', '82', '-m', '6'];
   if (width) args.push('-resize', String(width), '0');
+  name += SUF;
   execFileSync('cwebp', [...args, tmp, '-o', join(OUT, `${name}.webp`)]);
   // A half-size copy for normal screens (the pages pick it with srcset).
   const half = String(Math.round((width ?? 780) / 2));
@@ -114,7 +120,7 @@ await run(`
     i++;
   }
   localStorage.setItem('swiped', '1');
-  localStorage.setItem('lang', 'en');
+  localStorage.setItem('lang', '${LANG}');
   localStorage.setItem('artistPhotos', '{}');
   // Demo songs are fictional: no online lookups (they'd replace the demo lyrics).
   localStorage.setItem('findLyrics', 'off');
@@ -175,7 +181,7 @@ const stories = await run(`
   const cover = document.getElementById('cover');
   if (!cover.complete) await cover.decode();
   const lines = ${JSON.stringify(LYRICS)}.map((text, i) => ({ t: 30 + i * 4, text }));
-  const base = { title: 'Midnight Drive', artist: 'Nova Lane', cover, badge: 'Slowed ×0.85', ratio: 0.85,
+  const base = { title: 'Midnight Drive', artist: 'Nova Lane', cover, badge: '${BADGE}', ratio: 0.85,
     lyrics: { lines, at: () => 43 } };
   const out = {};
   for (const [name, extra] of [
@@ -215,6 +221,7 @@ const stories = await run(`
 `);
 for (const [name, url] of Object.entries(stories)) {
   if (name === 'og') {
+    if (LANG !== 'en') continue; // one link preview, in English
     const png = join(TMP, 'og.png');
     writeFileSync(png, Buffer.from(url.split(',')[1], 'base64'));
     // Link previews: JPEG keeps it small (Facebook, X, Telegram all take it).

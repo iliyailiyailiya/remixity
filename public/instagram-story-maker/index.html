@@ -7,10 +7,15 @@
     <title>Instagram Story Maker for Music: Your Song, Lyrics and Cover · THE REMIXITY</title>
     <meta name="description" content="Turn a song into an Instagram Story: a video with your remix playing, animated synced lyrics, a spinning vinyl or moving waves. 1080×1920, made on your phone." />
     <link rel="canonical" href="https://remixity.app/instagram-story-maker/" />
+    <link rel="alternate" hreflang="en" href="https://remixity.app/instagram-story-maker/" />
+    <link rel="alternate" hreflang="ru" href="https://remixity.app/ru/instagram-story-maker/" />
+    <link rel="alternate" hreflang="ro" href="https://remixity.app/ro/instagram-story-maker/" />
+    <link rel="alternate" hreflang="x-default" href="https://remixity.app/instagram-story-maker/" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="THE REMIXITY" />
+    <meta property="og:locale" content="en_US" />
     <meta property="og:url" content="https://remixity.app/instagram-story-maker/" />
     <meta property="og:title" content="Instagram Story Maker for Music: Your Song, Lyrics and Cover · THE REMIXITY" />
     <meta property="og:description" content="Turn a song into an Instagram Story: a video with your remix playing, animated synced lyrics, a spinning vinyl or moving waves. 1080×1920, made on your phone." />
@@ -58,6 +63,10 @@
       footer { border-top: 1px solid var(--line); margin-top: 30px; padding: 22px 0 40px; color: var(--dim); font-size: .92rem; }
       footer nav { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-bottom: 14px; }
       footer a { color: rgba(255,255,255,.85); } footer a[aria-current] { color: #fff; font-weight: 700; }
+      .langs { display: flex; gap: 4px; } .langs a { font-size: .8rem; font-weight: 650; text-decoration: none; padding: 6px 9px; border-radius: 999px; border: 1px solid var(--line); color: rgba(255,255,255,.8); }
+      .langs a[aria-current] { background: #fff; color: #120c1f; border-color: #fff; }
+      .top { display: flex; align-items: center; gap: 10px; }
+      @media (max-width: 560px) { header .cta.small { display: none; } } /* the big button is right below */
       @media (min-width: 820px) {
         .hero { grid-template-columns: 1.15fr .85fr; padding-top: 56px; }
         .feature { grid-template-columns: 1fr 1fr; gap: 56px; }
@@ -70,7 +79,10 @@
     <div class="wrap">
       <header>
         <a class="brand" href="/">THE <b>REMIXITY</b></a>
-        <a class="cta small" href="/">Open the app</a>
+        <div class="top">
+          <nav class="langs" aria-label="Language"><a href="/instagram-story-maker/" hreflang="en" lang="en" aria-current="true">EN</a><a href="/ru/instagram-story-maker/" hreflang="ru" lang="ru">RU</a><a href="/ro/instagram-story-maker/" hreflang="ro" lang="ro">RO</a></nav>
+          <a class="cta small" href="/">Open the app</a>
+        </div>
       </header>
       <main>
         <section class="hero">

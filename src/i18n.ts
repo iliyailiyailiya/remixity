@@ -868,6 +868,18 @@ export const enStrings: Dict = en;
 let current: Lang = detect();
 
 function detect(): Lang {
+  // A link can choose the language (remixity.app/?lang=ru); it's remembered.
+  if (typeof location !== 'undefined') {
+    const asked = new URLSearchParams(location.search).get('lang');
+    if (asked === 'en' || asked === 'ro' || asked === 'ru') {
+      try {
+        localStorage.setItem('lang', asked);
+      } catch {
+        /* storage blocked */
+      }
+      return asked;
+    }
+  }
   try {
     const saved = localStorage.getItem('lang');
     if (saved === 'en' || saved === 'ro' || saved === 'ru') return saved;
@@ -899,6 +911,10 @@ export function applyI18n() {
   });
   document.querySelectorAll<HTMLElement>('[data-i18n-aria]').forEach((el) => {
     el.setAttribute('aria-label', t(el.dataset.i18nAria as keyof Dict));
+  });
+  // Links to the feature pages go to the reader's language version.
+  document.querySelectorAll<HTMLAnchorElement>('a[data-feature]').forEach((a) => {
+    a.href = current === 'en' ? `/${a.dataset.feature}/` : `/${current}/${a.dataset.feature}/`;
   });
   document.querySelectorAll<HTMLElement>('[data-i18n-placeholder]').forEach((el) => {
     el.setAttribute('placeholder', t(el.dataset.i18nPlaceholder as keyof Dict));

@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#120c1f" />
+    <title>Онлайн аудиоредактор для песен: скорость, реверб, эквалайзер · THE REMIXITY</title>
+    <meta name="description" content="Редактируй песни онлайн: меняй скорость с тоном или без, добавляй реверб и эхо, настраивай 5-полосный эквалайзер, обрезай лишнее и сохраняй в MP3 или WAV." />
+    <link rel="canonical" href="https://remixity.app/ru/audio-editor/" />
+    <link rel="alternate" hreflang="en" href="https://remixity.app/audio-editor/" />
+    <link rel="alternate" hreflang="ru" href="https://remixity.app/ru/audio-editor/" />
+    <link rel="alternate" hreflang="ro" href="https://remixity.app/ro/audio-editor/" />
+    <link rel="alternate" hreflang="x-default" href="https://remixity.app/audio-editor/" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="THE REMIXITY" />
+    <meta property="og:locale" content="ru_RU" />
+    <meta property="og:url" content="https://remixity.app/ru/audio-editor/" />
+    <meta property="og:title" content="Онлайн аудиоредактор для песен: скорость, реверб, эквалайзер · THE REMIXITY" />
+    <meta property="og:description" content="Редактируй песни онлайн: меняй скорость с тоном или без, добавляй реверб и эхо, настраивай 5-полосный эквалайзер, обрезай лишнее и сохраняй в MP3 или WAV." />
+    <meta property="og:image" content="https://remixity.app/img/og.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="https://remixity.app/img/og.jpg" />
+    <script type="application/ld+json">{"@context": "https://schema.org", "@graph": [{"@type": "WebPage", "@id": "https://remixity.app/ru/audio-editor/", "url": "https://remixity.app/ru/audio-editor/", "name": "Онлайн аудиоредактор для песен: скорость, реверб, эквалайзер · THE REMIXITY", "description": "Редактируй песни онлайн: меняй скорость с тоном или без, добавляй реверб и эхо, настраивай 5-полосный эквалайзер, обрезай лишнее и сохраняй в MP3 или WAV.", "inLanguage": "ru", "isPartOf": {"@id": "https://remixity.app/#website"}, "about": {"@id": "https://remixity.app/#app"}, "primaryImageOfPage": "https://remixity.app/img/app-eq-ru.webp"}, {"@type": "BreadcrumbList", "itemListElement": [{"@type": "ListItem", "position": 1, "name": "THE REMIXITY", "item": "https://remixity.app/"}, {"@type": "ListItem", "position": 2, "name": "Аудиоредактор", "item": "https://remixity.app/ru/audio-editor/"}]}, {"@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": "Можно бесплатно наложить реверб на MP3 онлайн?", "acceptedAnswer": {"@type": "Answer", "text": "Да. Открой песню, перейди на страницу реверба и выбери уровень. Когда всё готово, сохрани в MP3."}}, {"@type": "Question", "name": "Какие файлы можно редактировать?", "acceptedAnswer": {"@type": "Answer", "text": "MP3, WAV, FLAC, M4A, AAC, OGG, Opus и AIFF, всё, что умеет открыть твой браузер (почти все умеют)."}}, {"@type": "Question", "name": "Качество не упадёт?", "acceptedAnswer": {"@type": "Answer", "text": "Звук обрабатывается с 32-битной точностью и сохраняется в MP3 320 кбит/с или в WAV без потерь."}}]}]}</script>
+    <style>
+      :root { color-scheme: dark; --dim: rgba(255,255,255,.66); --line: rgba(255,255,255,.12); }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0; color: #fff; -webkit-text-size-adjust: 100%;
+        font: 400 1.0625rem/1.65 system-ui, -apple-system, "Segoe UI", sans-serif;
+        background: radial-gradient(70% 45% at 15% 0%, #4a2a8a, transparent 70%), radial-gradient(60% 40% at 95% 8%, #2a3f9a, transparent 70%),
+          radial-gradient(60% 40% at 50% 100%, #5a1e46, transparent 70%), #120c1f;
+        background-attachment: fixed;
+      }
+      a { color: #fff; text-underline-offset: 3px; }
+      .wrap { max-width: 1080px; margin: 0 auto; padding: 0 20px; }
+      header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: max(16px, env(safe-area-inset-top)) 0 8px; }
+      .brand { color: #fff; text-decoration: none; font-size: .82rem; letter-spacing: .32em; font-weight: 300; white-space: nowrap; }
+      .brand b { font-weight: 800; }
+      .cta { display: inline-block; background: #fff; color: #120c1f; text-decoration: none; font-weight: 750; border-radius: 999px; padding: 12px 22px; }
+      .cta.small { padding: 9px 16px; font-size: .92rem; }
+      .hero { display: grid; gap: 28px; align-items: center; padding: 36px 0 24px; }
+      h1 { font-size: clamp(2.1rem, 6vw, 3.4rem); line-height: 1.05; letter-spacing: -.035em; margin: 0 0 16px; }
+      .lead { font-size: 1.15rem; color: rgba(255,255,255,.85); margin: 0 0 24px; max-width: 34em; }
+      .note { color: var(--dim); font-size: .92rem; margin: 12px 0 0; }
+      img { display: block; width: 100%; height: auto; border-radius: 26px; box-shadow: 0 24px 60px rgba(0,0,0,.45); }
+      .hero img, .shot img { max-width: 320px; margin: 0 auto; }
+      .story .hero img, .story .shot img { max-width: 300px; border-radius: 22px; }
+      figure { margin: 0; }
+      figcaption { color: var(--dim); font-size: .86rem; text-align: center; margin-top: 10px; }
+      h2 { font-size: clamp(1.4rem, 3.4vw, 1.9rem); letter-spacing: -.02em; line-height: 1.15; margin: 0 0 10px; }
+      p { margin: 0 0 12px; color: rgba(255,255,255,.84); }
+      .feature { display: grid; gap: 22px; align-items: center; padding: 34px 0; border-top: 1px solid var(--line); }
+      .card { background: rgba(255,255,255,.05); border: 1px solid var(--line); border-radius: 22px; padding: 22px; margin: 26px 0; }
+      ol { margin: 0; padding-left: 1.3em; } li { margin: 6px 0; }
+      details { border-top: 1px solid var(--line); padding: 12px 0; } details:first-of-type { border-top: 0; }
+      summary { cursor: pointer; font-weight: 650; } details p { margin: 8px 0 0; }
+      .related ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
+      .related a { font-weight: 700; display: block; } .related span { color: var(--dim); font-size: .95rem; }
+      footer { border-top: 1px solid var(--line); margin-top: 30px; padding: 22px 0 40px; color: var(--dim); font-size: .92rem; }
+      footer nav { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-bottom: 14px; }
+      footer a { color: rgba(255,255,255,.85); } footer a[aria-current] { color: #fff; font-weight: 700; }
+      .langs { display: flex; gap: 4px; } .langs a { font-size: .8rem; font-weight: 650; text-decoration: none; padding: 6px 9px; border-radius: 999px; border: 1px solid var(--line); color: rgba(255,255,255,.8); }
+      .langs a[aria-current] { background: #fff; color: #120c1f; border-color: #fff; }
+      .top { display: flex; align-items: center; gap: 10px; }
+      @media (max-width: 560px) { header .cta.small { display: none; } } /* the big button is right below */
+      @media (min-width: 820px) {
+        .hero { grid-template-columns: 1.15fr .85fr; padding-top: 56px; }
+        .feature { grid-template-columns: 1fr 1fr; gap: 56px; }
+        .feature.flip > div { order: 2; }
+        .feature.solo { grid-template-columns: 1fr; max-width: 46em; }
+      }
+    </style>
+  </head>
+  <body class="">
+    <div class="wrap">
+      <header>
+        <a class="brand" href="/?lang=ru">THE <b>REMIXITY</b></a>
+        <div class="top">
+          <nav class="langs" aria-label="Язык"><a href="/audio-editor/" hreflang="en" lang="en">EN</a><a href="/ru/audio-editor/" hreflang="ru" lang="ru" aria-current="true">RU</a><a href="/ro/audio-editor/" hreflang="ro" lang="ro">RO</a></nav>
+          <a class="cta small" href="/?lang=ru">Открыть приложение</a>
+        </div>
+      </header>
+      <main>
+        <section class="hero">
+          <div>
+            <h1>Онлайн-редактор музыки прямо в браузере</h1>
+            <p class="lead">THE REMIXITY сделан для песен, а не для подкастов. Меняй скорость и тон, накладывай реверб на MP3, подстраивай звук эквалайзером, вырезай лишнее и сохраняй чистый файл. Всё это происходит на твоём устройстве.</p>
+            <a class="cta" href="/?lang=ru">Открыть THE REMIXITY бесплатно</a>
+            <p class="note">Работает в браузере на iPhone, Android и компьютерах. Ничего не нужно устанавливать, ничего не загружается.</p>
+          </div>
+          <figure><img src="/img/app-eq-ru.webp" srcset="/img/app-eq-ru-sm.webp 390w, /img/app-eq-ru.webp 780w" sizes="(min-width: 820px) 320px, 78vw" width="780" height="1688" alt="5-полосный эквалайзер со спектром песни" fetchpriority="high" decoding="async" /><figcaption>5-полосный эквалайзер со спектром песни</figcaption></figure>
+        </section>
+        <section class="feature"><div><h2>Скорость и тон</h2><p>Ускоряй или замедляй от ×0.5 до ×1.5. По умолчанию тон меняется вместе со скоростью, как у пластинки; с «Сохранить тон» песня остаётся в своей тональности. Темп (BPM) определяется сам и следует за каждым изменением.</p></div><figure class="shot"><img src="/img/app-pedal-ru.webp" srcset="/img/app-pedal-ru-sm.webp 390w, /img/app-pedal-ru.webp 780w" sizes="(min-width: 820px) 320px, 78vw" width="780" height="1688" alt="Педаль с BPM и сохранением тона" loading="lazy" decoding="async" /><figcaption>Педаль с BPM и сохранением тона</figcaption></figure></section><section class="feature flip"><div><h2>Реверб и эхо</h2><p>Наложи реверб на MP3 или любую другую песню: выбери размер зала, насколько тёмно он звучит и сколько его слышно. Эхо можно привязать к темпу песни (четверти, восьмые, восьмые с точкой или шестнадцатые) или задать вручную.</p></div><figure class="shot"><img src="/img/app-space-ru.webp" srcset="/img/app-space-ru-sm.webp 390w, /img/app-space-ru.webp 780w" sizes="(min-width: 820px) 320px, 78vw" width="780" height="1688" alt="Реверб и эхо, эхо привязано к темпу" loading="lazy" decoding="async" /><figcaption>Реверб и эхо, эхо привязано к темпу</figcaption></figure></section><section class="feature solo"><div><h2>5-полосный эквалайзер, который видно</h2><p>Перетаскивай точки, чтобы поднять или убрать бас, нижнюю середину, середину, верха и «воздух», прямо поверх живой картины частот музыки.</p></div></section><section class="feature flip"><div><h2>Обрезать, вырезать, зациклить</h2><p>На странице «Нарезка» песня видна как волна. Выдели фрагмент, чтобы оставить только его или вырезать, ставь метки, зацикли кусок во время прослушивания и отменяй любые действия.</p></div><figure class="shot"><img src="/img/app-chop-ru.webp" srcset="/img/app-chop-ru-sm.webp 390w, /img/app-chop-ru.webp 780w" sizes="(min-width: 820px) 320px, 78vw" width="780" height="1688" alt="Редактор волны: обрезка, вырезание, цикл и отмена" loading="lazy" decoding="async" /><figcaption>Редактор волны: обрезка, вырезание, цикл и отмена</figcaption></figure></section><section class="feature"><div><h2>Чистый экспорт</h2><p>Сохраняй в MP3 320 кбит/с или WAV (16 или 24 бита) с лимитером, чтобы ничего не клиппило. Перед сохранением задай имя файла, название, исполнителя и обложку.</p></div><figure class="shot"><img src="/img/app-export-ru.webp" srcset="/img/app-export-ru-sm.webp 390w, /img/app-export-ru.webp 780w" sizes="(min-width: 820px) 320px, 78vw" width="780" height="1688" alt="Экспорт в MP3 или WAV с тегами" loading="lazy" decoding="async" /><figcaption>Экспорт в MP3 или WAV с тегами</figcaption></figure></section>
+        <section class="card">
+          <h2>Как это сделать</h2>
+          <ol><li>Выбери песню: ничего не загружается.</li><li>Листай страницы: скорость, реверб и эхо, эквалайзер, нарезка.</li><li>Сохрани в MP3 или WAV или поделись с телефона.</li></ol>
+          <p class="note" style="margin-top:16px"><a class="cta small" href="/?lang=ru">Попробовать</a></p>
+        </section>
+        <section class="card">
+          <h2>Вопросы</h2>
+          <details><summary>Можно бесплатно наложить реверб на MP3 онлайн?</summary><p>Да. Открой песню, перейди на страницу реверба и выбери уровень. Когда всё готово, сохрани в MP3.</p></details><details><summary>Какие файлы можно редактировать?</summary><p>MP3, WAV, FLAC, M4A, AAC, OGG, Opus и AIFF, всё, что умеет открыть твой браузер (почти все умеют).</p></details><details><summary>Качество не упадёт?</summary><p>Звук обрабатывается с 32-битной точностью и сохраняется в MP3 320 кбит/с или в WAV без потерь.</p></details>
+        </section>
+        <section class="card related">
+          <h2>Что ещё умеет THE REMIXITY</h2>
+          <ul><li><a href="/ru/slow-reverb/">Slowed + reverb онлайн: замедли любую песню</a><span>Сделай slowed + reverb онлайн бесплатно: сдвинь педаль вниз, песня замедлится, а реверб добавится сам.</span></li><li><a href="/ru/music-library/">Плеер с синхронным текстом для твоих файлов</a><span>Держи свою музыку в медиатеке на устройстве: исполнители, плейлисты и настоящий плеер с текстом, который идёт вместе с песней.</span></li><li><a href="/ru/music-card-maker/">Музыкальные карточки для любимых песен</a><span>Сделай музыкальную карточку для любой песни: обложка, название, исполнитель и скорость ремикса в красивом дизайне.</span></li></ul>
+        </section>
+      </main>
+      <footer>
+        <nav aria-label="Возможности"><a href="/?lang=ru">THE REMIXITY</a><a href="/ru/slow-reverb/">Slowed + reverb</a><a href="/ru/audio-editor/" aria-current="page">Аудиоредактор</a><a href="/ru/music-library/">Медиатека и тексты</a><a href="/ru/instagram-story-maker/">Сторис для Instagram</a><a href="/ru/music-card-maker/">Музыкальные карточки</a></nav>
+        <p><a href="/privacy?lang=ru">Конфиденциальность</a> · <a href="/terms?lang=ru">Условия</a> · Сделал <a href="https://instagram.com/iliyabarcari" target="_blank" rel="noopener">@iliyabarcari</a></p>
+      </footer>
+    </div>
+  </body>
+</html>
