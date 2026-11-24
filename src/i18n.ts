@@ -225,7 +225,7 @@ const en = {
   undo: 'Undo',
   editHint: 'Drag on the waveform to select a part. Trim keeps it, Cut removes it.',
   clearSel: 'Clear selection',
-  homeTagline: "Free online slowed + reverb and nightcore editor, a music player with synced lyrics, and a story maker for your songs. Everything runs in your browser.",
+  homeTagline: "Free slowed and reverb generator: slowed, sped up, nightcore and daycore. Plus a music player with synced lyrics and a story maker for your songs, all in your browser.",
   homeFeaturesTitle: "What you can do",
   featSlow: "Slowed + reverb online",
   featEditor: "Online audio editor",

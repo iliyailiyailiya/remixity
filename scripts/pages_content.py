@@ -9,21 +9,22 @@ EN = [
   {
     "slug": "slow-reverb",
     "nav": "Slowed + reverb",
-    "title": "Slowed + Reverb Online: Free, No Download · THE REMIXITY",
-    "desc": "Make slowed + reverb songs online for free. Slide one pedal to slow a song down, the reverb follows, then export MP3 320 or WAV. Nothing is uploaded.",
-    "h1": "Make slowed + reverb songs online",
-    "lead": "Pick a song from your phone or computer, slide the pedal down, and THE REMIXITY slows it and adds the reverb for you. No app to install, no account, and your music never leaves your device.",
+    "title": "Slowed and Reverb Generator: Free Online, No Download · THE REMIXITY",
+    "desc": "Free slowed and reverb generator: slow down any song, add reverb, make daycore, sped up or nightcore edits, then download MP3 320 or WAV. In your browser, nothing uploaded.",
+    "h1": "Slowed and reverb generator, free and online",
+    "lead": "Pick a song from your phone or computer, slide the pedal down, and THE REMIXITY slows it and adds the reverb for you: a slowed + reverb version in seconds. Slide it up for sped up and nightcore. No app to install, no account, and your music never leaves your device.",
     "hero": ("app-pedal", "The pedal in THE REMIXITY: the song slowed to ×0.85 at 119 BPM"),
     "sections": [
       ("One pedal does it", [
         "Slide the pedal down to slow the song, up to speed it up, from half speed (×0.5) to one and a half (×1.5). The BPM updates as you go, so you can aim for a tempo rather than a number.",
         "The reverb follows the pedal: the slower the song, the bigger and darker the room it plays in. That's the classic slowed + reverb sound, without touching a single slider. Want to set it yourself? Open the reverb page and change the size, tone and amount.",
       ], ("app-space", "Reverb and echo settings, with the echo synced to the beat")),
+      ("Slowed, daycore, sped up or nightcore", [
+        "It's one pedal for all four. Slowed + reverb is the song slower and lower with a big reverb. Daycore is the slowed, lower version on its own: take the reverb down on the reverb page. Sped up is the song a little faster and higher, and nightcore is the same pushed further, past ×1.25.",
+        "The speed is shown as ×0.85, ×1.20 and so on, with the tempo in BPM next to it, so you can make the same edit again or match a tempo exactly.",
+      ], None),
       ("Slow down without lowering the pitch", [
         "Classic slowed songs drop in pitch, like a record spinning slower. If you want the song slower but in the same key, turn on Keep pitch: the speed changes, the voice stays where it was.",
-      ], None),
-      ("Nightcore works the same way", [
-        "Push the pedal up past ×1.25 and you get nightcore: faster, brighter and higher. The same pedal, the same export.",
       ], None),
       ("Export the result", [
         "Save your remix as MP3 320 kbps, or as WAV in 16 or 24 bit. Rename the file and set the title, artist and cover that music players will show. You can also share it straight from your phone.",
@@ -39,6 +40,8 @@ EN = [
       ("Is my song uploaded anywhere?", "No. The song is decoded, processed and exported on your device. Only if you choose to share it does it go anywhere."),
       ("Does it work on iPhone?", "Yes, in Safari. You can also add it to your home screen and use it like an app, with the lock screen controls."),
       ("How do I slow down a song without downloading software?", "Open remixity.app in your browser, choose the song and slide the pedal. Everything happens in the page."),
+      ("Can I make a sped up or nightcore version?", "Yes. Slide the pedal up instead of down: a little for sped up, past ×1.25 for nightcore."),
+      ("What's the difference between slowed + reverb and daycore?", "Both are the song slowed down and lower. Slowed + reverb adds a big reverb; daycore usually keeps it dry. THE REMIXITY adds the reverb automatically, and you can turn it down for daycore."),
     ],
     "related": ["audio-editor", "instagram-story-maker", "music-library"],
   },
@@ -191,21 +194,22 @@ RU = [
   {
     "slug": "slow-reverb",
     "nav": "Slowed + reverb",
-    "title": "Slowed + Reverb онлайн: замедлить песню бесплатно · THE REMIXITY",
-    "desc": "Сделай slowed + reverb онлайн бесплатно: сдвинь педаль вниз, песня замедлится, а реверб добавится сам. Экспорт в MP3 320 или WAV. Ничего не загружается.",
-    "h1": "Slowed + reverb онлайн: замедли любую песню",
-    "lead": "Выбери песню на телефоне или компьютере, сдвинь педаль вниз, и THE REMIXITY замедлит её и сам добавит реверб. Без установки и регистрации, а твоя музыка не покидает устройство.",
+    "title": "Slowed and Reverb генератор онлайн: замедлить песню бесплатно · THE REMIXITY",
+    "desc": "Бесплатный генератор slowed and reverb: замедли любую песню, добавь реверб, сделай daycore, sped up или nightcore и скачай MP3 320 или WAV. В браузере, без загрузки.",
+    "h1": "Генератор slowed and reverb онлайн, бесплатно",
+    "lead": "Выбери песню на телефоне или компьютере, сдвинь педаль вниз, и THE REMIXITY замедлит её и сам добавит реверб: замедленная версия с реверберацией за секунды. Сдвинь вверх, и получится sped up или nightcore. Без установки и регистрации, а твоя музыка не покидает устройство.",
     "hero": ("app-pedal", "Педаль в THE REMIXITY: песня замедлена до ×0.85, 119 BPM"),
     "sections": [
       ("Всё делает одна педаль", [
         "Сдвинь педаль вниз, чтобы замедлить песню, или вверх, чтобы ускорить: от половины скорости (×0.5) до полуторной (×1.5). BPM меняется вместе с ней, так что можно целиться в нужный темп, а не в цифру.",
         "Реверб идёт за педалью: чем медленнее песня, тем больше и темнее зал, в котором она звучит. Это и есть классический slowed + reverb, без единого лишнего ползунка. Хочешь настроить сам? Открой страницу реверба и поменяй размер, тон и громкость эффекта.",
       ], ("app-space", "Настройки реверба и эха, эхо в такт песне")),
+      ("Slowed, daycore, sped up или nightcore", [
+        "Всё это делает одна педаль. Slowed + reverb — песня медленнее и ниже с мощным ревербом. Daycore — то же замедление, но без реверба: убери его на странице реверба. Sped up — песня чуть быстрее и выше, а nightcore — то же самое, только сильнее, дальше ×1.25.",
+        "Скорость показывается как ×0.85, ×1.20 и так далее, рядом с темпом в BPM, так что можно повторить ту же обработку или попасть точно в нужный темп.",
+      ], None),
       ("Замедлить песню, не меняя тональность", [
         "Обычные slowed-версии звучат ниже, как пластинка на меньших оборотах. Если нужна песня медленнее, но в той же тональности, включи «Сохранить тон»: скорость меняется, а голос остаётся на месте.",
-      ], None),
-      ("Nightcore делается так же", [
-        "Сдвинь педаль вверх дальше ×1.25, и получится nightcore: быстрее, ярче и выше. Та же педаль и тот же экспорт.",
       ], None),
       ("Сохрани результат", [
         "Сохрани ремикс в MP3 320 кбит/с или в WAV на 16 или 24 бита. Переименуй файл и укажи название, исполнителя и обложку, которые покажут плееры. С телефона можно сразу поделиться.",
@@ -221,6 +225,8 @@ RU = [
       ("Моя песня куда-то загружается?", "Нет. Песня декодируется, обрабатывается и сохраняется на твоём устройстве. Она уходит куда-то, только если ты сам решишь ею поделиться."),
       ("Работает на iPhone?", "Да, в Safari. Сайт можно добавить на экран «Домой» и пользоваться им как приложением, с управлением с экрана блокировки."),
       ("Как замедлить песню без программ?", "Открой remixity.app в браузере, выбери песню и сдвинь педаль. Всё происходит прямо на странице."),
+      ("Можно сделать ускоренную версию или nightcore?", "Да. Сдвинь педаль не вниз, а вверх: немного — для sped up, дальше ×1.25 — для nightcore."),
+      ("Чем slowed + reverb отличается от daycore?", "Оба — это замедленная и более низкая песня. В slowed + reverb добавляется большой реверб, а daycore обычно без него. THE REMIXITY добавляет реверб сам, а для daycore его можно убрать."),
     ],
     "related": ["audio-editor", "instagram-story-maker", "music-library"],
   },
@@ -373,21 +379,22 @@ RO = [
   {
     "slug": "slow-reverb",
     "nav": "Slowed + reverb",
-    "title": "Slowed + Reverb online: încetinește o melodie gratuit · THE REMIXITY",
-    "desc": "Fă slowed + reverb online gratuit: trage pedala în jos, melodia se încetinește, iar reverbul vine singur. Exportă MP3 320 sau WAV. Nu se încarcă nimic.",
-    "h1": "Fă melodii slowed + reverb online",
-    "lead": "Alege o melodie de pe telefon sau calculator, trage pedala în jos, iar THE REMIXITY o încetinește și adaugă reverbul pentru tine. Fără instalare, fără cont, iar muzica ta nu părăsește dispozitivul.",
+    "title": "Generator Slowed and Reverb online, gratuit · THE REMIXITY",
+    "desc": "Generator slowed and reverb gratuit: încetinește orice melodie, adaugă reverb, fă daycore, sped up sau nightcore, apoi descarcă MP3 320 sau WAV. În browser, fără încărcare.",
+    "h1": "Generator slowed and reverb, gratuit și online",
+    "lead": "Alege o melodie de pe telefon sau calculator, trage pedala în jos, iar THE REMIXITY o încetinește și adaugă reverbul pentru tine: o versiune slowed + reverb în câteva secunde. Trage-o în sus pentru sped up și nightcore. Fără instalare, fără cont, iar muzica ta nu părăsește dispozitivul.",
     "hero": ("app-pedal", "Pedala din THE REMIXITY: melodia încetinită la ×0.85, 119 BPM"),
     "sections": [
       ("O singură pedală face totul", [
         "Trage pedala în jos ca să încetinești melodia și în sus ca s-o accelerezi, de la jumătate de viteză (×0.5) până la una și jumătate (×1.5). BPM-ul se schimbă odată cu ea, așa că poți ținti un tempo, nu un număr.",
         "Reverbul urmează pedala: cu cât melodia e mai lentă, cu atât sala în care sună e mai mare și mai întunecată. Ăsta e sunetul clasic slowed + reverb, fără să atingi vreun slider. Vrei să-l reglezi singur? Deschide pagina de reverb și schimbă mărimea, tonul și cantitatea.",
       ], ("app-space", "Setări de reverb și ecou, cu ecoul pe ritm")),
+      ("Slowed, daycore, sped up sau nightcore", [
+        "O singură pedală pentru toate patru. Slowed + reverb e melodia mai lentă și mai joasă, cu mult reverb. Daycore e varianta încetinită fără reverb: scade-l din pagina de reverb. Sped up e melodia puțin mai rapidă și mai sus, iar nightcore e același lucru dus mai departe, peste ×1.25.",
+        "Viteza apare ca ×0.85, ×1.20 și așa mai departe, cu tempoul în BPM alături, ca să poți repeta aceeași editare sau nimeri exact un tempo.",
+      ], None),
       ("Încetinește fără să cobori tonalitatea", [
         "Melodiile slowed clasice coboară tonul, ca un disc care se învârte mai încet. Dacă vrei melodia mai lentă, dar în aceeași tonalitate, activează «Păstrează tonul»: viteza se schimbă, vocea rămâne unde era.",
-      ], None),
-      ("Nightcore merge la fel", [
-        "Împinge pedala în sus peste ×1.25 și obții nightcore: mai rapid, mai luminos și mai sus. Aceeași pedală, același export.",
       ], None),
       ("Exportă rezultatul", [
         "Salvează remixul ca MP3 320 kbps sau WAV pe 16 ori 24 de biți. Redenumește fișierul și setează titlul, artistul și coperta pe care le vor afișa playerele. De pe telefon îl poți distribui direct.",
@@ -403,6 +410,8 @@ RO = [
       ("Melodia mea e încărcată undeva?", "Nu. Melodia e decodată, procesată și exportată pe dispozitivul tău. Pleacă undeva doar dacă alegi s-o distribui."),
       ("Merge pe iPhone?", "Da, în Safari. O poți adăuga și pe ecranul principal și s-o folosești ca pe o aplicație, cu controalele de pe ecranul de blocare."),
       ("Cum încetinesc o melodie fără să descarc un program?", "Deschide remixity.app în browser, alege melodia și trage pedala. Totul se întâmplă în pagină."),
+      ("Pot face o versiune sped up sau nightcore?", "Da. Trage pedala în sus în loc de jos: puțin pentru sped up, peste ×1.25 pentru nightcore."),
+      ("Care e diferența dintre slowed + reverb și daycore?", "Ambele sunt melodia încetinită și mai joasă. Slowed + reverb adaugă mult reverb; daycore de obicei rămâne fără. THE REMIXITY adaugă reverbul singur, iar pentru daycore îl poți scădea."),
     ],
     "related": ["audio-editor", "instagram-story-maker", "music-library"],
   },
