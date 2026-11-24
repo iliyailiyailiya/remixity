@@ -90,6 +90,8 @@ def page(lang, p):
     <meta name="description" content="{e(p["desc"])}" />
     <link rel="canonical" href="{url}" />{alternates}
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon-48.png" type="image/png" sizes="48x48" />
+    <link rel="icon" href="/icon-192.png" type="image/png" sizes="192x192" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="THE REMIXITY" />
