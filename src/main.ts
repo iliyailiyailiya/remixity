@@ -24,6 +24,8 @@ import { initFix } from './library/fix';
 import { Backdrop } from './ui/backdrop';
 import { defaultPalette, generatedCover, paletteFrom } from './ui/palette';
 import { Pedal, MAX_RATIO, MIN_RATIO } from './ui/pedal';
+import { AUTO_PARAMS, addLane, emptyAutomation, moveLanesWithSection, moveSection, paramsAt, removeLane, split, type AutoParam } from './automation/model';
+import { Timeline } from './automation/timeline';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -33,10 +35,23 @@ const params: FxParams = { ...DEFAULT_PARAMS };
 let origBpm: number | null = null;
 let detectingBpm = false;
 let autoSpace = true; // reverb follows the pedal
+// Speed lock: the pedal keeps its speed when the song changes (remembered).
+let speedLocked = (() => {
+  try {
+    return localStorage.getItem('speedLock') === '1';
+  } catch {
+    return false;
+  }
+})();
 let original: AudioBuffer | null = null; // as decoded, never modified
 let buffer: AudioBuffer | null = null; // after trims and cuts; what plays and exports
 let edit: EditState = initialEdit(0);
 let history: EditState[] = [];
+// Automation lanes for the timeline (per song, not saved yet: see docs/automation-plan.md).
+let automation = emptyAutomation();
+let autoDirty = false; // re-apply the lanes on the next frame
+// Lanes as they were before a section move, by the edit Undo goes back to.
+const laneSnaps = new WeakMap<EditState, typeof automation.lanes>();
 // Quick start: while only the start of the song is decoded, the whole one is
 // on its way. Export, stories and chop wait for it (a moment).
 let fullReady: Promise<void> | null = null;
@@ -162,7 +177,8 @@ async function load(file: File, known?: Track, ready?: Promise<Prepared>) {
     // A new song starts fresh: normal speed, its own BPM, no effects.
     player.pause();
     // (Keep pitch is a way of listening, not a song setting: it carries over.)
-    Object.assign(params, DEFAULT_PARAMS, { keepPitch: params.keepPitch });
+    // Locked speed carries over to the next song too.
+    Object.assign(params, DEFAULT_PARAMS, { keepPitch: params.keepPitch }, speedLocked ? { ratio: params.ratio } : {});
     autoSpace = true;
     origBpm = null;
     detectingBpm = true;
@@ -197,6 +213,7 @@ async function load(file: File, known?: Track, ready?: Promise<Prepared>) {
     original = buffer = decoded;
     edit = initialEdit(decoded.duration);
     history = [];
+    automation = emptyAutomation();
     sel = null;
     trackName = tidyName(name) || name;
     player.setLoop(null);
@@ -217,6 +234,7 @@ async function load(file: File, known?: Track, ready?: Promise<Prepared>) {
           original = buffer = full;
           edit = initialEdit(full.duration);
           history = [];
+          automation = emptyAutomation();
           sel = null;
           wave.setBuffer(full);
           estDuration = null;
@@ -784,6 +802,7 @@ function tick() {
   if (!player || document.hidden) return;
   try {
     renderTransport();
+    tickAutomation(performance.now());
   } catch (err) {
     console.error(err);
   }
@@ -1289,6 +1308,11 @@ function trimToSelection() {
 function undo() {
   const prev = history.pop();
   if (!prev || !original || !player) return;
+  const snap = laneSnaps.get(prev);
+  if (snap) {
+    automation.lanes = snap;
+    autoDirty = true;
+  }
   const rebuild = prev.segments !== edit.segments;
   edit = prev;
   if (rebuild) {
@@ -1449,6 +1473,17 @@ $('keepPitchBtn').addEventListener('click', () => {
   apply();
 });
 
+// Lock: the next songs start at this same speed.
+$('lockSpeedBtn').addEventListener('click', () => {
+  speedLocked = !speedLocked;
+  try {
+    localStorage.setItem('speedLock', speedLocked ? '1' : '0');
+  } catch {
+    /* storage blocked */
+  }
+  render();
+});
+
 // ---------- sound & effects (menu) ----------
 
 type SliderKey = Exclude<keyof FxParams, 'ratio' | 'keepPitch'>;
@@ -1510,6 +1545,13 @@ autoBox.addEventListener('change', () => {
 $('eqReset').addEventListener('click', () => {
   const { eqLow, eqMid, eqHigh, eqAir, lowCut, highCut } = DEFAULT_PARAMS;
   Object.assign(params, { eqLow, eqMid, eqHigh, eqAir, lowCut, highCut });
+  apply();
+});
+
+// Reverb preset: the smallest room, half wet.
+$('smallRoom').addEventListener('click', () => {
+  autoSpace = false;
+  Object.assign(params, { reverbMix: 0.5, decay: 0.6 });
   apply();
 });
 
@@ -1608,7 +1650,102 @@ renderUserPresets();
 function apply() {
   if (autoSpace) Object.assign(params, spaceFor(params.ratio));
   player?.setParams({ ...params });
+  autoDirty = true; // lanes win over the plain settings
   render();
+}
+
+// ---------- timeline & automation (phase 1, behind ?lab=1) ----------
+
+const lab = (() => {
+  try {
+    const q = new URLSearchParams(location.search).get('lab');
+    if (q !== null) localStorage.setItem('lab', q === '0' ? '0' : '1');
+    return localStorage.getItem('lab') === '1';
+  } catch {
+    return false;
+  }
+})();
+const timelineEl = $('timeline');
+const tlAdd = $<HTMLSelectElement>('tlAddLane');
+$('openTimeline').hidden = !lab;
+
+const laneName = (param: AutoParam) => (param === 'ratio' ? t('speed') : t(AUTO_PARAMS[param].label as Parameters<typeof t>[0]));
+
+function fillLaneMenu() {
+  const used = new Set(automation.lanes.map((l) => l.param));
+  const full = automation.lanes.length >= 5;
+  tlAdd.replaceChildren(new Option(full ? t('lanesFull') : t('addLane'), ''));
+  if (full) return;
+  for (const param of Object.keys(AUTO_PARAMS) as AutoParam[]) {
+    if (used.has(param)) continue;
+    const live = AUTO_PARAMS[param].live;
+    tlAdd.append(new Option(live ? laneName(param) : `${laneName(param)} (${t('notLiveYet')})`, param));
+  }
+}
+
+const timeline = new Timeline($<HTMLCanvasElement>('tlCanvas'), {
+  buffer: () => buffer,
+  edit: () => edit,
+  get automation() {
+    return automation;
+  },
+  position: () => player?.position ?? 0,
+  ratio: () => params.ratio,
+  seek: (s) => {
+    player?.seek(s);
+    render();
+  },
+  moveSection: (from, to) => {
+    // Undo puts the lanes back too (they moved with the section).
+    laneSnaps.set(edit, structuredClone(automation.lanes));
+    moveLanesWithSection(automation, edit, from, to);
+    commit(moveSection(edit, from, to));
+  },
+  changed: () => (autoDirty = true),
+  removeLane: (id) => {
+    removeLane(automation, id);
+    fillLaneMenu();
+    apply(); // back to the plain settings for that parameter
+  },
+  label: (lane) => laneName(lane.param),
+});
+
+$('openTimeline').addEventListener('click', () => {
+  if (!buffer) return;
+  closeSheets();
+  fillLaneMenu();
+  $('tlInfo').textContent = t('timelineHint');
+  timelineEl.hidden = false;
+  document.body.classList.add('timeline-open');
+  timeline.open();
+});
+document.querySelectorAll('[data-tl-close]').forEach((b) =>
+  b.addEventListener('click', () => {
+    timeline.close();
+    timelineEl.hidden = true;
+    document.body.classList.remove('timeline-open');
+  }),
+);
+tlAdd.addEventListener('change', () => {
+  const param = tlAdd.value as AutoParam;
+  if (param && buffer) addLane(automation, param, params[param], buffer.duration);
+  fillLaneMenu();
+  autoDirty = true;
+});
+$('tlSplit').addEventListener('click', () => {
+  if (player) commit(split(edit, player.position));
+});
+$('tlUndo').addEventListener('click', () => undo());
+
+// Live automation: the lanes that can play live yet are applied ~30×/s on top
+// of the settings (the chain glides between values, so no zipper noise).
+let autoAt = 0;
+function tickAutomation(now: number) {
+  if (!player || !automation.lanes.length) return;
+  if (!autoDirty && (!player.playing || now - autoAt < 33)) return;
+  autoAt = now;
+  autoDirty = false;
+  player.setParams(paramsAt(params, automation, player.position));
 }
 
 // ---------- export ----------
@@ -1771,6 +1908,7 @@ function renderTransport() {
     shown.playing = player.playing;
     playerView.classList.toggle('playing', player.playing);
     lyricsFull.classList.toggle('playing', player.playing);
+    $('timeline').classList.toggle('playing', player.playing);
     playToggles.forEach((b) => b.setAttribute('aria-label', t(player!.playing ? 'pause' : 'play')));
   }
   if ('mediaSession' in navigator) {
@@ -1804,6 +1942,7 @@ function render() {
   bpmBig.classList.toggle('detecting', detectingBpm && !origBpm);
   $('gaugeSub').textContent = `×${r.toFixed(2)} · ${pitchText(r)}`;
   $('keepPitchBtn').setAttribute('aria-pressed', String(params.keepPitch));
+  $('lockSpeedBtn').setAttribute('aria-pressed', String(speedLocked));
   const dash = $('dash');
   dash.classList.toggle('up', r > 1);
   dash.classList.toggle('down', r < 1);
