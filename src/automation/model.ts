@@ -56,6 +56,27 @@ export const MAX_LANES = 5;
 export interface AutoPoint {
   t: number; // timeline seconds
   v: number; // the parameter's own value
+  /**
+   * Bend of the segment from this point to the next: 0 = straight; positive
+   * = slow start then fast (bows toward this point's value), negative = the
+   * other way. Range ±CURVE_MAX.
+   */
+  c?: number;
+}
+
+export const CURVE_MAX = 12;
+
+/** 0..1 → 0..1 along a bent segment (exponential curve; `c` 0 = straight). */
+export function bend(k: number, c = 0): number {
+  if (Math.abs(c) < 1e-3) return k;
+  return (Math.exp(c * k) - 1) / (Math.exp(c) - 1);
+}
+
+/** The bend whose middle (k = 0.5) lands at fraction m of the way: the handle you drag. */
+export function bendFor(m: number): number {
+  const mm = Math.min(0.98, Math.max(0.02, m));
+  const c = 2 * Math.log(1 / mm - 1);
+  return Math.max(-CURVE_MAX, Math.min(CURVE_MAX, c));
 }
 
 export interface Lane {
@@ -116,7 +137,7 @@ export function valueAt(lane: Lane, t: number): number {
   }
   const a = pts[lo];
   const b = pts[hi];
-  const k = b.t > a.t ? (t - a.t) / (b.t - a.t) : 0;
+  const k = bend(b.t > a.t ? (t - a.t) / (b.t - a.t) : 0, a.c);
   return denorm(lane.param, norm(lane.param, a.v) + k * (norm(lane.param, b.v) - norm(lane.param, a.v)));
 }
 
@@ -145,11 +166,62 @@ export function movePoint(lane: Lane, i: number, t: number, v: number) {
   const pts = lane.points;
   const lo = i > 0 ? pts[i - 1].t : 0;
   const hi = i < pts.length - 1 ? pts[i + 1].t : Infinity;
-  pts[i] = { t: clamp(t, lo, hi), v };
+  pts[i] = { ...pts[i], t: clamp(t, lo, hi), v };
 }
 
 export function removePoint(lane: Lane, i: number) {
   if (lane.points.length > 1) lane.points.splice(i, 1);
+}
+
+// ---------- shapes ----------
+
+export type ShapeKind = 'line' | 'sine' | 'triangle' | 'saw' | 'square';
+
+/**
+ * Points for a shape from t0 to t1, between normalised levels n0 (where it
+ * starts) and n1. Repeating shapes repeat every `period` seconds; a line goes
+ * once from n0 to n1. Sine is drawn as curved halves (two points a cycle).
+ */
+export function shapePoints(kind: ShapeKind, t0: number, t1: number, n0: number, n1: number, period: number): { t: number; n: number; c?: number }[] {
+  const out: { t: number; n: number; c?: number }[] = [];
+  if (t1 - t0 < 0.01) return out;
+  if (kind === 'line') return [{ t: t0, n: n0 }, { t: t1, n: n1 }];
+  const p = Math.max(0.04, period, (t1 - t0) / 400); // at most 400 cycles
+  const eps = 0.001; // a jump is two points 1 ms apart
+  for (let a = t0; a < t1 - 1e-6; a += p) {
+    const b = Math.min(t1, a + p);
+    const m = Math.min(b, a + p / 2);
+    if (kind === 'triangle') out.push({ t: a, n: n0 }, { t: m, n: n1 });
+    else if (kind === 'sine') {
+      // Each half: an S-curve made of two bent quarters.
+      const q1 = a + p / 4;
+      const q3 = a + (3 * p) / 4;
+      const mid = (n0 + n1) / 2;
+      out.push({ t: a, n: n0, c: 1.8 }, { t: Math.min(b, q1), n: mid, c: -1.8 });
+      if (m < b) out.push({ t: m, n: n1, c: 1.8 }, { t: Math.min(b, q3), n: mid, c: -1.8 });
+    } else if (kind === 'saw') out.push({ t: a, n: n0 }, { t: b - eps, n: n1 });
+    else out.push({ t: a, n: n1 }, { t: m - eps, n: n1 }, { t: m, n: n0 }, { t: b - eps, n: n0 });
+  }
+  // End where the shape is at t1.
+  const last = out[out.length - 1];
+  if (last && last.t < t1 - eps) out.push({ t: t1, n: kind === 'saw' || kind === 'square' ? last.n : n0 });
+  return out.filter((q) => q.t <= t1 + 1e-9);
+}
+
+/** Replace the lane between t0 and t1 with a shape; the rest of the lane keeps its values. */
+export function applyShape(lane: Lane, pts: { t: number; n: number; c?: number }[]) {
+  if (pts.length < 2) return;
+  const t0 = pts[0].t;
+  const t1 = pts[pts.length - 1].t;
+  const before = lane.points.filter((p) => p.t < t0);
+  const after = lane.points.filter((p) => p.t > t1);
+  const out: AutoPoint[] = [...before];
+  // Keep the curve outside the shape as it was (a point just before / after it).
+  if (before.length) out.push({ t: Math.max(0, t0 - 0.001), v: valueAt(lane, t0) });
+  for (const q of pts) out.push({ t: q.t, v: denorm(lane.param, q.n), ...(q.c ? { c: q.c } : {}) });
+  if (after.length) out.push({ t: t1 + 0.001, v: valueAt(lane, t1) });
+  out.push(...after);
+  lane.points = out.sort((x, y) => x.t - y.t);
 }
 
 // ---------- sections (the edit's segments, in timeline order) ----------

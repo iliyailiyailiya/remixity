@@ -3050,6 +3050,11 @@ body.lyrics-open .player {
   font-size: 0.78rem;
   font-weight: 650;
 }
+.tl-toggle[aria-pressed='true'] {
+  background: #fff;
+  border-color: #fff;
+  color: #120c1f;
+}
 .tl-zoom {
   width: 34px;
   padding: 6px 0;

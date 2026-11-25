@@ -100,6 +100,16 @@ echo mix / time / feedback, bass, EQ low / mid / high / air, low cut, high cut.
   Waveform drawn from RMS per 5 ms, so kicks show even on loud masters.
 - A tap on an empty lane spot adds the point on release, so a pinch that
   starts on a lane doesn't leave a stray point.
+- **Curves**: each point has an optional bend `c` for the segment after it
+  (exponential, `bend()` in the model; 0 = straight). A hollow dot in the
+  middle of each sloped segment drags it; double-tap straightens it. Live
+  playback and exports follow the curve (same `valueAt`).
+- **Shapes** (the ✎ menu): line, sine, triangle, saw, square. Drag across a
+  lane: the drag sets the range, its start/end heights the two levels;
+  repeating shapes repeat once per grid step (one beat with the grid off).
+  The lane outside the range keeps its values. Square/saw jumps are two points
+  1 ms apart; sine is curved quarter segments.
+- **Snap** toggle (remembered): the grid can stay visible with snapping off.
 - Still to come: gaps/overlaps (sections with their own position),
   duplicate a section, keyboard shortcuts on desktop.
 

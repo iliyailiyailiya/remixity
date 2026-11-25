@@ -3,7 +3,10 @@
 //
 //   ruler     tap / drag to seek
 //   track     drag a section left or right to move it (Split makes sections)
-//   lanes     tap to add a point, drag to move it, double-tap to delete it
+//   lanes     tap to add a point, drag to move it, double-tap to delete it;
+//             drag the dot in the middle of a segment to curve it (double-tap
+//             it to straighten); with a shape picked, drag across a lane to
+//             draw it (start/end height = the two levels)
 //   zoom      pinch, ctrl/⌘ + wheel (trackpad pinch), or the − / + buttons
 //   scroll    two fingers, or the wheel / trackpad; follows the playhead
 //
@@ -12,6 +15,11 @@
 import type { EditState } from '../engine/edit';
 import {
   AUTO_PARAMS,
+  applyShape,
+  bend,
+  bendFor,
+  shapePoints,
+  type ShapeKind,
   addPoint,
   movePoint,
   norm,
@@ -54,6 +62,8 @@ type Drag =
   | { kind: 'section'; index: number; x0: number; dx: number; moved: boolean }
   | { kind: 'pending'; lane: Lane; x0: number; y0: number } // a tap that may become a new point
   | { kind: 'point'; lane: Lane; index: number }
+  | { kind: 'curve'; lane: Lane; index: number }
+  | { kind: 'shape'; lane: Lane; t0: number; n0: number; t1: number; n1: number }
   | { kind: 'pinch' };
 
 export class Timeline {
@@ -67,6 +77,10 @@ export class Timeline {
   private h = 0;
   /** Grid size in beats (4 = a bar, 1 = a quarter, 2/3 = quarter triplets); 0 = off. */
   grid = 1;
+  /** Snap to the grid (it can stay visible with snapping off). */
+  snapOn = true;
+  /** What dragging on a lane does: move/add points, or draw a shape. */
+  shape: ShapeKind | 'points' = 'points';
   // The visible window, in timeline seconds. span 0 = the whole song.
   private viewStart = 0;
   private viewSpan = 0;
@@ -205,7 +219,7 @@ export class Timeline {
   /** The nearest grid line to t (t itself when the grid is off). */
   snap(t: number) {
     const g = this.gridLines();
-    if (!g) return t;
+    if (!g || !this.snapOn) return t;
     return Math.min(this.length, Math.max(0, g.offset + Math.round((t - g.offset) / g.step) * g.step));
   }
 
@@ -316,12 +330,45 @@ export class Timeline {
       }
       g.stroke();
       g.fillStyle = c;
+      // Dots only where they're far enough apart to grab (a drawn shape has
+      // many points; zoom in to edit them one by one).
+      let lastX = -Infinity;
       for (const p of lane.points) {
         const x = this.xOf(p.t);
-        if (x < -6 || x > w + 6) continue;
+        if (x < -6 || x > w + 6 || x - lastX < 7) continue;
+        lastX = x;
         g.beginPath();
         g.arc(x, top + 4 + (1 - norm(lane.param, p.v)) * (lh - 8), 5, 0, Math.PI * 2);
         g.fill();
+      }
+      // Curve handles: a hollow dot in the middle of each sloped segment.
+      if (this.shape === 'points') {
+        g.strokeStyle = c;
+        g.lineWidth = 1.5;
+        for (const hnd of this.handles(lane, top, lh)) {
+          g.beginPath();
+          g.arc(hnd.x, hnd.y, 4, 0, Math.PI * 2);
+          g.stroke();
+        }
+      }
+      // A shape being drawn.
+      const d = this.drag;
+      if (d?.kind === 'shape' && d.lane === lane) {
+        const pts = this.shapeOf(d);
+        const tmp: Lane = { id: '', param: lane.param, points: pts.map((q) => ({ t: q.t, v: denorm(lane.param, q.n), c: q.c })) };
+        g.strokeStyle = '#fff';
+        g.lineWidth = 2;
+        g.setLineDash([4, 3]);
+        g.beginPath();
+        const xa = Math.max(0, this.xOf(pts[0]?.t ?? 0));
+        const xb = Math.min(w, this.xOf(pts[pts.length - 1]?.t ?? 0));
+        for (let x = xa; x <= xb; x += 2) {
+          const y = top + 4 + (1 - norm(lane.param, valueAt(tmp, this.tOf(x)))) * (lh - 8);
+          if (x === xa) g.moveTo(x, y);
+          else g.lineTo(x, y);
+        }
+        g.stroke();
+        g.setLineDash([]);
       }
       const info = AUTO_PARAMS[lane.param];
       const name = `${this.host.label(lane)}${info.live ? '' : ' ·'}`;
@@ -373,6 +420,38 @@ export class Timeline {
       const hh = Math.max(1, v * amp);
       g.fillRect(x + px, mid - hh, 1.5, hh * 2);
     }
+  }
+
+  /** Curve handles of a lane on screen: the middle of each sloped, wide-enough segment. */
+  private handles(lane: Lane, top: number, lh: number) {
+    const out: { index: number; x: number; y: number }[] = [];
+    const pts = lane.points;
+    for (let i = 0; i + 1 < pts.length; i++) {
+      const a = pts[i];
+      const b = pts[i + 1];
+      const na = norm(lane.param, a.v);
+      const nb = norm(lane.param, b.v);
+      const xa = this.xOf(a.t);
+      const xb = this.xOf(b.t);
+      if (Math.abs(nb - na) < 0.03 || xb - xa < 28 || xb < 0 || xa > this.w) continue;
+      const n = na + bend(0.5, a.c) * (nb - na);
+      out.push({ index: i, x: (xa + xb) / 2, y: top + 4 + (1 - n) * (lh - 8) });
+    }
+    return out;
+  }
+
+  /** The points of the shape being drawn (normalised levels). */
+  private shapeOf(d: { t0: number; n0: number; t1: number; n1: number }) {
+    const kind = this.shape === 'points' ? 'line' : this.shape;
+    const [a, b] = d.t1 >= d.t0 ? [d.t0, d.t1] : [d.t1, d.t0];
+    const g = this.gridLines();
+    const beat = this.host.grid()?.beat;
+    const period = g ? g.step : beat ?? (b - a) / 4;
+    return shapePoints(kind, a, b, d.n0, d.n1, period);
+  }
+
+  private normFromY(y: number, top: number, lh: number) {
+    return Math.min(1, Math.max(0, 1 - (y - top - 4) / (lh - 8)));
   }
 
   // ---------- input ----------
@@ -429,9 +508,31 @@ export class Timeline {
       this.drag = null;
       return;
     }
+    if (this.shape !== 'points') {
+      const t = this.snap(this.tOf(x));
+      const n = this.normFromY(y, top, lh);
+      this.drag = { kind: 'shape', lane, t0: t, n0: n, t1: t, n1: n };
+      return;
+    }
     const yOf = (v: number) => top + 4 + (1 - norm(lane.param, v)) * (lh - 8);
     const index = lane.points.findIndex((p) => Math.hypot(this.xOf(p.t) - x, yOf(p.v) - y) < HIT);
     const now = performance.now();
+    if (index < 0) {
+      const hnd = this.handles(lane, top, lh).find((q) => Math.hypot(q.x - x, q.y - y) < 12);
+      if (hnd) {
+        const key = `${lane.id}#c`;
+        if (this.lastTap.lane === key && this.lastTap.index === hnd.index && now - this.lastTap.at < 320) {
+          delete lane.points[hnd.index].c; // double-tap: straight again
+          this.lastTap.at = 0;
+          this.drag = null;
+          this.host.changed();
+          return;
+        }
+        this.lastTap = { lane: key, index: hnd.index, at: now };
+        this.drag = { kind: 'curve', lane, index: hnd.index };
+        return;
+      }
+    }
     if (index >= 0 && this.lastTap.lane === lane.id && this.lastTap.index === index && now - this.lastTap.at < 320) {
       removePoint(lane, index);
       this.lastTap.at = 0;
@@ -480,6 +581,24 @@ export class Timeline {
     else if (d.kind === 'section') {
       d.dx = x - d.x0;
       if (Math.abs(d.dx) > 6) d.moved = true;
+    } else if (d.kind === 'curve' || d.kind === 'shape') {
+      const li = this.host.automation.lanes.indexOf(d.lane);
+      if (li < 0) return;
+      const n = this.normFromY(y, this.laneTop(li), this.laneH());
+      if (d.kind === 'shape') {
+        d.t1 = this.snap(this.tOf(x));
+        d.n1 = n;
+        return;
+      }
+      const pts = d.lane.points;
+      const a = pts[d.index];
+      const b = pts[d.index + 1];
+      if (!b) return;
+      const na = norm(d.lane.param, a.v);
+      const nb = norm(d.lane.param, b.v);
+      if (Math.abs(nb - na) < 1e-3) return;
+      a.c = bendFor((n - na) / (nb - na));
+      this.host.changed();
     } else if (d.kind === 'pending') {
       if (Math.hypot(x - d.x0, y - d.y0) < 5) return;
       const index = this.addAt(d.lane, d.x0, d.y0);
@@ -506,6 +625,14 @@ export class Timeline {
     if (!d) return;
     if (d.kind === 'pending') {
       this.addAt(d.lane, d.x0, d.y0); // a tap adds a point
+      return;
+    }
+    if (d.kind === 'shape') {
+      const pts = this.shapeOf(d);
+      if (pts.length >= 2) {
+        applyShape(d.lane, pts);
+        this.host.changed();
+      }
       return;
     }
     if (d.kind !== 'section') return;

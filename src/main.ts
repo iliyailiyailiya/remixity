@@ -1813,6 +1813,35 @@ $('tlBeatOne').addEventListener('click', () => {
   saveTimelineSoon();
 });
 $('tlZoomIn').addEventListener('click', () => timeline.zoom(1.6));
+// Snap on/off and the drawing tool (points or a shape). Both remembered.
+const tlSnap = $('tlSnap');
+const tlShape = $<HTMLSelectElement>('tlShape');
+try {
+  timeline.snapOn = localStorage.getItem('tlSnap') !== '0';
+  const sh = localStorage.getItem('tlShape');
+  if (sh && [...tlShape.options].some((o) => o.value === sh)) tlShape.value = sh;
+} catch {
+  /* storage blocked */
+}
+tlSnap.setAttribute('aria-pressed', String(timeline.snapOn));
+timeline.shape = tlShape.value as typeof timeline.shape;
+tlSnap.addEventListener('click', () => {
+  timeline.snapOn = !timeline.snapOn;
+  tlSnap.setAttribute('aria-pressed', String(timeline.snapOn));
+  try {
+    localStorage.setItem('tlSnap', timeline.snapOn ? '1' : '0');
+  } catch {
+    /* storage blocked */
+  }
+});
+tlShape.addEventListener('change', () => {
+  timeline.shape = tlShape.value as typeof timeline.shape;
+  try {
+    localStorage.setItem('tlShape', tlShape.value);
+  } catch {
+    /* storage blocked */
+  }
+});
 $('tlZoomOut').addEventListener('click', () => timeline.zoom(1 / 1.6));
 
 // Grid (from the song's BPM): splits and points snap to it. Remembered.
