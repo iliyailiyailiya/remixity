@@ -1225,6 +1225,50 @@ html {
   }
 }
 
+/* Phones on their side: like the desktop, the cover on the left and
+   everything else on the right, with the dashboard (lyrics, pedal, EQ…)
+   taking all the height that's left instead of the page scrolling. */
+@media (orientation: landscape) and (max-height: 520px) and (min-width: 560px) {
+  .player {
+    max-width: none;
+    display: grid;
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+    grid-template-rows: auto auto auto minmax(0, 1fr);
+    grid-template-areas:
+      'cover top'
+      'cover meta'
+      'cover scrub'
+      'cover dash';
+    column-gap: 28px;
+    height: calc(100 * var(--vh));
+    min-height: 0;
+    overflow: hidden;
+    padding: max(8px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+      max(10px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  }
+  .topbar {
+    grid-area: top;
+    height: 34px;
+  }
+  .cover-wrap {
+    grid-area: cover;
+    height: auto;
+    min-height: 0;
+    margin: 0;
+  }
+  .meta-row {
+    grid-area: meta;
+  }
+  .scrub {
+    grid-area: scrub;
+  }
+  .dash {
+    grid-area: dash;
+    height: auto;
+    min-height: 0;
+  }
+}
+
 /* ----- Sheets ----- */
 
 .sheet-scrim {
