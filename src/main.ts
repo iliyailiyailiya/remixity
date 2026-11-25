@@ -1686,6 +1686,18 @@ const lab = (() => {
 const timelineEl = $('timeline');
 const tlAdd = $<HTMLSelectElement>('tlAddLane');
 $('openTimeline').hidden = !lab;
+// The same switch in the ⋯ menu (a home-screen app has its own storage, so a
+// ?lab=1 link opened in Safari never reaches it).
+const labBox = $<HTMLInputElement>('labTimeline');
+labBox.checked = lab;
+labBox.addEventListener('change', () => {
+  try {
+    localStorage.setItem('lab', labBox.checked ? '1' : '0');
+  } catch {
+    /* storage blocked: on for this visit only */
+  }
+  $('openTimeline').hidden = !labBox.checked;
+});
 
 const laneName = (param: AutoParam) => (param === 'ratio' ? t('speed') : t(AUTO_PARAMS[param].label as Parameters<typeof t>[0]));
 
