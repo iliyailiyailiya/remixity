@@ -3,7 +3,7 @@ import { applyI18n, getLang, Lang, setLang, t } from './i18n';
 import { DEFAULT_PARAMS, FxParams } from './engine/chain';
 import { decodeData, niceName, quickPart, safeFileName } from './engine/decode';
 import { Player } from './engine/player';
-import { exportAudio, Format, renderClip, Stage } from './engine/render';
+import { exportAudio, Format, renderClip, Stage, type RenderAuto } from './engine/render';
 import { canRecordVideo, levelsOf, storyImage, storyVideo, type StoryInfo, type StoryStyle } from './ui/story';
 import { shareOrDownload } from './library/export';
 import { addMarker, assemble, cut, EditState, initialEdit, keepOnly, removeMarker } from './engine/edit';
@@ -24,7 +24,7 @@ import { initFix } from './library/fix';
 import { Backdrop } from './ui/backdrop';
 import { defaultPalette, generatedCover, paletteFrom } from './ui/palette';
 import { Pedal, MAX_RATIO, MIN_RATIO } from './ui/pedal';
-import { AUTO_PARAMS, addLane, emptyAutomation, moveLanesWithSection, moveSection, paramsAt, removeLane, split, type AutoParam } from './automation/model';
+import { AUTO_PARAMS, addLane, emptyAutomation, moveLanesWithSection, moveSection, paramsAt, removeLane, split, valueAt, type Automation, type AutoParam } from './automation/model';
 import { Timeline } from './automation/timeline';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -802,7 +802,6 @@ function tick() {
   if (!player || document.hidden) return;
   try {
     renderTransport();
-    tickAutomation(performance.now());
   } catch (err) {
     console.error(err);
   }
@@ -1122,7 +1121,7 @@ storyCreate.addEventListener('click', async () => {
       storyStatus.textContent = t('storyPreparing');
       storyAbort = new AbortController();
       storyCreate.textContent = t('fixStop');
-      const clip = await renderClip(buffer, params, start, Math.min(seconds, buffer.duration / params.ratio));
+      const clip = await renderClip(buffer, params, start, Math.min(seconds, buffer.duration / params.ratio), renderAuto());
       if (!storyAbort || storyAbort.signal.aborted) return;
       if (info.style === 'waves') info.levels = levelsOf(clip); // the bars follow what you hear
       storyBar.hidden = false;
@@ -1755,15 +1754,49 @@ tlGrid.addEventListener('change', () => {
 });
 $('tlUndo').addEventListener('click', () => undo());
 
-// Live automation: the lanes that can play live yet are applied ~30×/s on top
-// of the settings (the chain glides between values, so no zipper noise).
-let autoAt = 0;
-function tickAutomation(now: number) {
+// Live automation: every lane is applied ~25×/s on top of the settings (the
+// chain glides between values, the speed ramps, the reverb room crossfades).
+// A timer, not the animation loop, so it keeps going in a background tab.
+/** The settings at timeline second t, with the lanes applied. */
+function automatedAt(base: FxParams, a: Automation, followPedal: boolean, t: number): FxParams {
+  const speed = a.lanes.find((l) => l.param === 'ratio');
+  // "Follows the pedal": the reverb follows the automated speed too (its own lanes still win).
+  const b = followPedal && speed ? { ...base, ...spaceFor(valueAt(speed, t)) } : base;
+  return paramsAt(b, a, t, false);
+}
+
+function tickAutomation() {
   if (!player || !automation.lanes.length) return;
-  if (!autoDirty && (!player.playing || now - autoAt < 33)) return;
-  autoAt = now;
+  if (!autoDirty && !player.playing) return;
   autoDirty = false;
-  player.setParams(paramsAt(params, automation, player.position));
+  const q = automatedAt(params, automation, autoSpace, player.position);
+  player.setParams(q, true);
+  // A speed lane moves the pedal and the BPM, so you see what you hear.
+  if (automation.lanes.some((l) => l.param === 'ratio')) showSpeed(q.ratio);
+}
+
+/** Just the speed readouts (cheap enough for every automation tick). */
+function showSpeed(r: number) {
+  pedal.set(r);
+  if (origBpm) $('bpmBig').textContent = String(Math.round(origBpm * r));
+  $('gaugeSub').textContent = `×${r.toFixed(2)} · ${pitchText(r)}`;
+  glowRed.style.opacity = String(clamp01((r - 1) / 0.4) * 0.95);
+  glowBlue.style.opacity = String(clamp01((1 - r) / 0.4) * 0.95);
+}
+setInterval(tickAutomation, 40);
+
+/** A frozen copy of the automation for an export or a story clip. */
+function renderAuto(): RenderAuto | undefined {
+  if (!automation.lanes.length) return undefined;
+  const a = structuredClone(automation);
+  const base = { ...params };
+  const follow = autoSpace;
+  const has = (k: AutoParam) => a.lanes.some((l) => l.param === k);
+  return {
+    at: (t) => automatedAt(base, a, follow, t),
+    speed: has('ratio'),
+    room: has('decay') || has('tone') || (follow && has('ratio')),
+  };
 }
 
 // ---------- export ----------
@@ -1836,7 +1869,7 @@ let lastExport: { blob: Blob; name: string } | null = null;
 const share = initShare({
   renderMp3: (onProgress) => {
     if (!buffer) return Promise.reject(new Error('no track'));
-    return exportAudio(buffer, { ...params }, 'mp3', (_stage, f) => onProgress(f));
+    return exportAudio(buffer, { ...params }, 'mp3', (_stage, f) => onProgress(f), renderAuto());
   },
   fileName: () => outputName('mp3'),
   remixTag,
@@ -1873,7 +1906,7 @@ exportBtn.addEventListener('click', async () => {
       exportStatus.textContent = `${label[stage]()}${f === null ? '…' : ` ${Math.round(f * 100)}%`}`;
       progress.classList.toggle('indeterminate', f === null);
       progressBar.style.width = `${Math.round((f ?? 0) * 100)}%`;
-    });
+    }, renderAuto());
     const tagged = await withTags(blob, fmt === 'mp3' ? 'mp3' : 'wav', {
       title: titleIn.value.trim(),
       artist: artistIn.value.trim(),
@@ -2051,5 +2084,9 @@ if (import.meta.env.DEV) {
     get player() {
       return player;
     },
+    get automation() {
+      return automation;
+    },
+    touchAutomation: () => (autoDirty = true),
   };
 }

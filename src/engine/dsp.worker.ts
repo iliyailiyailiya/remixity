@@ -4,6 +4,7 @@ import { Mp3Encoder } from '@breezystack/lamejs';
 
 type Req =
   | { id: number; kind: 'resample'; channels: Float32Array[]; step: number; outLength: number }
+  | { id: number; kind: 'warp'; channels: Float32Array[]; steps: Float32Array; starts: Float64Array; block: number; outLength: number }
   | { id: number; kind: 'mp3'; channels: Float32Array[]; sampleRate: number; kbps: number };
 
 const post = (msg: unknown, transfer: Transferable[] = []) =>
@@ -14,6 +15,11 @@ self.onmessage = (e: MessageEvent<Req>) => {
   try {
     if (req.kind === 'resample') {
       const out = resample(req.channels, req.step, req.outLength, (p) =>
+        post({ id: req.id, progress: p }),
+      );
+      post({ id: req.id, result: out }, out.map((c) => c.buffer));
+    } else if (req.kind === 'warp') {
+      const out = warp(req.channels, req.steps, req.starts, req.block, req.outLength, (p) =>
         post({ id: req.id, progress: p }),
       );
       post({ id: req.id, result: out }, out.map((c) => c.buffer));
@@ -97,6 +103,63 @@ function resample(
       }
       o[j] = acc;
       if ((j & 0xffff) === 0) onProgress((done + j) / total);
+    }
+    done += outLength;
+    out.push(o);
+  }
+  onProgress(1);
+  return out;
+}
+
+/**
+ * Resample with a speed that changes per block (speed automation). Kernels
+ * are built per speed bucket: one for slowing down (full bandwidth) and one
+ * per 0.05 of speed-up, whose cutoff is lowered so nothing aliases.
+ */
+function warp(
+  channels: Float32Array[],
+  steps: Float32Array,
+  starts: Float64Array,
+  block: number,
+  outLength: number,
+  onProgress: (p: number) => void,
+): Float32Array[] {
+  const tables = new Map<number, ReturnType<typeof buildTable>>();
+  const kernel = (step: number) => {
+    const key = step <= 1 ? 1 : Math.ceil(step * 20) / 20;
+    let t = tables.get(key);
+    if (!t) tables.set(key, (t = buildTable(key)));
+    return t;
+  };
+  const out: Float32Array[] = [];
+  const total = channels.length * outLength;
+  let done = 0;
+  for (const input of channels) {
+    const n = input.length;
+    const o = new Float32Array(outLength);
+    for (let b = 0; b < steps.length; b++) {
+      const step = steps[b];
+      const { table, half, taps } = kernel(step);
+      const j0 = b * block;
+      const j1 = Math.min(outLength, j0 + block);
+      for (let j = j0; j < j1; j++) {
+        const pos = starts[b] + (j - j0) * step;
+        const i = Math.floor(pos);
+        const p = Math.round((pos - i) * PHASES);
+        const base = p * taps;
+        const start = i - half + 1;
+        let acc = 0;
+        if (start >= 0 && start + taps <= n) {
+          for (let k = 0; k < taps; k++) acc += input[start + k] * table[base + k];
+        } else {
+          for (let k = 0; k < taps; k++) {
+            const idx = start + k;
+            if (idx >= 0 && idx < n) acc += input[idx] * table[base + k];
+          }
+        }
+        o[j] = acc;
+      }
+      if ((b & 0xff) === 0) onProgress((done + j0) / total);
     }
     done += outLength;
     out.push(o);

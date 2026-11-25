@@ -60,8 +60,18 @@ export interface Chain {
   input: AudioNode;
   output: AudioNode;
   set(p: FxParams): void;
-  setImpulse(ir: AudioBuffer): void;
+  /** Ramp every value to `p`, arriving at context time `time` (automation). */
+  rampTo(p: FxParams, time: number): void;
+  /**
+   * Use a new reverb impulse. After the first one, it crossfades from the old
+   * one (two convolvers), starting at context time `at` (default: now), so
+   * changing the room never clicks.
+   */
+  setImpulse(ir: AudioBuffer, at?: number): void;
 }
+
+/** How long a reverb impulse change crossfades (seconds). */
+export const IR_FADE = 0.12;
 
 /** How long the delay keeps ringing after the input stops (to -60 dB). */
 export function delayTail(p: FxParams) {
@@ -118,8 +128,15 @@ export function buildChain(ctx: BaseAudioContext, p: FxParams): Chain {
   satOut.gain.value = 2;
 
   const dry = ctx.createGain();
-  const convolver = ctx.createConvolver();
-  convolver.normalize = true;
+  // Two convolvers, so a new impulse can fade in while the old one fades out.
+  const rooms = [0, 1].map(() => {
+    const conv = ctx.createConvolver();
+    conv.normalize = true;
+    const gain = ctx.createGain();
+    gain.gain.value = 0;
+    conv.connect(gain);
+    return { conv, gain, fed: false };
+  });
   const wet = ctx.createGain();
 
   const delay = ctx.createDelay(2);
@@ -143,7 +160,20 @@ export function buildChain(ctx: BaseAudioContext, p: FxParams): Chain {
     .connect(shaper)
     .connect(satOut);
   satOut.connect(dry).connect(master);
-  satOut.connect(convolver).connect(wet).connect(master);
+  for (const r of rooms) r.gain.connect(wet);
+  wet.connect(master);
+  // Live, the idle convolver gets no input (saves CPU on phones); offline
+  // both stay fed, since impulses change at scheduled times there.
+  const live = typeof AudioContext !== 'undefined' && ctx instanceof AudioContext;
+  const feed = (k: number, on: boolean) => {
+    const r = rooms[k];
+    if (on === r.fed) return;
+    r.fed = on;
+    if (on) satOut.connect(r.conv);
+    else satOut.disconnect(r.conv);
+  };
+  let active = -1;
+  let idleTimer = 0;
   satOut.connect(delay);
   delay.connect(delayDamp).connect(feedback).connect(delay);
   delayDamp.connect(delayWet).connect(master);
@@ -182,11 +212,45 @@ export function buildChain(ctx: BaseAudioContext, p: FxParams): Chain {
     output: master,
     set(q) {
       const t = ctx.currentTime;
-      for (const [param, v] of values(q)) param.setTargetAtTime(v, t, 0.02);
+      for (const [param, v] of values(q)) {
+        param.cancelScheduledValues(t);
+        param.setTargetAtTime(v, t, 0.02);
+      }
       setDrive(q.drive);
     },
-    setImpulse(ir) {
-      convolver.buffer = ir;
+    rampTo(q, time) {
+      for (const [param, v] of values(q)) param.linearRampToValueAtTime(v, time);
+      setDrive(q.drive);
+    },
+    setImpulse(ir, at) {
+      const t = Math.max(at ?? 0, ctx.currentTime);
+      if (active < 0) {
+        active = 0;
+        rooms[0].conv.buffer = ir;
+        feed(0, true);
+        rooms[0].gain.gain.setValueAtTime(1, t);
+        return;
+      }
+      const from = rooms[active];
+      const k = 1 - active;
+      const to = rooms[k];
+      feed(k, true);
+      to.conv.buffer = ir;
+      to.gain.gain.cancelScheduledValues(t);
+      to.gain.gain.setValueAtTime(0, t);
+      to.gain.gain.linearRampToValueAtTime(1, t + IR_FADE);
+      from.gain.gain.cancelScheduledValues(t);
+      from.gain.gain.setValueAtTime(1, t);
+      from.gain.gain.linearRampToValueAtTime(0, t + IR_FADE);
+      active = k;
+      if (live) {
+        clearTimeout(idleTimer);
+        const old = 1 - k;
+        idleTimer = window.setTimeout(() => {
+          // Let its tail ring out under the fade, then stop feeding it.
+          if (active !== old) feed(old, false);
+        }, (IR_FADE + 0.05) * 1000);
+      } else feed(1 - k, true);
     },
   };
 }

@@ -47,3 +47,11 @@ export function makeImpulse(ctx: BaseAudioContext, decay: number, tone: number):
   }
   return ir;
 }
+
+/**
+ * Room settings rounded to steps you can't hear apart (4% of size, 0.05 of
+ * tone), so automating them rebuilds the impulse only when it matters.
+ */
+export function roomStep(decay: number, tone: number): [number, number] {
+  return [Math.exp(Math.round(Math.log(decay) / 0.04) * 0.04), Math.round(tone * 20) / 20];
+}

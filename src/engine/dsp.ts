@@ -51,6 +51,22 @@ export function resample(
   );
 }
 
+/** Resample along a time warp (speed automation). Inputs are transferred. */
+export function resampleWarp(
+  channels: Float32Array<ArrayBuffer>[],
+  steps: Float32Array,
+  starts: Float64Array,
+  block: number,
+  outLength: number,
+  onProgress?: (p: number) => void,
+) {
+  return call<Float32Array<ArrayBuffer>[]>(
+    { kind: 'warp', channels, steps, starts, block, outLength },
+    channels.map((c) => c.buffer),
+    onProgress,
+  );
+}
+
 export function encodeMp3(
   channels: Float32Array<ArrayBuffer>[],
   sampleRate: number,

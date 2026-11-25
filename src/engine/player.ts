@@ -4,7 +4,7 @@
 // song plays through Signalsmith Stretch (WASM, loaded on first use), which
 // changes speed without changing pitch.
 import { buildChain, CEILING_DB, Chain, FxParams } from './chain';
-import { makeImpulse } from './impulse';
+import { makeImpulse, roomStep } from './impulse';
 import { LIMITER_WORKLET } from './limiter';
 
 /** The parts of Signalsmith Stretch's node we use. */
@@ -399,7 +399,12 @@ export class Player {
     if (wasPlaying) this.play();
   }
 
-  setParams(p: FxParams) {
+  /**
+   * Apply settings. `fromLanes` = automation is driving them (many small
+   * changes a second): the speed glides instead of stepping, and the reverb
+   * room is rebuilt on a steady beat instead of waiting for changes to stop.
+   */
+  setParams(p: FxParams, fromLanes = false) {
     if (p.keepPitch !== this.keepPitch) {
       // Switch engines in place, keeping the position.
       const wasPlaying = this.playing;
@@ -416,11 +421,29 @@ export class Player {
       this.srcOff0 += (now - this.srcCtx0) * this.ratio;
       this.srcCtx0 = now;
       this.ratio = p.ratio;
-      this.src?.playbackRate.setValueAtTime(p.ratio, now);
+      const rate = this.src?.playbackRate;
+      if (rate) {
+        rate.cancelScheduledValues(now);
+        if (fromLanes) rate.linearRampToValueAtTime(p.ratio, now + 0.04);
+        else rate.setValueAtTime(p.ratio, now);
+      }
       if (this.stretch && this.stretchRunning)
         void this.stretch.schedule({ rate: p.ratio, output: this.ctx.currentTime });
     }
     this.chain.set(p);
+    if (fromLanes) {
+      // Rounded to steps you can't hear apart, at most ~6 rebuilds a second.
+      const [d, t] = roomStep(p.decay, p.tone);
+      const key = `${d.toFixed(3)}|${t.toFixed(2)}`;
+      const now = performance.now();
+      if (key !== this.irKey && now - this.irAt > 160) {
+        this.irKey = key;
+        this.irAt = now;
+        clearTimeout(this.irTimer);
+        this.chain.setImpulse(makeImpulse(this.ctx, d, t));
+      }
+      return;
+    }
     const key = `${p.decay.toFixed(2)}|${p.tone.toFixed(2)}`;
     if (key !== this.irKey) {
       this.irKey = key;
@@ -435,6 +458,7 @@ export class Player {
   }
 
   private irTimer = 0;
+  private irAt = 0;
 
   private stopSource() {
     if (this.src) {

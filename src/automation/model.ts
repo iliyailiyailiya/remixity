@@ -35,10 +35,10 @@ export interface ParamInfo {
 }
 
 export const AUTO_PARAMS: Record<AutoParam, ParamInfo> = {
-  ratio: { min: 0.5, max: 1.5, group: 'pedal', live: false, label: 'speed' },
+  ratio: { min: 0.5, max: 1.5, group: 'pedal', live: true, label: 'speed' },
   reverbMix: { min: 0, max: 1, group: 'reverb', live: true, label: 'autoReverbMix' },
-  decay: { min: 0.6, max: 8, group: 'reverb', live: false, label: 'autoReverbSize' },
-  tone: { min: 0, max: 1, group: 'reverb', live: false, label: 'autoReverbTone' },
+  decay: { min: 0.6, max: 8, group: 'reverb', live: true, label: 'autoReverbSize' },
+  tone: { min: 0, max: 1, group: 'reverb', live: true, label: 'autoReverbTone' },
   delayMix: { min: 0, max: 1, group: 'echo', live: true, label: 'autoEchoMix' },
   delayTime: { min: 0.05, max: 1.5, group: 'echo', live: true, label: 'autoEchoTime' },
   delayFeedback: { min: 0, max: 0.85, group: 'echo', live: true, label: 'autoEchoFeedback' },
