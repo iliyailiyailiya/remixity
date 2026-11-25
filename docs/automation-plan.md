@@ -110,6 +110,10 @@ echo mix / time / feedback, bass, EQ low / mid / high / air, low cut, high cut.
   The lane outside the range keeps its values. Square/saw jumps are two points
   1 ms apart; sine is curved quarter segments.
 - **Snap** toggle (remembered): the grid can stay visible with snapping off.
+- **Lane close-up**: tap a lane's name → only that lane, filling the space
+  under a taller track (≈38% of the height); tap the name (‹) again to go back.
+- **Follow** toggle (remembered): off = the view never turns the page by
+  itself while playing, so drawing isn't interrupted.
 - Still to come: gaps/overlaps (sections with their own position),
   duplicate a section, keyboard shortcuts on desktop.
 

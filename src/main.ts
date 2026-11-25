@@ -1824,6 +1824,23 @@ try {
   /* storage blocked */
 }
 tlSnap.setAttribute('aria-pressed', String(timeline.snapOn));
+// Follow: the view turns the page with the playhead; off = it stays where you put it.
+const tlFollow = $('tlFollow');
+try {
+  timeline.followOn = localStorage.getItem('tlFollow') !== '0';
+} catch {
+  /* storage blocked */
+}
+tlFollow.setAttribute('aria-pressed', String(timeline.followOn));
+tlFollow.addEventListener('click', () => {
+  timeline.followOn = !timeline.followOn;
+  tlFollow.setAttribute('aria-pressed', String(timeline.followOn));
+  try {
+    localStorage.setItem('tlFollow', timeline.followOn ? '1' : '0');
+  } catch {
+    /* storage blocked */
+  }
+});
 timeline.shape = tlShape.value as typeof timeline.shape;
 tlSnap.addEventListener('click', () => {
   timeline.snapOn = !timeline.snapOn;

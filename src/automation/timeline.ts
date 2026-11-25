@@ -3,6 +3,7 @@
 //
 //   ruler     tap / drag to seek
 //   track     drag a section left or right to move it (Split makes sections)
+//   lane name tap it for a close-up of that lane (and the track), tap again to go back
 //   lanes     tap to add a point, drag to move it, double-tap to delete it;
 //             drag the dot in the middle of a segment to curve it (double-tap
 //             it to straighten); with a shape picked, drag across a lane to
@@ -47,6 +48,8 @@ export interface TimelineHost {
   changed(): void;
   removeLane(id: string): void;
   label(lane: Lane): string;
+  /** The close-up changed (lane id, or null for all lanes). */
+  focusChanged?(id: string | null): void;
 }
 
 const RULER = 22;
@@ -81,6 +84,11 @@ export class Timeline {
   snapOn = true;
   /** What dragging on a lane does: move/add points, or draw a shape. */
   shape: ShapeKind | 'points' = 'points';
+  /** Turn the page with the playhead while playing (off = the view stays put). */
+  followOn = true;
+  /** Close-up: only this lane (by id) is shown, big, under a taller track. */
+  focus: string | null = null;
+  private nameChips: { lane: Lane; x0: number; x1: number; y0: number; y1: number }[] = [];
   // The visible window, in timeline seconds. span 0 = the whole song.
   private viewStart = 0;
   private viewSpan = 0;
@@ -191,7 +199,7 @@ export class Timeline {
 
   /** While playing, turn the page when the playhead runs off the screen. */
   private follow() {
-    if (!this.viewSpan || !this.host.playing() || this.drag || performance.now() - this.userMovedAt < 2000) return;
+    if (!this.followOn || !this.viewSpan || !this.host.playing() || this.drag || performance.now() - this.userMovedAt < 2000) return;
     const p = this.host.position();
     if (p < this.viewStart || p > this.viewStart + this.span * 0.95) {
       this.viewStart = p - this.span * 0.05;
@@ -240,12 +248,32 @@ export class Timeline {
 
   // ---------- drawing ----------
 
+  /** The lanes on screen: all, or just the one in close-up. */
+  private lanes(): Lane[] {
+    const all = this.host.automation.lanes;
+    if (this.focus) {
+      const one = all.find((l) => l.id === this.focus);
+      if (one) return [one];
+      this.focus = null; // it was removed
+    }
+    return all;
+  }
+  /** Track row height: taller in a close-up. */
+  private trackH() {
+    return this.focus ? Math.max(TRACK, Math.round((this.h - RULER) * 0.38)) : TRACK;
+  }
   private laneH() {
-    const n = this.host.automation.lanes.length;
-    return n ? Math.min(LANE_MAX, (this.h - RULER - TRACK) / n) : LANE_MAX;
+    const n = this.lanes().length;
+    const room = this.h - RULER - this.trackH();
+    if (this.focus) return Math.max(LANE_MAX, room);
+    return n ? Math.min(LANE_MAX, room / n) : LANE_MAX;
   }
   private laneTop(i: number) {
-    return RULER + TRACK + i * this.laneH();
+    return RULER + this.trackH() + i * this.laneH();
+  }
+  /** Index of a lane among those on screen (-1 when hidden). */
+  private shownIndex(lane: Lane) {
+    return this.lanes().indexOf(lane);
   }
 
   private ensurePeaks() {
@@ -308,16 +336,17 @@ export class Timeline {
       if (x > w || x + sw < 0) return;
       g.fillStyle = dragging ? 'rgba(255,255,255,0.22)' : i % 2 ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.14)';
       g.beginPath();
-      g.roundRect(x + 1, RULER + 4, Math.max(2, sw - 2), TRACK - 8, 6);
+      g.roundRect(x + 1, RULER + 4, Math.max(2, sw - 2), this.trackH() - 8, 6);
       g.fill();
       this.drawWave(x, sw, starts[i], len);
     });
 
     // Lanes.
     const lh = this.laneH();
-    this.host.automation.lanes.forEach((lane, i) => {
+    this.nameChips = [];
+    this.lanes().forEach((lane, i) => {
       const top = this.laneTop(i);
-      const c = COLORS[i % COLORS.length];
+      const c = COLORS[Math.max(0, this.host.automation.lanes.indexOf(lane)) % COLORS.length]; // its own colour, in a close-up too
       g.fillStyle = i % 2 ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.06)';
       g.fillRect(0, top, w, lh);
       g.strokeStyle = c;
@@ -371,12 +400,13 @@ export class Timeline {
         g.setLineDash([]);
       }
       const info = AUTO_PARAMS[lane.param];
-      const name = `${this.host.label(lane)}${info.live ? '' : ' ·'}`;
+      const name = `${this.focus ? '‹ ' : ''}${this.host.label(lane)}${info.live ? '' : ' ·'}`;
       g.font = '650 11px system-ui, -apple-system, sans-serif';
       const tw = g.measureText(name).width;
       g.fillStyle = 'rgba(10,6,20,0.7)';
       g.beginPath();
       g.roundRect(4, top + 4, tw + 30, 18, 9);
+      this.nameChips.push({ lane, x0: 22, x1: tw + 34, y0: top + 2, y1: top + 26 });
       g.fill();
       g.fillStyle = '#fff';
       g.fillText('×', 11, top + 13);
@@ -406,8 +436,9 @@ export class Timeline {
     const b = this.host.buffer();
     if (!peaks || !b) return;
     const g = this.ctx;
-    const mid = RULER + TRACK / 2;
-    const amp = TRACK / 2 - 8;
+    const th = this.trackH();
+    const mid = RULER + th / 2;
+    const amp = th / 2 - 8;
     const perSec = b.sampleRate / PEAK_HOP;
     const from = Math.max(0, -x);
     const to = Math.min(sw, this.w - x);
@@ -490,7 +521,7 @@ export class Timeline {
       this.host.seek(this.tOf(x));
       return;
     }
-    if (y < RULER + TRACK) {
+    if (y < RULER + this.trackH()) {
       const starts = sectionStarts(this.host.edit());
       const t = this.tOf(x);
       let index = starts.findIndex((s, i) => t >= s && (i === starts.length - 1 || t < starts[i + 1]));
@@ -499,13 +530,20 @@ export class Timeline {
       return;
     }
     const lh = this.laneH();
-    const li = Math.floor((y - RULER - TRACK) / lh);
-    const lane = this.host.automation.lanes[li];
+    const li = Math.floor((y - RULER - this.trackH()) / lh);
+    const lane = this.lanes()[li];
     if (!lane) return;
     const top = this.laneTop(li);
     if (x < 22 && y < top + 24) {
       this.host.removeLane(lane.id);
       this.drag = null;
+      return;
+    }
+    // The lane's name: close-up of it, or back to all lanes.
+    if (this.nameChips.some((c) => c.lane === lane && x >= c.x0 && x <= c.x1 && y >= c.y0 && y <= c.y1)) {
+      this.focus = this.focus ? null : lane.id;
+      this.drag = null;
+      this.host.focusChanged?.(this.focus);
       return;
     }
     if (this.shape !== 'points') {
@@ -555,7 +593,7 @@ export class Timeline {
   }
 
   private addAt(lane: Lane, x: number, y: number) {
-    const li = this.host.automation.lanes.indexOf(lane);
+    const li = this.shownIndex(lane);
     if (li < 0) return -1;
     const index = addPoint(lane, this.snap(this.tOf(x)), this.valueFromY(lane, y, this.laneTop(li), this.laneH()));
     this.lastTap = { lane: lane.id, index, at: performance.now() };
@@ -582,7 +620,7 @@ export class Timeline {
       d.dx = x - d.x0;
       if (Math.abs(d.dx) > 6) d.moved = true;
     } else if (d.kind === 'curve' || d.kind === 'shape') {
-      const li = this.host.automation.lanes.indexOf(d.lane);
+      const li = this.shownIndex(d.lane);
       if (li < 0) return;
       const n = this.normFromY(y, this.laneTop(li), this.laneH());
       if (d.kind === 'shape') {
@@ -604,7 +642,7 @@ export class Timeline {
       const index = this.addAt(d.lane, d.x0, d.y0);
       this.drag = index >= 0 ? { kind: 'point', lane: d.lane, index } : null;
     } else {
-      const li = this.host.automation.lanes.indexOf(d.lane);
+      const li = this.shownIndex(d.lane);
       if (li < 0) return;
       movePoint(d.lane, d.index, this.snap(this.tOf(x)), this.valueFromY(d.lane, y, this.laneTop(li), this.laneH()));
       this.host.changed();
