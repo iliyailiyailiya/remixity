@@ -134,8 +134,10 @@ export class Timeline {
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     this.w = r.width;
     this.h = r.height;
-    this.canvas.width = Math.round(r.width * dpr);
-    this.canvas.height = Math.round(r.height * dpr);
+    const cw = Math.round(r.width * dpr);
+    const ch = Math.round(r.height * dpr);
+    if (this.canvas.width !== cw) this.canvas.width = cw;
+    if (this.canvas.height !== ch) this.canvas.height = ch;
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 

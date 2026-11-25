@@ -126,8 +126,10 @@ export class EqView {
     const r = this.canvas.getBoundingClientRect();
     this.w = r.width;
     this.h = r.height;
-    this.canvas.width = Math.round(r.width * dpr);
-    this.canvas.height = Math.round(r.height * dpr);
+    const w = Math.round(r.width * dpr);
+    const h = Math.round(r.height * dpr);
+    if (this.canvas.width !== w) this.canvas.width = w;
+    if (this.canvas.height !== h) this.canvas.height = h;
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     this.draw();
   }

@@ -940,6 +940,10 @@ html {
   min-height: 0;
   width: 100%;
   display: block;
+  /* Its size comes from the layout only, never from its pixel size: otherwise
+     resizing it changes the page height, which resizes it again; after a
+     rotation that loop never settled and the whole player flickered. */
+  contain: size;
   touch-action: pan-x; /* vertical drags move nodes; sideways flips the page */
 }
 
@@ -948,6 +952,7 @@ html {
   flex: 1;
   min-height: 44px;
   height: auto;
+  contain: size; /* see .eq-canvas */
 }
 .page-chop .tools {
   margin-top: 0;
@@ -3096,6 +3101,7 @@ select.tl-btn {
   flex: 1;
   min-height: 0;
   width: 100%;
+  contain: size; /* see .eq-canvas */
   touch-action: none;
 }
 .tl-rotate {
