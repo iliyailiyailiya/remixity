@@ -45,9 +45,27 @@ select {
   font-size: max(16px, 1em);
 }
 
+/*
+ * Screen-height unit. In Safari, 1dvh follows the toolbars as they show and
+ * hide. A home-screen app has no toolbars, and there iOS re-reports dvh
+ * several times while the phone rotates, so everything sized by it re-laid
+ * out over and over (the whole UI flickered). There 1vh is exact and stable.
+ */
+:root {
+  --vh: 1dvh;
+}
+@media (display-mode: standalone) {
+  :root {
+    --vh: 1vh;
+  }
+}
+:root.standalone {
+  --vh: 1vh;
+}
+
 body {
   margin: 0;
-  min-height: 100dvh;
+  min-height: calc(100 * var(--vh));
   background: transparent;
   color: var(--text);
   font: 16px/1.4 -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', 'Segoe UI', Roboto, sans-serif;
@@ -422,7 +440,7 @@ html {
 .player {
   max-width: 460px;
   margin: 0 auto;
-  height: 100dvh;
+  height: calc(100 * var(--vh));
   display: flex;
   flex-direction: column;
   padding: max(6px, env(safe-area-inset-top)) 22px max(14px, env(safe-area-inset-bottom));
@@ -432,12 +450,12 @@ html {
 @media (max-height: 520px) {
   .player {
     height: auto;
-    min-height: 100dvh;
+    min-height: calc(100 * var(--vh));
     overflow: visible;
   }
   .cover-wrap {
     flex: none !important;
-    height: 60dvh;
+    height: calc(60 * var(--vh));
   }
 }
 
@@ -598,7 +616,7 @@ html {
   background: rgba(255, 255, 255, 0.06);
   border-color: rgba(255, 255, 255, 0.12);
   flex: none;
-  height: clamp(196px, 29dvh, 260px);
+  height: clamp(196px, calc(29 * var(--vh)), 260px);
   border-radius: 30px;
   position: relative;
   overflow: hidden;
@@ -1176,7 +1194,7 @@ html {
       'cover dash'
       'cover .';
     column-gap: 56px;
-    height: 100dvh;
+    height: calc(100 * var(--vh));
   }
   .topbar {
     grid-area: top;
@@ -1222,7 +1240,7 @@ html {
   left: 50%;
   bottom: 0;
   width: min(100%, 560px);
-  max-height: 90dvh;
+  max-height: calc(90 * var(--vh));
   display: flex;
   flex-direction: column;
   transform: translate(-50%, 104%);
@@ -2497,7 +2515,7 @@ body.lyrics-open .player {
   margin: 4px 0 14px;
 }
 .story-preview canvas {
-  height: min(42dvh, 420px);
+  height: min(calc(42 * var(--vh)), 420px);
   aspect-ratio: 9 / 16;
   width: auto;
   border-radius: 18px;

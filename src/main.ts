@@ -101,6 +101,10 @@ function spaceFor(r: number): Pick<FxParams, 'reverbMix' | 'decay' | 'tone'> {
 
 // ---------- background ----------
 
+// Home-screen app (no browser toolbars): see --vh in style.css.
+if ((navigator as Navigator & { standalone?: boolean }).standalone || matchMedia('(display-mode: standalone)').matches)
+  document.documentElement.classList.add('standalone');
+
 const backdrop = new Backdrop($<HTMLCanvasElement>('bg'), defaultPalette());
 const glowRed = $('glowRed');
 const glowBlue = $('glowBlue');
@@ -1756,6 +1760,7 @@ $('openTimeline').addEventListener('click', () => {
   $('tlInfo').textContent = t('timelineHint');
   timelineEl.hidden = false;
   document.body.classList.add('timeline-open');
+  backdrop.covered = true; // the timeline covers everything: hold the background still
   timelineUsed = true; // from now on this song's timeline is kept
   timeline.open();
 });
@@ -1764,6 +1769,7 @@ document.querySelectorAll('[data-tl-close]').forEach((b) =>
     timeline.close();
     timelineEl.hidden = true;
     document.body.classList.remove('timeline-open');
+    backdrop.covered = libraryOpen();
   }),
 );
 // Rebuilt right before the list opens too, so it can never show another song's lanes.

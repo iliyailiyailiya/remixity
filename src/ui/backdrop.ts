@@ -95,11 +95,40 @@ export class Backdrop {
     canvas.after(this.art);
     this.setCssFallback(this.palette);
     this.startBlobs();
+    this.side = this.squareSide();
+    this.placeSquare();
+    // The cover layers live in a square as big as the screen's long side,
+    // centred: turning the phone changes nothing in it, so there's nothing to
+    // rebuild (rebuilding big blurred layers mid-rotation made the whole UI
+    // flicker, worst in the home-screen app). Only a real size change (a
+    // desktop window) rebuilds the drift.
     let resizeTimer = 0;
     addEventListener('resize', () => {
       clearTimeout(resizeTimer);
-      resizeTimer = window.setTimeout(() => this.animate(), 200);
+      resizeTimer = window.setTimeout(() => {
+        const side = this.squareSide();
+        if (side > this.side * 1.05 || side < this.side * 0.8) {
+          this.side = side;
+          this.placeSquare();
+          this.animate();
+        }
+      }, 250);
     });
+  }
+
+  private side = 0;
+  private squareSide() {
+    // Phones and tablets: the screen's long side (the same in both orientations).
+    // A desktop window: its own size (the screen may be much bigger than it).
+    const touch = matchMedia('(pointer: coarse)').matches;
+    return Math.max(innerWidth, innerHeight, touch ? Math.max(screen.width || 0, screen.height || 0) : 0);
+  }
+  private placeSquare() {
+    const st = this.art.style;
+    st.inset = 'auto';
+    st.left = st.top = '50%';
+    st.width = st.height = `${this.side}px`;
+    st.marginLeft = st.marginTop = `${-this.side / 2}px`;
   }
 
   /** Drift speed multiplier (1 = normal). */
@@ -168,9 +197,9 @@ export class Backdrop {
   /** (Re)start the cover layers' drift for the current screen size. */
   private animate() {
     if (!this.group) return;
-    const w = innerWidth;
-    const h = innerHeight;
-    const side = Math.max(w, h);
+    const w = this.side;
+    const h = this.side;
+    const side = this.side;
     const old = this.anims;
     this.anims = this.group.layers.map((img, i) => {
       const l = LAYERS[i];
