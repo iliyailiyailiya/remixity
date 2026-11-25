@@ -86,3 +86,105 @@ export async function detectBpm(buffer: AudioBuffer): Promise<number | null> {
   while (bpm > 180) bpm /= 2;
   return Math.round(bpm * 10) / 10;
 }
+
+// ---------- beat grid ----------
+
+/** Onset envelope (as above) of a mono signal at RATE. */
+function onsetEnvelope(mono: Float32Array): Float32Array {
+  const frames = Math.floor(mono.length / HOP);
+  const energy = new Float32Array(frames);
+  for (let f = 0; f < frames; f++) {
+    let s = 0;
+    for (let i = f * HOP, e = i + HOP; i < e; i++) s += mono[i] * mono[i];
+    energy[f] = Math.log(1e-9 + s / HOP);
+  }
+  const win = Math.round(FPS * 0.4);
+  const onset = new Float32Array(frames);
+  let acc = 0;
+  let prev = energy[0] ?? 0;
+  const flux = new Float32Array(frames);
+  for (let f = 1; f < frames; f++) {
+    flux[f] = Math.max(0, energy[f] - prev);
+    prev = energy[f];
+  }
+  for (let f = 0; f < frames; f++) {
+    acc += flux[f];
+    if (f >= win) acc -= flux[f - win];
+    onset[f] = Math.max(0, flux[f] - acc / Math.min(f + 1, win));
+  }
+  return onset;
+}
+
+const at = (env: Float32Array, x: number) => {
+  const i = Math.floor(x);
+  if (i < 0 || i + 1 >= env.length) return 0;
+  const k = x - i;
+  return env[i] * (1 - k) + env[i + 1] * k;
+};
+
+export interface BeatGrid {
+  /** One beat, in seconds (refined over the whole song). */
+  beat: number;
+  /** Where a bar starts (beat 1), in seconds, within [0, 4 beats). */
+  offset: number;
+}
+
+/**
+ * Lay a 4/4 grid over the song. The tempo is refined around `bpm` (±1.5 BPM,
+ * so the grid doesn't drift over a long song) together with the beat phase:
+ * the pair whose beats land on the most onsets wins. Beat 1 of the bar is
+ * the phase where the low end (the kick) hits hardest.
+ */
+export async function detectGrid(buffer: AudioBuffer, bpm: number): Promise<BeatGrid> {
+  const length = Math.max(1, Math.floor(buffer.duration * RATE));
+  const ctx = new OfflineAudioContext(2, length, RATE);
+  const src = ctx.createBufferSource();
+  src.buffer = buffer;
+  const merge = ctx.createChannelMerger(2);
+  const mid = ctx.createBiquadFilter();
+  mid.type = 'lowpass';
+  mid.frequency.value = 2500;
+  const low = ctx.createBiquadFilter();
+  low.type = 'lowpass';
+  low.frequency.value = 150;
+  src.connect(mid).connect(merge, 0, 0);
+  src.connect(low).connect(merge, 0, 1);
+  merge.connect(ctx.destination);
+  src.start();
+  const out = await ctx.startRendering();
+  const env = onsetEnvelope(out.getChannelData(0));
+  const kick = onsetEnvelope(out.getChannelData(1));
+
+  // Coarse then fine: the detected BPM can be off by a beat or so a minute,
+  // which over a whole song puts the grid a beat out by the end.
+  let best = { score: -1, period: (60 / bpm) * FPS, phase: 0 };
+  const search = (lo: number, hi: number, step: number, phaseStep: number) => {
+    for (let b = lo; b <= hi + 1e-9; b += step) {
+      const period = (60 / b) * FPS;
+      for (let phase = 0; phase < period; phase += phaseStep) {
+        let s = 0;
+        for (let x = phase; x < env.length - 1; x += period) s += at(env, x);
+        if (s > best.score) best = { score: s, period, phase };
+      }
+    }
+  };
+  search(bpm - 1.5, bpm + 1.5, 0.05, 0.5);
+  const coarse = (60 * FPS) / best.period;
+  search(coarse - 0.06, coarse + 0.06, 0.005, 0.25);
+  const { period, phase } = best;
+  let bestJ = 0;
+  let bestKick = -1;
+  for (let j = 0; j < 4; j++) {
+    let s = 0;
+    for (let x = phase + j * period; x < kick.length - 1; x += 4 * period) s += at(kick, x);
+    if (s > bestKick) {
+      bestKick = s;
+      bestJ = j;
+    }
+  }
+  const beat = period / FPS;
+  // An onset frame starts up to a frame before the hit itself: half a frame
+  // later is where it lands on average (measured: −6 ms without this).
+  const late = HOP / 2 / RATE;
+  return { beat, offset: ((phase + bestJ * period) / FPS + late) % (4 * beat) };
+}

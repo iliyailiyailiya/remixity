@@ -13,6 +13,8 @@ export interface SavedTimeline {
   segments: Segment[];
   markers: number[];
   lanes: Lane[];
+  /** The beat grid (seconds per beat, where bar 1 starts). */
+  grid?: { beat: number; offset: number };
   savedAt: number;
 }
 

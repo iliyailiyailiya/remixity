@@ -43,8 +43,7 @@ echo mix / time / feedback, bass, EQ low / mid / high / air, low cut, high cut.
   - Lanes: tap to add a point, drag to move it, double-tap to delete it.
 - Grid from the song's BPM (1 bar, 1/2, 1/4, 1/8, 1/16 and triplets 1/4T, 1/8T,
   1/16T, or off). Split and automation points snap to it; bars are drawn
-  brighter. The grid starts at 0 s (first downbeat detection is phase 3), and
-  lines closer than 4 px are hidden until zoom exists.
+  brighter. Lines closer than 4 px are hidden (zoom in to see them).
 - "Turn your phone" card in portrait on touch phones.
 - Live playback of the mix-type lanes (reverb/echo mix, echo feedback, EQ,
   bass, cuts); phase 2 added the rest.
@@ -85,11 +84,24 @@ echo mix / time / feedback, bass, EQ low / mid / high / air, low cut, high cut.
   clears the song (Undo brings it back) and deletes the save; deleting a song
   from the library deletes its timeline.
 
-### Phase 3: arrangement freedom
-- Gaps and overlaps: sections get their own `at` position (silence between).
-- Find the first downbeat so the grid lines up with the music, not with 0 s.
-- Zoom and scroll (pinch / two-finger) for long songs.
-- Copy/duplicate a section (loops for edits).
+### Phase 3: grid + zoom (done) and arrangement freedom
+- **Beat grid from the audio** (`detectGrid` in `src/engine/bpm.ts`): the
+  tempo is refined around the detected BPM (±1.5, coarse then fine) together
+  with the beat phase, over the whole song, so the grid doesn't drift; bar 1
+  is the beat where the low end (kick) hits hardest. Synthetic drum tracks at
+  93–128 BPM: exact tempo, bar 1 within a few ms, 140 s in. Double-time songs
+  (DnB) come out at half tempo, like the BPM itself: the 2× button fixes both.
+  A kick on 1 and 3 can put bar 1 on beat 3: **Beat 1 here** sets it by hand.
+  Saved with the song's timeline.
+- **Zoom and scroll**: pinch (two fingers, also pans), ctrl/⌘ + wheel or
+  trackpad pinch, the − / + buttons (around the playhead); wheel/trackpad
+  scrolls. While playing, the view turns the page with the playhead (not
+  right after you scrolled). A thin bar under the ruler shows where you are.
+  Waveform drawn from RMS per 5 ms, so kicks show even on loud masters.
+- A tap on an empty lane spot adds the point on release, so a pinch that
+  starts on a lane doesn't leave a stray point.
+- Still to come: gaps/overlaps (sections with their own position),
+  duplicate a section, keyboard shortcuts on desktop.
 
 ### Phase 4: mix two tracks
 - A second track row: the next song in the queue. Crossfade lane (equal power)

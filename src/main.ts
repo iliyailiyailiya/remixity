@@ -8,7 +8,7 @@ import { canRecordVideo, levelsOf, storyImage, storyVideo, type StoryInfo, type 
 import { shareOrDownload } from './library/export';
 import { addMarker, assemble, cut, EditState, initialEdit, keepOnly, removeMarker } from './engine/edit';
 import { readMeta, songNames, tidyName } from './engine/meta';
-import { detectBpm } from './engine/bpm';
+import { detectBpm, detectGrid, type BeatGrid } from './engine/bpm';
 import { readbackIsNoisy } from './engine/noisecheck';
 import { Waveform } from './ui/waveform';
 import { EqView } from './ui/eqview';
@@ -55,6 +55,9 @@ let autoDirty = false; // re-apply the lanes on the next frame
 // whose timeline was opened, so plain Chop edits work as before).
 let timelineKey: string | null = null;
 let timelineUsed = false;
+// The beat grid (detected once per song, or set with "Beat 1 here").
+let gridInfo: BeatGrid | null = null;
+let gridDetecting = false;
 // Lanes as they were before a section move, by the edit Undo goes back to.
 const laneSnaps = new WeakMap<EditState, typeof automation.lanes>();
 // Quick start: while only the start of the song is decoded, the whole one is
@@ -222,6 +225,8 @@ async function load(file: File, known?: Track, ready?: Promise<Prepared>) {
     automation = emptyAutomation();
     timelineKey = songKey(known?.id ?? null, file);
     timelineUsed = false;
+    gridInfo = null;
+    timeline.fit();
     sel = null;
     trackName = tidyName(name) || name;
     player.setLoop(null);
@@ -1704,7 +1709,8 @@ const timeline = new Timeline($<HTMLCanvasElement>('tlCanvas'), {
   },
   position: () => player?.position ?? 0,
   ratio: () => params.ratio,
-  beat: () => (origBpm ? 60 / origBpm : null),
+  playing: () => !!player?.playing,
+  grid: () => currentGrid(),
   seek: (s) => {
     player?.seek(s);
     render();
@@ -1755,6 +1761,43 @@ tlAdd.addEventListener('change', () => {
 $('tlSplit').addEventListener('click', () => {
   if (player) commit(split(edit, timeline.snap(player.position)));
 });
+/**
+ * The grid in timeline seconds. Detected from the audio the first time it's
+ * needed (the refined tempo and where bar 1 falls); if the BPM was changed by
+ * hand since, the hand-set BPM wins and the bar start stays.
+ */
+function currentGrid(): BeatGrid | null {
+  if (!origBpm) return null;
+  if (!gridInfo && !gridDetecting && buffer && !fullReady) {
+    gridDetecting = true;
+    const token = loadToken;
+    const bpm = origBpm;
+    detectGrid(buffer, bpm)
+      .then((g) => {
+        if (token === loadToken && !gridInfo) {
+          gridInfo = g;
+          saveTimelineSoon();
+        }
+      })
+      .catch((err) => console.warn('grid detection failed', err))
+      .finally(() => (gridDetecting = false));
+  }
+  const handBeat = 60 / origBpm;
+  if (!gridInfo) return { beat: handBeat, offset: 0 };
+  return Math.abs(gridInfo.beat - handBeat) / handBeat < 0.005 ? gridInfo : { beat: handBeat, offset: gridInfo.offset };
+}
+
+// "Beat 1 here": the bar starts at the playhead.
+$('tlBeatOne').addEventListener('click', () => {
+  const g = currentGrid();
+  if (!g || !player) return;
+  const bar = g.beat * 4;
+  gridInfo = { beat: g.beat, offset: ((player.position % bar) + bar) % bar };
+  saveTimelineSoon();
+});
+$('tlZoomIn').addEventListener('click', () => timeline.zoom(1.6));
+$('tlZoomOut').addEventListener('click', () => timeline.zoom(1 / 1.6));
+
 // Grid (from the song's BPM): splits and points snap to it. Remembered.
 const tlGrid = $<HTMLSelectElement>('tlGrid');
 try {
@@ -1795,7 +1838,7 @@ function flushTimelineSave() {
   clearTimeout(saveTimer);
   saveTimer = 0;
   if (!timelineUsed || !timelineKey || !original) return;
-  const blank = automation.lanes.length === 0 && edit.segments.length === 1 && !edit.markers.length &&
+  const blank = automation.lanes.length === 0 && edit.segments.length === 1 && !edit.markers.length && !gridInfo &&
     edit.segments[0].start <= 0 && edit.segments[0].end >= original.duration - 1e-6;
   if (blank) void deleteTimeline(timelineKey);
   else
@@ -1805,6 +1848,7 @@ function flushTimelineSave() {
       segments: edit.segments.map((g) => ({ ...g })),
       markers: [...edit.markers],
       lanes: structuredClone(automation.lanes),
+      grid: gridInfo ?? undefined,
       savedAt: Date.now(),
     });
 }
@@ -1820,6 +1864,7 @@ async function restoreTimeline(token: number) {
   const fits = rec.segments.every((g) => g.start >= 0 && g.end <= original!.duration + 1e-3 && g.end > g.start);
   if (!fits || !rec.segments.length) return;
   timelineUsed = true;
+  if (rec.grid && rec.grid.beat > 0.1 && rec.grid.beat < 2) gridInfo = rec.grid;
   automation = { lanes: rec.lanes.slice(0, 5) };
   edit = { segments: rec.segments, markers: rec.markers };
   history = [];

@@ -3050,6 +3050,12 @@ body.lyrics-open .player {
   font-size: 0.78rem;
   font-weight: 650;
 }
+.tl-zoom {
+  width: 34px;
+  padding: 6px 0;
+  font-size: 1rem;
+  line-height: 1;
+}
 select.tl-btn {
   appearance: none;
   max-width: 13rem;
