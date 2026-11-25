@@ -41,6 +41,10 @@ echo mix / time / feedback, bass, EQ low / mid / high / air, low cut, high cut.
   - Sections: **Split** at the playhead, drag a section left/right to
     reorder it (commits through `commit()`, so Undo works).
   - Lanes: tap to add a point, drag to move it, double-tap to delete it.
+- Grid from the song's BPM (1 bar, 1/2, 1/4, 1/8, 1/16 and triplets 1/4T, 1/8T,
+  1/16T, or off). Split and automation points snap to it; bars are drawn
+  brighter. The grid starts at 0 s (first downbeat detection is phase 3), and
+  lines closer than 4 px are hidden until zoom exists.
 - "Turn your phone" card in portrait on touch phones.
 - Live playback of **mix-type** lanes (reverb/echo mix, echo feedback, EQ, bass,
   cuts), applied about 30 times a second through `player.setParams` (the chain
@@ -65,7 +69,7 @@ echo mix / time / feedback, bass, EQ low / mid / high / air, low cut, high cut.
 
 ### Phase 3: arrangement freedom
 - Gaps and overlaps: sections get their own `at` position (silence between).
-- Snap to beats (we already know the BPM) and to bars.
+- Find the first downbeat so the grid lines up with the music, not with 0 s.
 - Zoom and scroll (pinch / two-finger) for long songs.
 - Copy/duplicate a section (loops for edits).
 

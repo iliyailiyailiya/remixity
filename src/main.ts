@@ -1691,6 +1691,7 @@ const timeline = new Timeline($<HTMLCanvasElement>('tlCanvas'), {
   },
   position: () => player?.position ?? 0,
   ratio: () => params.ratio,
+  beat: () => (origBpm ? 60 / origBpm : null),
   seek: (s) => {
     player?.seek(s);
     render();
@@ -1733,7 +1734,24 @@ tlAdd.addEventListener('change', () => {
   autoDirty = true;
 });
 $('tlSplit').addEventListener('click', () => {
-  if (player) commit(split(edit, player.position));
+  if (player) commit(split(edit, timeline.snap(player.position)));
+});
+// Grid (from the song's BPM): splits and points snap to it. Remembered.
+const tlGrid = $<HTMLSelectElement>('tlGrid');
+try {
+  const g = localStorage.getItem('tlGrid');
+  if (g && [...tlGrid.options].some((o) => o.value === g)) tlGrid.value = g;
+} catch {
+  /* storage blocked */
+}
+timeline.grid = Number(tlGrid.value);
+tlGrid.addEventListener('change', () => {
+  timeline.grid = Number(tlGrid.value);
+  try {
+    localStorage.setItem('tlGrid', tlGrid.value);
+  } catch {
+    /* storage blocked */
+  }
 });
 $('tlUndo').addEventListener('click', () => undo());
 

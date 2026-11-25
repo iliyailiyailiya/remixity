@@ -27,6 +27,8 @@ export interface TimelineHost {
   automation: Automation;
   position(): number;
   ratio(): number;
+  /** One beat in timeline seconds (from the detected BPM), null when unknown. */
+  beat(): number | null;
   seek(t: number): void;
   /** Move section `from` to `to` (the host commits it, so Undo works). */
   moveSection(from: number, to: number): void;
@@ -56,6 +58,8 @@ export class Timeline {
   private lastTap = { lane: '', index: -1, at: 0 };
   private w = 0;
   private h = 0;
+  /** Grid size in beats (4 = a bar, 1 = a quarter, 2/3 = quarter triplets); 0 = off. */
+  grid = 1;
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -113,6 +117,35 @@ export class Timeline {
     return RULER + TRACK + i * this.laneH();
   }
 
+  // ---------- grid ----------
+
+  /** Grid spacing in seconds, or 0 when off / no BPM. */
+  private step() {
+    const b = this.host.beat();
+    return b && this.grid ? b * this.grid : 0;
+  }
+
+  /** The nearest grid line to t (t itself when the grid is off). */
+  snap(t: number) {
+    const st = this.step();
+    return st ? Math.min(this.length, Math.max(0, Math.round(t / st) * st)) : t;
+  }
+
+  private drawGrid() {
+    const st = this.step();
+    const beat = this.host.beat();
+    if (!st || !beat || this.xOf(st) < 4) return;
+    const g = this.ctx;
+    const bar = beat * 4;
+    const n = Math.floor(this.length / st);
+    for (let i = 0; i <= n; i++) {
+      const t = i * st;
+      const onBar = Math.abs(t / bar - Math.round(t / bar)) < 1e-6;
+      g.fillStyle = onBar ? 'rgba(255,255,255,0.16)' : 'rgba(255,255,255,0.06)';
+      g.fillRect(Math.round(this.xOf(t)), RULER, 1, this.h - RULER);
+    }
+  }
+
   // ---------- drawing ----------
 
   private ensurePeaks() {
@@ -157,6 +190,8 @@ export class Timeline {
       g.fillRect(x, RULER - 6, 1, 6);
       g.fillText(`${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`, x + 3, RULER / 2 - 2);
     }
+
+    this.drawGrid();
 
     // Sections.
     const e = this.host.edit();
@@ -280,7 +315,7 @@ export class Timeline {
       this.host.changed();
       return;
     }
-    if (index < 0) index = addPoint(lane, this.tOf(x), this.valueFromY(lane, y, top, lh));
+    if (index < 0) index = addPoint(lane, this.snap(this.tOf(x)), this.valueFromY(lane, y, top, lh));
     this.lastTap = { lane: lane.id, index, at: now };
     this.drag = { kind: 'point', lane, index };
     this.host.changed();
@@ -302,7 +337,7 @@ export class Timeline {
       const li = this.host.automation.lanes.indexOf(d.lane);
       if (li < 0) return;
       const top = this.laneTop(li);
-      movePoint(d.lane, d.index, this.tOf(x), this.valueFromY(d.lane, y, top, this.laneH()));
+      movePoint(d.lane, d.index, this.snap(this.tOf(x)), this.valueFromY(d.lane, y, top, this.laneH()));
       this.host.changed();
     }
   }
