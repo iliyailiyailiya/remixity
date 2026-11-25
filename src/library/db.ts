@@ -3,6 +3,7 @@
 // touches the big files), and playlists. Nothing leaves the device.
 
 import { undoubleArtist, undoubleTitle } from '../engine/meta';
+import { deleteTimeline } from '../automation/store';
 
 export interface Track {
   id: string;
@@ -105,6 +106,7 @@ export async function deleteTrack(id: string): Promise<void> {
   const all = (await done(lists.getAll() as IDBRequest<Playlist[]>)) ?? [];
   for (const p of all) if (p.trackIds.includes(id)) lists.put({ ...p, trackIds: p.trackIds.filter((t) => t !== id) });
   await finished(tx);
+  await deleteTimeline(id); // its saved timeline goes too
 }
 
 export async function allPlaylists(): Promise<Playlist[]> {

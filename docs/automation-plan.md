@@ -76,7 +76,14 @@ echo mix / time / feedback, bass, EQ low / mid / high / air, low cut, high cut.
     resumes. Click-track test: within ±2 ms.
   - Every other setting is written as ramps every 25 ms of output time;
     room changes suspend the render and crossfade a new impulse.
-- Still to do: save lanes + edit per song in IndexedDB, so a remix can be reopened.
+- **Saved per song** (`src/automation/store.ts`, its own IndexedDB
+  `remixity-timelines`): sections, markers and lanes, keyed by the library
+  song's id (or file name + size), saved 400 ms after each change and on
+  page hide, restored once the whole song is decoded. Only songs whose
+  timeline was opened are kept, so plain Chop edits work as before. A
+  different file under the same key (other length) is ignored. **Reset**
+  clears the song (Undo brings it back) and deletes the save; deleting a song
+  from the library deletes its timeline.
 
 ### Phase 3: arrangement freedom
 - Gaps and overlaps: sections get their own `at` position (silence between).

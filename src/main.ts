@@ -26,6 +26,7 @@ import { defaultPalette, generatedCover, paletteFrom } from './ui/palette';
 import { Pedal, MAX_RATIO, MIN_RATIO } from './ui/pedal';
 import { AUTO_PARAMS, addLane, emptyAutomation, moveLanesWithSection, moveSection, paramsAt, removeLane, split, valueAt, type Automation, type AutoParam } from './automation/model';
 import { Timeline } from './automation/timeline';
+import { deleteTimeline, loadTimeline, saveTimeline, songKey } from './automation/store';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -50,6 +51,10 @@ let history: EditState[] = [];
 // Automation lanes for the timeline (per song, not saved yet: see docs/automation-plan.md).
 let automation = emptyAutomation();
 let autoDirty = false; // re-apply the lanes on the next frame
+// Saved timeline: which song it belongs to, and whether to keep it (only songs
+// whose timeline was opened, so plain Chop edits work as before).
+let timelineKey: string | null = null;
+let timelineUsed = false;
 // Lanes as they were before a section move, by the edit Undo goes back to.
 const laneSnaps = new WeakMap<EditState, typeof automation.lanes>();
 // Quick start: while only the start of the song is decoded, the whole one is
@@ -157,6 +162,7 @@ async function prepare(file: File) {
 type Prepared = Awaited<ReturnType<typeof prepare>>;
 
 async function load(file: File, known?: Track, ready?: Promise<Prepared>) {
+  flushTimelineSave(); // the previous song's timeline, if a save was pending
   const token = ++loadToken;
   status.textContent = t('loading');
   try {
@@ -214,6 +220,8 @@ async function load(file: File, known?: Track, ready?: Promise<Prepared>) {
     edit = initialEdit(decoded.duration);
     history = [];
     automation = emptyAutomation();
+    timelineKey = songKey(known?.id ?? null, file);
+    timelineUsed = false;
     sel = null;
     trackName = tidyName(name) || name;
     player.setLoop(null);
@@ -237,6 +245,7 @@ async function load(file: File, known?: Track, ready?: Promise<Prepared>) {
           automation = emptyAutomation();
           sel = null;
           wave.setBuffer(full);
+          void restoreTimeline(token);
           estDuration = null;
           fullReady = null;
           $('dash').classList.remove('decoding');
@@ -255,7 +264,10 @@ async function load(file: File, known?: Track, ready?: Promise<Prepared>) {
           status.textContent = t('loadError');
         },
       );
-    } else wave.setBuffer(decoded);
+    } else {
+      wave.setBuffer(decoded);
+      void restoreTimeline(token);
+    }
 
     // Tags from download sites are often wrong; songNames() sorts that out.
     const names = songNames(meta, name);
@@ -1276,6 +1288,7 @@ function commit(next: EditState, keepAt?: number) {
     player.load(buffer, keepAt ?? player.position);
     wave.setBuffer(buffer);
   }
+  saveTimelineSoon();
   render();
 }
 
@@ -1321,6 +1334,7 @@ function undo() {
     player.load(buffer, player.position);
     wave.setBuffer(buffer);
   }
+  saveTimelineSoon();
   render();
 }
 
@@ -1701,9 +1715,13 @@ const timeline = new Timeline($<HTMLCanvasElement>('tlCanvas'), {
     moveLanesWithSection(automation, edit, from, to);
     commit(moveSection(edit, from, to));
   },
-  changed: () => (autoDirty = true),
+  changed: () => {
+    autoDirty = true;
+    saveTimelineSoon();
+  },
   removeLane: (id) => {
     removeLane(automation, id);
+    saveTimelineSoon();
     fillLaneMenu();
     apply(); // back to the plain settings for that parameter
   },
@@ -1717,6 +1735,7 @@ $('openTimeline').addEventListener('click', () => {
   $('tlInfo').textContent = t('timelineHint');
   timelineEl.hidden = false;
   document.body.classList.add('timeline-open');
+  timelineUsed = true; // from now on this song's timeline is kept
   timeline.open();
 });
 document.querySelectorAll('[data-tl-close]').forEach((b) =>
@@ -1731,6 +1750,7 @@ tlAdd.addEventListener('change', () => {
   if (param && buffer) addLane(automation, param, params[param], buffer.duration);
   fillLaneMenu();
   autoDirty = true;
+  saveTimelineSoon();
 });
 $('tlSplit').addEventListener('click', () => {
   if (player) commit(split(edit, timeline.snap(player.position)));
@@ -1753,6 +1773,63 @@ tlGrid.addEventListener('change', () => {
   }
 });
 $('tlUndo').addEventListener('click', () => undo());
+// Reset: the song as it was, no lanes (Undo brings it all back).
+$('tlReset').addEventListener('click', () => {
+  if (!original || !player) return;
+  laneSnaps.set(edit, structuredClone(automation.lanes));
+  automation.lanes = [];
+  fillLaneMenu();
+  commit(initialEdit(original.duration), 0);
+  apply();
+});
+
+// ---------- saved timelines ----------
+
+let saveTimer = 0;
+function saveTimelineSoon() {
+  clearTimeout(saveTimer);
+  saveTimer = window.setTimeout(flushTimelineSave, 400);
+}
+function flushTimelineSave() {
+  if (!saveTimer) return;
+  clearTimeout(saveTimer);
+  saveTimer = 0;
+  if (!timelineUsed || !timelineKey || !original) return;
+  const blank = automation.lanes.length === 0 && edit.segments.length === 1 && !edit.markers.length &&
+    edit.segments[0].start <= 0 && edit.segments[0].end >= original.duration - 1e-6;
+  if (blank) void deleteTimeline(timelineKey);
+  else
+    void saveTimeline({
+      key: timelineKey,
+      duration: original.duration,
+      segments: edit.segments.map((g) => ({ ...g })),
+      markers: [...edit.markers],
+      lanes: structuredClone(automation.lanes),
+      savedAt: Date.now(),
+    });
+}
+addEventListener('pagehide', flushTimelineSave);
+
+/** Bring back this song's saved timeline (once the whole song is decoded). */
+async function restoreTimeline(token: number) {
+  const key = timelineKey;
+  if (!key) return;
+  const rec = await loadTimeline(key);
+  if (!rec || token !== loadToken || key !== timelineKey || !original || !player) return;
+  if (Math.abs(rec.duration - original.duration) > 0.05) return; // another file under this name
+  const fits = rec.segments.every((g) => g.start >= 0 && g.end <= original!.duration + 1e-3 && g.end > g.start);
+  if (!fits || !rec.segments.length) return;
+  timelineUsed = true;
+  automation = { lanes: rec.lanes.slice(0, 5) };
+  edit = { segments: rec.segments, markers: rec.markers };
+  history = [];
+  buffer = assemble(original, edit.segments);
+  player.load(buffer, Math.min(player.position, buffer.duration));
+  wave.setBuffer(buffer);
+  autoDirty = true;
+  if (!automation.lanes.length) apply();
+  render();
+}
 
 // Live automation: every lane is applied ~25×/s on top of the settings (the
 // chain glides between values, the speed ramps, the reverb room crossfades).

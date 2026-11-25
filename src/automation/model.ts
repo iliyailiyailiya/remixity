@@ -70,12 +70,13 @@ export interface Automation {
 
 export const emptyAutomation = (): Automation => ({ lanes: [] });
 
-let nextId = 1;
+// Unique across reloads (saved lanes come back with their ids).
+const newLaneId = () => `lane${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
 
 /** A new lane for `param`, starting flat at its current value. Null when full or already there. */
 export function addLane(a: Automation, param: AutoParam, current: number, length: number): Lane | null {
   if (a.lanes.length >= MAX_LANES || a.lanes.some((l) => l.param === param)) return null;
-  const lane: Lane = { id: `lane${nextId++}`, param, points: [{ t: 0, v: current }, { t: length, v: current }] };
+  const lane: Lane = { id: newLaneId(), param, points: [{ t: 0, v: current }, { t: length, v: current }] };
   a.lanes.push(lane);
   return lane;
 }

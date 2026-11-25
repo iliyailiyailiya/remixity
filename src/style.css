@@ -3028,6 +3028,17 @@ body.lyrics-open .player {
   gap: 8px;
   padding: 6px 10px;
   flex: none;
+  overflow-x: auto; /* narrow screens: the buttons scroll instead of spilling off */
+  scrollbar-width: none;
+}
+.tl-bar::-webkit-scrollbar {
+  display: none;
+}
+.tl-bar > * {
+  flex: none;
+}
+.tl-bar > .tl-info {
+  flex: 1 1 auto;
 }
 .tl-btn {
   padding: 6px 12px;
