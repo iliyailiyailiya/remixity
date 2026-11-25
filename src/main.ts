@@ -223,6 +223,7 @@ async function load(file: File, known?: Track, ready?: Promise<Prepared>) {
     edit = initialEdit(decoded.duration);
     history = [];
     automation = emptyAutomation();
+    fillLaneMenu(); // the "+ Automation" list follows the lanes
     timelineKey = songKey(known?.id ?? null, file);
     timelineUsed = false;
     gridInfo = null;
@@ -248,6 +249,7 @@ async function load(file: File, known?: Track, ready?: Promise<Prepared>) {
           edit = initialEdit(full.duration);
           history = [];
           automation = emptyAutomation();
+          fillLaneMenu(); // the "+ Automation" list follows the lanes
           sel = null;
           wave.setBuffer(full);
           void restoreTimeline(token);
@@ -1328,6 +1330,7 @@ function undo() {
   const snap = laneSnaps.get(prev);
   if (snap) {
     automation.lanes = snap;
+    fillLaneMenu(); // the "+ Automation" list follows the lanes
     autoDirty = true;
   }
   const rebuild = prev.segments !== edit.segments;
@@ -1763,6 +1766,8 @@ document.querySelectorAll('[data-tl-close]').forEach((b) =>
     document.body.classList.remove('timeline-open');
   }),
 );
+// Rebuilt right before the list opens too, so it can never show another song's lanes.
+for (const ev of ['pointerdown', 'focus'] as const) tlAdd.addEventListener(ev, fillLaneMenu);
 tlAdd.addEventListener('change', () => {
   const param = tlAdd.value as AutoParam;
   if (param && buffer) addLane(automation, param, params[param], buffer.duration);
@@ -1878,6 +1883,7 @@ async function restoreTimeline(token: number) {
   timelineUsed = true;
   if (rec.grid && rec.grid.beat > 0.1 && rec.grid.beat < 2) gridInfo = rec.grid;
   automation = { lanes: rec.lanes.slice(0, 5) };
+  fillLaneMenu(); // the "+ Automation" list follows the lanes
   edit = { segments: rec.segments, markers: rec.markers };
   history = [];
   buffer = assemble(original, edit.segments);
