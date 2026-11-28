@@ -640,6 +640,21 @@ let incomingMix: {
   ease: number;
 } | null = null;
 let mixStarting = false;
+/** "Hear it" is playing a transition: stop when song b reaches `at` (the mix area's end). */
+let previewStop: { a: string; b: string; at: number } | null = null;
+function watchPreview() {
+  const p = previewStop;
+  if (!p || !player) return;
+  if (!player.playing || (libraryId !== p.a && libraryId !== p.b)) {
+    if (!mixStarting) previewStop = null; // paused, or another song: not a preview any more
+    return;
+  }
+  if (libraryId === p.b && player.position >= p.at) {
+    previewStop = null;
+    player.pause();
+    render();
+  }
+}
 /** The transition that brought the playing song in (the Mix card draws it). */
 let lastIncoming: Incoming | null = null;
 /** After a beat-matched transition: the new song's speed glides back to its own. */
@@ -724,6 +739,7 @@ function easeSpeed() {
 /** The transition into the next song, if one should start now. */
 function mixWatch() {
   easeSpeed();
+  watchPreview();
   if (!mixOn || mixStarting || !player?.playing || player.mixing) return;
   if (player.repeating || player.looping || player.provisional || estDuration) return;
   if (!libraryId || libraryId !== queue[queueIndex] || queueIndex + 1 >= queue.length) return;
@@ -835,9 +851,15 @@ const mixUi = initMix({
   mixing: () => !!player?.mixing,
   nextPlan: () => planNext(true),
   incoming: () => lastIncoming,
-  preview: async (a, b) => {
+  previewing: () => !!previewStop,
+  stopPreview: () => {
+    previewStop = null;
+    player?.pause();
+    render();
+  },
+  preview: async (a, b, before) => {
     // Hear a transition: load its first song if needed, get both analysed,
-    // then play from a few seconds before it starts. Again = the same one.
+    // play the mix area (or from one bar before it) and stop at its end.
     if (!player) return;
     void player.ctx.resume();
     nowPlaying.set(true); // (inside the tap, for the lock screen)
@@ -852,7 +874,9 @@ const mixUi = initMix({
     }
     const plan = planNext();
     if (!plan || !player) return;
-    player.seek(Math.max(0, plan.startA - 4 * params.ratio));
+    const lead = before ? (plan.bar ?? 2) : 0; // real seconds before the mix area
+    player.seek(Math.max(0, plan.startA - lead * params.ratio));
+    previewStop = { a, b, at: plan.bIn + plan.dur * plan.rateIn };
     if (!player.playing) player.play();
     render();
   },

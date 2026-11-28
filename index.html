@@ -495,7 +495,6 @@
           <span id="mixA"></span>
           <span id="mixB"></span>
         </div>
-        <button id="mixPreview" class="mix-preview" data-i18n="mixPreview"></button>
       </header>
       <div class="mix-full-body">
         <div id="mixStudio" class="mix-studio" hidden>
@@ -518,6 +517,14 @@
             <canvas id="mixCanvas" class="mix-canvas"></canvas>
             <p id="mixStageInfo" class="mix-stage-info"></p>
           </div>
+          <div class="mix-hear">
+            <button id="mixPreview" class="mix-preview"><span id="mixPreviewLabel" data-i18n="mixPreview"></span></button>
+            <label class="switch small">
+              <input id="mixBefore" type="checkbox" />
+              <span class="track"><i></i></span>
+              <span data-i18n="mixBefore"></span>
+            </label>
+          </div>
           <div class="mix-row">
             <small data-i18n="mixLength"></small>
             <div id="mixLen" class="mix-chips"></div>
@@ -527,9 +534,9 @@
             <div id="mixPresets" class="mix-chips scroll"></div>
           </div>
           <div id="mixTabs" class="mix-tabs" role="tablist">
-            <button data-tab="volume" class="vol" aria-pressed="true" data-i18n="mixVolume"></button>
-            <button data-tab="eq" class="eq" aria-pressed="false" data-i18n="mixEq"></button>
-            <button data-tab="effect" class="fx" aria-pressed="false" data-i18n="mixEffect"></button>
+            <button data-tab="volume" class="vol" aria-pressed="true"><span data-i18n="mixVolume"></span><small class="tab-val"></small></button>
+            <button data-tab="eq" class="eq" aria-pressed="false"><span data-i18n="mixEq"></span><small class="tab-val"></small></button>
+            <button data-tab="effect" class="fx" aria-pressed="false"><span data-i18n="mixEffect"></span><small class="tab-val"></small></button>
           </div>
           <div id="mixOptions" class="mix-chips scroll"></div>
           <div class="mix-row">

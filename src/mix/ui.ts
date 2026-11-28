@@ -65,8 +65,13 @@ export interface MixHost {
   /** The transition out of the playing song (rough until the next song is decoded). */
   nextPlan(): Plan | null;
   incoming(): Incoming | null;
-  /** Play the transition a → b from a few seconds before it (loading a if needed). */
-  preview(a: string, b: string): Promise<void>;
+  /**
+   * Play the transition a → b (loading a if needed) and stop at its end;
+   * `before` = start one bar earlier.
+   */
+  preview(a: string, b: string, before: boolean): Promise<void>;
+  previewing(): boolean;
+  stopPreview(): void;
   /**
    * Open a song's own automation (the timeline), loading the song if needed.
    * `back` runs when the timeline is closed (to come back to the mix).
@@ -383,8 +388,23 @@ export function initMix(host: MixHost) {
     $('mixB').textContent = ed.b.title + (tb ? ` · ${tb}` : '');
   }
 
+  const before = $<HTMLInputElement>('mixBefore');
+  try {
+    before.checked = localStorage.getItem('mixBefore') === '1';
+  } catch {
+    /* storage blocked */
+  }
+  before.addEventListener('change', () => {
+    try {
+      localStorage.setItem('mixBefore', before.checked ? '1' : '0');
+    } catch {
+      /* storage blocked */
+    }
+  });
   $('mixPreview').addEventListener('click', () => {
-    if (ed) void host.preview(ed.a.id, ed.b.id);
+    if (!ed) return;
+    if (host.previewing()) host.stopPreview();
+    else void host.preview(ed.a.id, ed.b.id, before.checked);
   });
   for (const [btn, side] of [
     ['mixSongA', 'a'],
@@ -483,8 +503,17 @@ export function initMix(host: MixHost) {
       }),
       ...PRESET_NAMES.map((n) => chip(presetLabel(n), p === n, () => change({ ...PRESETS[n] }))),
     );
-    for (const b of document.querySelectorAll<HTMLButtonElement>('#mixTabs button'))
-      b.setAttribute('aria-pressed', String(b.dataset.tab === tab));
+    const valueOf: Record<Tab, string> = {
+      volume: label(`mixV_${shown.volume}`),
+      eq: label(`mixE_${shown.eq}`),
+      effect: label(`mixF_${shown.effect}`),
+    };
+    for (const b of document.querySelectorAll<HTMLButtonElement>('#mixTabs button')) {
+      const k = b.dataset.tab as Tab;
+      b.setAttribute('aria-pressed', String(k === tab));
+      b.querySelector('.tab-val')!.textContent = valueOf[k];
+      b.classList.toggle('idle', (k === 'eq' || k === 'effect') && shown[k] === 'none');
+    }
     const opts =
       tab === 'volume'
         ? VOLUME.map((v) => chip(label(`mixV_${v}`), shown.volume === v, () => change({ volume: v })))
@@ -566,10 +595,10 @@ export function initMix(host: MixHost) {
 
     g.fillStyle = 'rgba(255,255,255,0.12)';
     g.fillRect(0, rowH - dpr / 2, w, dpr);
-    const curve = (deck: 'a' | 'b', top: number, val: (s: StripState) => number, color: string, alpha = 1) => {
+    const curve = (deck: 'a' | 'b', top: number, val: (s: StripState) => number, color: string, alpha = 1, width = 2.2) => {
       g.strokeStyle = color;
       g.globalAlpha = alpha;
-      g.lineWidth = 2.2 * dpr;
+      g.lineWidth = width * dpr;
       g.beginPath();
       const n = 120;
       for (let i = 0; i <= n; i++) {
@@ -582,10 +611,18 @@ export function initMix(host: MixHost) {
       g.stroke();
       g.globalAlpha = 1;
     };
+    /** Does this control do anything in this transition (else its line would just sit at the top)? */
+    const moves = (k: Tab, deck: 'a' | 'b') => {
+      for (let i = 0; i <= 20; i++) if (SHOW[k](stripAt(tr, deck, i / 20)) < 0.98) return true;
+      return false;
+    };
     for (const [deck, top] of [
       ['a', 0],
       ['b', rowH],
     ] as const) {
+      // The other two controls, faint, so you see everything a style does.
+      for (const k of ['volume', 'eq', 'effect'] as Tab[])
+        if (k !== tab && moves(k, deck)) curve(deck, top, SHOW[k], COLORS[k], 0.4, 1.4);
       if (tab === 'volume') curve(deck, top, (s) => s.gain, COLORS.volume);
       else if (tab === 'eq') {
         curve(deck, top, (s) => dbH(s.low), COLORS.eq);
@@ -662,7 +699,15 @@ export function initMix(host: MixHost) {
         raf = 0;
         return;
       }
-      if (!editView.hidden) drawEditor();
+      if (!editView.hidden) {
+        drawEditor();
+        const on = host.previewing();
+        const btn = $('mixPreview');
+        if (btn.classList.contains('stop') !== on) {
+          btn.classList.toggle('stop', on);
+          $('mixPreviewLabel').textContent = t(on ? 'mixStop' : 'mixPreview');
+        }
+      }
       raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);

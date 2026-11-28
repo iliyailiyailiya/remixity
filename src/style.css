@@ -3445,7 +3445,7 @@ body.timeline-open {
   font-size: 0.85rem;
   position: relative;
 }
-.mix-tabs button::before {
+.mix-tabs button > span::before {
   content: '';
   display: inline-block;
   width: 8px;
@@ -3454,13 +3454,13 @@ body.timeline-open {
   margin-right: 6px;
   vertical-align: 1px;
 }
-.mix-tabs .vol::before {
+.mix-tabs .vol > span::before {
   background: #29c8ff;
 }
-.mix-tabs .eq::before {
+.mix-tabs .eq > span::before {
   background: #ffd23b;
 }
-.mix-tabs .fx::before {
+.mix-tabs .fx > span::before {
   background: #c77dff;
 }
 .mix-tabs button[aria-pressed='true'] {
@@ -3684,4 +3684,40 @@ body.mix-open .home {
 }
 .mix-export-hint {
   text-align: center;
+}
+
+.mix-hear {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 12px;
+}
+.mix-hear .mix-preview {
+  flex: none;
+  min-width: 120px;
+  padding: 10px 18px;
+  font-size: 0.95rem;
+}
+.mix-preview.stop {
+  background: #ff5a5a;
+  color: #fff;
+}
+.mix-tabs button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 7px 0;
+}
+.mix-tabs .tab-val {
+  font-weight: 500;
+  font-size: 0.72rem;
+  color: var(--dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.mix-tabs button.idle span {
+  opacity: 0.55;
 }
