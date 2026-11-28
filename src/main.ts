@@ -526,6 +526,11 @@ function decodeAhead() {
 async function playFromQueue(index: number, autoplay = true): Promise<boolean> {
   const id = queue[index];
   if (!id) return false;
+  // Start the lock screen's media element now, before anything is awaited:
+  // iOS only lets it start inside the tap itself. (Loading and decoding come
+  // after, and by then iOS refused, so the lock-screen buttons never worked
+  // for songs started from the library.)
+  if (autoplay) nowPlaying.set(true);
   queueIndex = index;
   updateTrackButtons();
   let track: Track | undefined;
@@ -536,7 +541,10 @@ async function playFromQueue(index: number, autoplay = true): Promise<boolean> {
     ahead = null;
   } else {
     const [t, audio] = await Promise.all([getTrack(id), getAudio(id)]);
-    if (!t || !audio) return false;
+    if (!t || !audio) {
+      nowPlaying.set(!!player?.playing); // nothing new to play after all
+      return false;
+    }
     track = t;
     file = new File([audio], t.fileName, { type: t.type });
   }
@@ -2228,6 +2236,13 @@ function syncLockScreen() {
 }
 // The animation loop stops while the screen is off; this doesn't.
 setInterval(syncLockScreen, 500);
+// Back in the foreground while a song plays: wake the audio and the lock
+// screen's element if iOS parked either of them.
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden || !player?.playing) return;
+  void player.ctx.resume();
+  nowPlaying.set(true);
+});
 // Last values written by renderTransport: it runs every frame, so it only
 // touches the page when something visible actually changed.
 const shown = { bar: '', now: '', left: '', playing: null as boolean | null };
