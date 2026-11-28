@@ -3795,3 +3795,28 @@ body.mix-open .home {
   background: rgba(255, 255, 255, 0.9);
   color: #000;
 }
+
+/* One transition switched off */
+.mix-link.off .mix-pill {
+  opacity: 0.55;
+  border-style: dashed;
+  border-color: var(--line);
+  background: transparent;
+}
+.mix-link.off .mix-pill svg {
+  stroke: var(--dim);
+}
+.mix-off-hint {
+  display: none;
+  text-align: center;
+}
+#mixEditView.is-off .mix-off-hint {
+  display: block;
+}
+#mixEditView.is-off .mix-row:has(#mixLen),
+#mixEditView.is-off .mix-tabs,
+#mixEditView.is-off #mixOptions,
+#mixEditView.is-off .mix-hear,
+#mixEditView.is-off .mix-stage {
+  display: none;
+}

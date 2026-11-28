@@ -750,7 +750,7 @@ function mixWatch() {
     playingGrid(); // start detecting the beat now, not at the last moment
   }
   const plan = planNext();
-  if (!plan || !ahead) return;
+  if (!plan || !ahead || plan.tr.off) return; // (this one is off: the song ends and the next starts, as without Mix)
   const pos = player.exactPosition;
   const lead = (plan.startA - pos) / params.ratio;
   if (lead > 0.02) return;

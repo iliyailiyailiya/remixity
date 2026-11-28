@@ -24,6 +24,8 @@ export interface Transition {
   seconds: number;
   /** Where B comes in, relative to the automatic point (seconds of real time, + = later). */
   shift: number;
+  /** No transition between these two: back to back, as without Mix. */
+  off?: boolean;
   /** Line the beats up when the tempos are close enough (default on). */
   sync?: boolean;
   /** Chosen by hand (true) or the automatic default. */
@@ -94,6 +96,17 @@ export interface Plan {
 export function planTransition(i: PlanInput): Plan {
   const auto = !i.tr.custom;
   const { gridA, gridB } = i;
+  if (i.tr.off)
+    return {
+      dur: 0.05,
+      startA: Math.max(0, i.aEnd - 0.05 * i.rateA),
+      bIn: 0,
+      rateIn: i.rateB,
+      synced: false,
+      nudge: 0,
+      tr: { ...i.tr, volume: 'cut', eq: 'none', effect: 'none' },
+      bar: null,
+    };
   if (i.tr.sync !== false && gridA && gridB && gridA.beat > 0.2 && gridB.beat > 0.2) {
     const heard = i.rateA / gridA.beat; // A's beats per real second
     let best: { rate: number; dev: number } | null = null;

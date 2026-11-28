@@ -297,10 +297,13 @@ export function initMix(host: MixHost) {
       const txt = document.createElement('span');
       const p = presetOf(trn);
       // Auto: the app decides (style and length). Custom: you changed this one.
-      txt.textContent = trn.custom
-        ? `${t('mixCustom')} · ${p ? `${presetLabel(p)} · ` : ''}${trn.bars} ${t('mixBars')}`
-        : t('mixAuto');
-      pill.classList.toggle('custom', !!trn.custom);
+      txt.textContent = trn.off
+        ? t('mixNoMix')
+        : trn.custom
+          ? `${t('mixCustom')} · ${p ? `${presetLabel(p)} · ` : ''}${trn.bars} ${t('mixBars')}`
+          : t('mixAuto');
+      pill.classList.toggle('custom', !!trn.custom && !trn.off);
+      pill.classList.toggle('off', !!trn.off);
       btn.append(txt);
       if (i === 0) {
         const when = document.createElement('em');
@@ -332,7 +335,7 @@ export function initMix(host: MixHost) {
       if (host.mixing()) {
         text = t('mixNow');
         mixingNow = true;
-      } else if (plan && host.isOn()) {
+      } else if (plan && host.isOn() && !plan.tr.off) {
         const left = (plan.startA - host.position()) / host.ratio();
         text = left > 0 ? `${t('mixIn')} ${fmtTime(left)}` : t('mixNow');
       }
@@ -481,7 +484,7 @@ export function initMix(host: MixHost) {
 
   function change(next: Partial<Transition>) {
     if (!ed) return;
-    ed.tr = { ...ed.tr, ...next, custom: true };
+    ed.tr = { ...ed.tr, off: false, ...next, custom: true };
     saveTransition(ed.a.id, ed.b.id, ed.tr);
     if (!host.isOn()) host.setOn(true); // editing a transition means you want to hear it
     renderControls();
@@ -509,7 +512,8 @@ export function initMix(host: MixHost) {
     sync.className = 'sync' + (pl?.synced ? '' : ' idle'); // on, but these two can't be synced
     sync.disabled = !(ed.a.grid && ed.b.grid);
     $('mixLen').replaceChildren(...len, sync);
-    const p = tr.custom ? presetOf(tr) : null;
+    const p = tr.custom && !tr.off ? presetOf(tr) : null;
+    editView.classList.toggle('is-off', !!tr.off);
     $('mixPresets').replaceChildren(
       chip(t('mixAuto'), !tr.custom, () => {
         if (!ed) return;
@@ -519,7 +523,8 @@ export function initMix(host: MixHost) {
         renderHead();
         stale = true;
       }),
-      ...PRESET_NAMES.map((n) => chip(presetLabel(n), p === n, () => change({ ...PRESETS[n] }))),
+      chip(t('mixOffOne'), !!tr.off, () => change({ off: true })),
+      ...PRESET_NAMES.map((n) => chip(presetLabel(n), p === n, () => change({ ...PRESETS[n], off: false }))),
     );
     const valueOf: Record<Tab, string> = {
       volume: label(`mixV_${shown.volume}`),
@@ -801,7 +806,7 @@ export function initMix(host: MixHost) {
     }
     const pl = host.nextPlan();
     const nextId = host.queue()[1];
-    if (!pl || !nextId) return null;
+    if (!pl || !nextId || pl.tr.off) return null;
     return {
       aBuf: buf,
       bBuf: host.aheadBuffer(nextId),
