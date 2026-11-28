@@ -290,7 +290,11 @@ export function initMix(host: MixHost) {
       btn.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h4c4 0 6 10 10 10h4" /><path d="M3 17h4c4 0 6-10 10-10h4" /></svg>`;
       const txt = document.createElement('span');
       const p = presetOf(trn);
-      txt.textContent = `${trn.custom ? (p ? presetLabel(p) : t('mixCustom')) : t('mixAuto')} · ${trn.bars} ${t('mixBars')}`;
+      // Auto: the app decides (style and length). Custom: you changed this one.
+      txt.textContent = trn.custom
+        ? `${t('mixCustom')} · ${p ? `${presetLabel(p)} · ` : ''}${trn.bars} ${t('mixBars')}`
+        : t('mixAuto');
+      pill.classList.toggle('custom', !!trn.custom);
       btn.append(txt);
       if (i === 0) {
         const when = document.createElement('em');
