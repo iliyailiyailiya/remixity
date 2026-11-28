@@ -25,6 +25,7 @@ import { NowPlaying } from './nowPlaying';
 import { debugOn, initDebugPanel, npLog } from './debugLog';
 import { initFix } from './library/fix';
 import { Backdrop } from './ui/backdrop';
+import { marquee } from './ui/marquee';
 import { defaultPalette, generatedCover, paletteFrom } from './ui/palette';
 import { Pedal, MAX_RATIO, MIN_RATIO } from './ui/pedal';
 import { AUTO_PARAMS, addLane, emptyAutomation, moveLanesWithSection, moveSection, paramsAt, removeLane, split, valueAt, type Automation, type AutoParam, type Lane } from './automation/model';
@@ -911,6 +912,8 @@ const mixUi = initMix({
 $('openMix').classList.toggle('on', mixOn);
 $('openMix').addEventListener('click', () => mixUi.open());
 $('mixTwoHome').addEventListener('click', () => mixUi.openStudio());
+// Long names scroll instead of ending in "…".
+for (const id of ['title', 'artist', 'lyFullTitle', 'lyFullArtist']) marquee($(id));
 
 /** Like every player: back to the start first, then the previous song. */
 async function prevInQueue() {

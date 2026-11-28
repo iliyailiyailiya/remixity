@@ -549,6 +549,7 @@ html {
   text-overflow: ellipsis;
 }
 .artist {
+  min-width: 0;
   font-size: 1.15rem;
   color: var(--dim);
   white-space: nowrap;
@@ -3727,4 +3728,41 @@ body.mix-open .home {
 }
 .mix-link.custom .mix-pill svg {
   stroke: #ffd23b;
+}
+
+/* Long names scroll back and forth (src/ui/marquee.ts) */
+.mq-in {
+  display: inline-block;
+  white-space: nowrap;
+}
+.mq {
+  text-overflow: clip !important;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 10px, #000 calc(100% - 18px), transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 10px, #000 calc(100% - 18px), transparent);
+  padding-left: 6px;
+  margin-left: -6px;
+}
+.mq .mq-in {
+  animation: mq var(--mq-t, 8s) ease-in-out infinite;
+}
+@keyframes mq {
+  0%,
+  18% {
+    transform: translateX(0);
+  }
+  62%,
+  78% {
+    transform: translateX(var(--mq-d));
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mq .mq-in {
+    animation: none;
+  }
+  .mq {
+    text-overflow: ellipsis !important;
+  }
 }

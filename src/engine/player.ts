@@ -38,7 +38,21 @@ interface Tail {
   src: AudioBufferSourceNode | null;
   stretch: StretchNode | null;
   timer: number;
+  /** Its speed, and its part of the transition (to re-time both when the pedal moves). */
+  rate: number;
+  fade: Fade;
+  /** Real seconds of its song left when it was let go. */
+  left: number;
 }
+
+/** A transition's curves in progress: x0 at context time t0, the whole transition lasting `dur` there. */
+interface Fade {
+  tr: Pick<Transition, 'volume' | 'eq' | 'effect'>;
+  t0: number;
+  x0: number;
+  dur: number;
+}
+const fadeX = (f: Fade, now: number) => f.x0 + (now - f.t0) / f.dur;
 
 export class Player {
   ctx: AudioContext;
@@ -454,12 +468,21 @@ export class Player {
     const now = this.ctx.currentTime;
     const left = (this.duration - this.position) / this.ratio; // real seconds until A's end
     const stretch = this.stretchRunning ? this.stretch : null;
-    const tail: Tail = { chain: this.chain, strip: this.strip, src: this.src, stretch, timer: 0 };
+    const tail: Tail = {
+      chain: this.chain,
+      strip: this.strip,
+      src: this.src,
+      stretch,
+      timer: 0,
+      rate: this.ratio,
+      fade: { tr, t0: now, x0, dur },
+      left,
+    };
     tail.strip.run(tr, 'a', now, dur, x0);
     if (tail.src) tail.src.onended = null;
-    const end = Math.min(left, dur * (1 - x0)) + 0.05;
-    tail.timer = window.setTimeout(() => this.endTail(tail), end * 1000);
+    this.timeTail(tail, now);
     this.tails.push(tail);
+    this.fade = null;
 
     // The player starts over, empty, on a new chain.
     clearInterval(this.endTimer);
@@ -494,13 +517,56 @@ export class Player {
    * over `dur` seconds from now. Call right after play().
    */
   mixIn(tr: Pick<Transition, 'volume' | 'eq' | 'effect'>, dur: number, x0 = 0) {
-    this.strip.run(tr, 'b', this.ctx.currentTime, dur, x0);
+    const now = this.ctx.currentTime;
+    this.strip.run(tr, 'b', now, dur, x0);
+    this.fade = x0 < 1 ? { tr, t0: now, x0, dur } : null;
+  }
+  /** This song's part of the transition it's coming in with. */
+  private fade: Fade | null = null;
+
+  /** Stop the tail when its fade (or its song) ends. */
+  private timeTail(t: Tail, now: number) {
+    clearTimeout(t.timer);
+    const x = fadeX(t.fade, now);
+    const fadeLeft = Math.max(0, (1 - x) * t.fade.dur);
+    const songLeft = t.left - (now - t.fade.t0); // (re-based whenever the speed changes)
+    t.timer = window.setTimeout(() => this.endTail(t), (Math.min(songLeft, fadeLeft) + 0.05) * 1000);
+  }
+
+  /**
+   * The pedal moved during a transition: the leaving song changes speed by
+   * the same factor (so the beats stay together) and the rest of the
+   * transition stretches or shrinks with it, for both songs.
+   */
+  private retimeMix(k: number, glide: boolean) {
+    const now = this.ctx.currentTime;
+    const rescale = (f: Fade): Fade => ({ tr: f.tr, t0: now, x0: Math.min(1, fadeX(f, now)), dur: f.dur / k });
+    for (const t of this.tails) {
+      t.left = (t.left - (now - t.fade.t0)) / k;
+      t.fade = rescale(t.fade);
+      t.rate *= k;
+      if (t.fade.x0 < 1) t.strip.run(t.fade.tr, 'a', now, t.fade.dur, t.fade.x0);
+      const rate = t.src?.playbackRate;
+      if (rate) {
+        rate.cancelScheduledValues(now);
+        if (glide) rate.linearRampToValueAtTime(t.rate, now + 0.04);
+        else rate.setValueAtTime(t.rate, now);
+      }
+      if (t.stretch) void t.stretch.schedule({ rate: t.rate, output: now });
+      this.timeTail(t, now);
+    }
+    if (this.fade) {
+      this.fade = rescale(this.fade);
+      if (this.fade.x0 < 1) this.strip.run(this.fade.tr, 'b', now, this.fade.dur, this.fade.x0);
+      else this.fade = null;
+    }
   }
 
   /** Stop any transition right away: the tail goes, this song is at full. */
   private dropTails() {
     for (const t of [...this.tails]) this.endTail(t);
     this.strip.set(NEUTRAL);
+    this.fade = null;
   }
 
   private endTail(t: Tail) {
@@ -560,7 +626,11 @@ export class Player {
       const now = this.ctx.currentTime;
       this.srcOff0 += (now - this.srcCtx0) * this.ratio;
       this.srcCtx0 = now;
+      const k = p.ratio / this.ratio;
       this.ratio = p.ratio;
+      // (Only for a song that's playing: a new song arriving at its own
+      // speed isn't the pedal moving.)
+      if ((this.tails.length || this.fade) && this.buffer && this.playing) this.retimeMix(k, fromLanes);
       const rate = this.src?.playbackRate;
       if (rate) {
         rate.cancelScheduledValues(now);
