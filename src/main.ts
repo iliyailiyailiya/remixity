@@ -181,7 +181,11 @@ async function load(file: File, known?: Track, ready?: Promise<Prepared>) {
       if (nav.audioSession) nav.audioSession.type = 'playback';
       player = new Player(params);
       player.setRepeat(repeatOn);
-      player.onEnded = () => (nextInQueue(true) ? undefined : render());
+      player.onEnded = () => {
+        if (nextInQueue(true)) return;
+        nowPlaying.set(false); // the end of the queue: nothing plays any more
+        render();
+      };
       player.onInterrupted = render;
       player.onPlay = () => {
         announcePlaying();
@@ -2202,7 +2206,9 @@ const nowPlaying = new NowPlaying();
 /** Play state and position for the lock screen. Also runs with the screen off. */
 function syncLockScreen() {
   if (!player) return;
-  nowPlaying.set(player.playing);
+  // (The silent element is NOT paused here: a song change pauses the player
+  // for a moment, and pausing the element then let iOS suspend our audio, so
+  // the next song arrived paused. It only stops when you pause.)
   if (!('mediaSession' in navigator)) return;
   const ms = navigator.mediaSession;
   const state = player.playing ? 'playing' : 'paused';
@@ -2362,3 +2368,4 @@ if (import.meta.env.DEV) {
     nowPlaying: () => nowPlaying.active,
   };
 }
+

@@ -7,26 +7,31 @@
 // then sends those buttons to our Media Session handlers. It's silent and
 // a few kilobytes; the music itself still comes from Web Audio.
 
-/** One second of silence as a WAV file (8 kHz, 16-bit mono). */
+/**
+ * 30 seconds of silence as a WAV file (8 kHz, 8-bit mono, ~240 KB, made here,
+ * nothing downloaded). Long on purpose: iOS doesn't treat very short media as
+ * the "main" thing playing, and then won't hand it the lock-screen buttons.
+ */
 function silentWav(): string {
   const rate = 8000;
-  const n = rate;
-  const buf = new ArrayBuffer(44 + n * 2);
+  const n = rate * 30;
+  const buf = new ArrayBuffer(44 + n);
   const v = new DataView(buf);
   const s = (o: number, t: string) => [...t].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
   s(0, 'RIFF');
-  v.setUint32(4, 36 + n * 2, true);
+  v.setUint32(4, 36 + n, true);
   s(8, 'WAVE');
   s(12, 'fmt ');
   v.setUint32(16, 16, true);
-  v.setUint16(20, 1, true);
-  v.setUint16(22, 1, true);
+  v.setUint16(20, 1, true); // PCM
+  v.setUint16(22, 1, true); // mono
   v.setUint32(24, rate, true);
-  v.setUint32(28, rate * 2, true);
-  v.setUint16(32, 2, true);
-  v.setUint16(34, 16, true);
+  v.setUint32(28, rate, true); // bytes per second
+  v.setUint16(32, 1, true); // block align
+  v.setUint16(34, 8, true); // 8-bit: silence is 128
   s(36, 'data');
-  v.setUint32(40, n * 2, true);
+  v.setUint32(40, n, true);
+  new Uint8Array(buf, 44).fill(128);
   return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
 }
 
@@ -42,6 +47,8 @@ export class NowPlaying {
       el.preload = 'auto';
       el.setAttribute('playsinline', '');
       el.setAttribute('aria-hidden', 'true');
+      el.style.display = 'none';
+      document.body.append(el); // in the page, like a normal player's element
       this.el = el;
     }
     return this.el;
