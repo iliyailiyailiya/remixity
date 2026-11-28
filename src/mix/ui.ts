@@ -398,23 +398,31 @@ export function initMix(host: MixHost) {
     $('mixB').textContent = ed.b.title + (tb ? ` · ${tb}` : '');
   }
 
-  const before = $<HTMLInputElement>('mixBefore');
+  // Where "Hear it" starts: the mix area only, or one bar before it (the default).
+  let fromBar = true;
   try {
-    before.checked = localStorage.getItem('mixBefore') === '1';
+    fromBar = localStorage.getItem('mixBefore') !== '0';
   } catch {
     /* storage blocked */
   }
-  before.addEventListener('change', () => {
-    try {
-      localStorage.setItem('mixBefore', before.checked ? '1' : '0');
-    } catch {
-      /* storage blocked */
-    }
-  });
+  const fromBtns = [...document.querySelectorAll<HTMLButtonElement>('#mixFrom button')];
+  const showFrom = () => fromBtns.forEach((b) => b.setAttribute('aria-pressed', String((b.dataset.from === 'bar') === fromBar)));
+  fromBtns.forEach((b) =>
+    b.addEventListener('click', () => {
+      fromBar = b.dataset.from === 'bar';
+      showFrom();
+      try {
+        localStorage.setItem('mixBefore', fromBar ? '1' : '0');
+      } catch {
+        /* storage blocked */
+      }
+    }),
+  );
+  showFrom();
   $('mixPreview').addEventListener('click', () => {
     if (!ed) return;
     if (host.previewing()) host.stopPreview();
-    else void host.preview(ed.a.id, ed.b.id, before.checked);
+    else void host.preview(ed.a.id, ed.b.id, fromBar);
   });
   for (const [btn, side] of [
     ['mixSongA', 'a'],

@@ -519,11 +519,10 @@
           </div>
           <div class="mix-hear">
             <button id="mixPreview" class="mix-preview"><span id="mixPreviewLabel" data-i18n="mixPreview"></span></button>
-            <label class="switch small">
-              <input id="mixBefore" type="checkbox" />
-              <span class="track"><i></i></span>
-              <span data-i18n="mixBefore"></span>
-            </label>
+            <div id="mixFrom" class="mix-from" role="group">
+              <button data-from="mix" data-i18n="mixOnly"></button>
+              <button data-from="bar" data-i18n="mixBefore"></button>
+            </div>
           </div>
           <div class="mix-row">
             <small data-i18n="mixLength"></small>

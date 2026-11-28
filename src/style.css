@@ -3766,3 +3766,32 @@ body.mix-open .home {
     text-overflow: ellipsis !important;
   }
 }
+
+.mix-from {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  padding: 3px;
+  gap: 3px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--line);
+}
+.mix-from button {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  border-radius: 999px;
+  padding: 8px 6px;
+  background: transparent;
+  color: var(--dim);
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mix-from button[aria-pressed='true'] {
+  background: rgba(255, 255, 255, 0.9);
+  color: #000;
+}
