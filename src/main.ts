@@ -774,7 +774,7 @@ function mixWatch() {
     rateIn: plan.rateIn,
     ease: plan.synced && plan.bar ? plan.bar * 4 : 0,
   };
-  lastIncoming = { id: ahead.id, tr: plan.tr, dur: plan.dur, bIn: plan.bIn, rateIn: plan.rateIn };
+  lastIncoming = { id: ahead.id, fromBuffer: buffer, startA: plan.startA, rateA: params.ratio, tr: plan.tr, dur: plan.dur, bIn: plan.bIn, rateIn: plan.rateIn };
   if (import.meta.env.DEV) (window as unknown as { __lastMix: unknown }).__lastMix = { ...incomingMix, plan, gridA: playingGrid().grid, gridB: ahead.grid };
   void playFromQueue(queueIndex + 1).finally(() => (mixStarting = false));
 }
@@ -851,6 +851,7 @@ const mixUi = initMix({
   mixing: () => !!player?.mixing,
   nextPlan: () => planNext(true),
   incoming: () => lastIncoming,
+  prepareNext: () => decodeAhead(),
   previewing: () => !!previewStop,
   stopPreview: () => {
     previewStop = null;

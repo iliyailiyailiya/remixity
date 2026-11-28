@@ -34,6 +34,10 @@ import { knownInfo, songInfo } from './info';
 /** The transition that brought the playing song in. */
 export interface Incoming {
   id: string;
+  /** The song that left, and where it was (for drawing the transition afterwards). */
+  fromBuffer: AudioBuffer | null;
+  startA: number;
+  rateA: number;
   tr: Pick<Transition, 'volume' | 'eq' | 'effect'>;
   dur: number;
   bIn: number;
@@ -65,6 +69,8 @@ export interface MixHost {
   /** The transition out of the playing song (rough until the next song is decoded). */
   nextPlan(): Plan | null;
   incoming(): Incoming | null;
+  /** Decode the next song now (the Mix card wants to draw it). */
+  prepareNext(): void;
   /**
    * Play the transition a → b (loading a if needed) and stop at its end;
    * `before` = start one bar earlier.
@@ -756,58 +762,126 @@ export function initMix(host: MixHost) {
 
   // ---------- the widget: the playing song, its transitions, no labels ----------
 
-  let miniPeaks: { buffer: AudioBuffer; cols: number; pk: Float32Array } | null = null;
+  // Only the transition: this song's end on top, the next one's start below,
+  // the three curves over them, a playhead. Just after a transition, the one
+  // that brought this song in.
+  const miniStill = document.createElement('canvas');
+  let miniKey = '';
+
+  interface MiniPair {
+    aBuf: AudioBuffer | null;
+    bBuf: AudioBuffer | null;
+    startA: number;
+    rateA: number;
+    bIn: number;
+    rateB: number;
+    dur: number;
+    tr: Pick<Transition, 'volume' | 'eq' | 'effect'>;
+    /** The playhead, in seconds from the transition's start. */
+    u: number;
+  }
+
+  function miniPair(): MiniPair | null {
+    const buf = host.playingBuffer();
+    if (!buf || !host.isOn()) return null;
+    const pos = host.position();
+    const inc = host.incoming();
+    if (inc && inc.id === host.playingId()) {
+      const u = (pos - inc.bIn) / inc.rateIn;
+      if (u < inc.dur + 1.5)
+        return { aBuf: inc.fromBuffer, bBuf: buf, startA: inc.startA, rateA: inc.rateA, bIn: inc.bIn, rateB: inc.rateIn, dur: inc.dur, tr: inc.tr, u };
+    }
+    const pl = host.nextPlan();
+    const nextId = host.queue()[1];
+    if (!pl || !nextId) return null;
+    return {
+      aBuf: buf,
+      bBuf: host.aheadBuffer(nextId),
+      startA: pl.startA,
+      rateA: host.ratio(),
+      bIn: pl.bIn,
+      rateB: pl.rateIn,
+      dur: pl.dur,
+      tr: pl.tr,
+      u: (pos - pl.startA) / host.ratio(),
+    };
+  }
 
   function drawMini() {
     const { w, h, dpr } = sizeCanvas(mini);
     const g = mini.getContext('2d')!;
     g.clearRect(0, 0, w, h);
-    const buf = host.playingBuffer();
     const nextId = host.queue()[1];
-    $('mixMiniInfo').textContent = !host.isOn()
-      ? t('mixOffShort')
-      : nextId
-        ? `→ ${miniNextTitle(nextId)}`
-        : '';
-    if (!buf) return;
-    const cols = Math.max(20, Math.floor(w / (3 * dpr)));
-    if (miniPeaks?.buffer !== buf || miniPeaks.cols !== cols) miniPeaks = { buffer: buf, cols, pk: peaks(buf, 0, buf.duration, cols) };
-    const pos = host.position();
-    const x = (s: number) => (s / buf.duration) * w;
-    const mid = h / 2;
-    for (let c = 0; c < cols; c++) {
-      const s = ((c + 0.5) / cols) * buf.duration;
-      const amp = Math.min(1, miniPeaks.pk[c] * 1.5) * (h / 2 - 4 * dpr);
-      g.fillStyle = s <= pos ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.3)';
-      g.fillRect((c / cols) * w, mid - amp, Math.max(dpr, (w / cols) * 0.55), Math.max(dpr, amp * 2));
-    }
-    // The three curves of each transition on this song.
-    const curves = (tr: Pick<Transition, 'volume' | 'eq' | 'effect'>, deck: 'a' | 'b', s0: number, s1: number) => {
-      if (s1 - s0 < 0.05) return;
-      g.fillStyle = 'rgba(255,255,255,0.08)';
-      g.fillRect(x(s0), 0, x(s1) - x(s0), h);
-      for (const k of ['effect', 'eq', 'volume'] as Tab[]) {
-        g.strokeStyle = COLORS[k];
-        g.lineWidth = 2 * dpr;
-        g.beginPath();
-        for (let i = 0; i <= 60; i++) {
-          const xx = i / 60;
-          const y = 3 * dpr + (1 - SHOW[k](stripAt(tr, deck, xx))) * (h - 6 * dpr);
-          const px = x(s0 + (s1 - s0) * xx);
-          if (i === 0) g.moveTo(px, y);
-          else g.lineTo(px, y);
+    $('mixMiniInfo').textContent = !host.isOn() ? t('mixOffShort') : nextId ? `→ ${miniNextTitle(nextId)}` : '';
+    const m = miniPair();
+    if (!m) return;
+    if (!m.bBuf) host.prepareNext();
+    if (m.u < 0 && host.isPlaying()) $('mixMiniInfo').textContent += ` · ${t('mixIn')} ${fmtTime(-m.u)}`;
+    const pad = Math.max(2, m.dur * 0.2);
+    const from = -pad;
+    const to = m.dur + pad;
+    const x = (u: number) => ((u - from) / (to - from)) * w;
+    const key = [w, h, m.aBuf?.length, m.bBuf?.length, m.startA.toFixed(3), m.bIn.toFixed(3), m.dur.toFixed(3), m.rateA, m.rateB, m.tr.volume, m.tr.eq, m.tr.effect].join('|');
+    if (key !== miniKey) {
+      miniKey = key;
+      miniStill.width = w;
+      miniStill.height = h;
+      const s = miniStill.getContext('2d')!;
+      s.clearRect(0, 0, w, h);
+      const gap = 6 * dpr;
+      const rowH = (h - gap) / 2;
+      // The transition's span.
+      s.fillStyle = 'rgba(255,255,255,0.07)';
+      s.beginPath();
+      s.roundRect(x(0), 0, x(m.dur) - x(0), h, 8 * dpr);
+      s.fill();
+      const cols = Math.max(16, Math.floor(w / (3 * dpr)));
+      const bw = Math.max(dpr, (w / cols) * 0.5);
+      const lane = (buf: AudioBuffer | null, sec: (u: number) => number, top: number, live: (u: number) => boolean) => {
+        if (!buf) return;
+        const pk = peaks(buf, sec(from), sec(to), cols);
+        const mid = top + rowH / 2;
+        for (let c = 0; c < cols; c++) {
+          const u = from + ((c + 0.5) / cols) * (to - from);
+          const t0 = sec(u);
+          if (t0 < 0 || t0 > buf.duration) continue;
+          const amp = Math.min(1, pk[c] * 1.5) * (rowH / 2 - 2 * dpr);
+          s.fillStyle = live(u) ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.2)';
+          s.beginPath();
+          s.roundRect((c / cols) * w, mid - amp, bw, Math.max(dpr * 2, amp * 2), bw / 2);
+          s.fill();
         }
-        g.stroke();
+      };
+      lane(m.aBuf, (u) => m.startA + u * m.rateA, 0, (u) => u <= m.dur);
+      lane(m.bBuf, (u) => m.bIn + u * m.rateB, rowH + gap, (u) => u >= 0);
+      // The three curves, each song in its own row.
+      for (const [deck, top] of [
+        ['a', 0],
+        ['b', rowH + gap],
+      ] as const) {
+        for (const k of ['effect', 'eq', 'volume'] as Tab[]) {
+          let flat = true;
+          for (let i = 0; i <= 20; i++) if (SHOW[k](stripAt(m.tr, deck, i / 20)) < 0.98) flat = false;
+          if (flat && k !== 'volume') continue;
+          s.strokeStyle = COLORS[k];
+          s.lineWidth = 2 * dpr;
+          s.lineJoin = 'round';
+          s.beginPath();
+          for (let i = 0; i <= 60; i++) {
+            const xx = i / 60;
+            const y = top + 2 * dpr + (1 - SHOW[k](stripAt(m.tr, deck, xx))) * (rowH - 4 * dpr);
+            if (i === 0) s.moveTo(x(xx * m.dur), y);
+            else s.lineTo(x(xx * m.dur), y);
+          }
+          s.stroke();
+        }
       }
-    };
-    if (host.isOn()) {
-      const pl = host.nextPlan();
-      if (pl && nextId) curves(pl.tr, 'a', pl.startA, Math.min(buf.duration, pl.startA + pl.dur * host.ratio()));
-      const inc = host.incoming();
-      if (inc && inc.id === host.playingId()) curves(inc.tr, 'b', inc.bIn, inc.bIn + inc.dur * inc.rateIn);
     }
-    g.fillStyle = '#fff';
-    g.fillRect(x(pos) - dpr, 0, 2 * dpr, h);
+    g.drawImage(miniStill, 0, 0);
+    if (m.u >= from && m.u <= to) {
+      g.fillStyle = '#fff';
+      g.fillRect(x(m.u) - dpr, 0, 2 * dpr, h);
+    }
   }
   const titles = new Map<string, string>();
   function miniNextTitle(id: string) {
