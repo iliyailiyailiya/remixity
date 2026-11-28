@@ -8,9 +8,9 @@ const MAX = 250;
 
 let on = false;
 try {
-  const q = new URLSearchParams(location.search).get('npdebug');
-  if (q !== null) localStorage.setItem('npdebug', q === '0' ? '0' : '1');
-  on = localStorage.getItem('npdebug') === '1';
+  const q = new URLSearchParams(location.search).get('npdebugOn');
+  if (q !== null) localStorage.setItem('npdebugOn', q === '0' ? '0' : '1');
+  on = localStorage.getItem('npdebugOn') === '1';
 } catch {
   on = false;
 }

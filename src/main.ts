@@ -1778,7 +1778,7 @@ const debugBox = $<HTMLInputElement>('labDebug');
 debugBox.checked = debugOn;
 debugBox.addEventListener('change', () => {
   try {
-    localStorage.setItem('npdebug', debugBox.checked ? '1' : '0');
+    localStorage.setItem('npdebugOn', debugBox.checked ? '1' : '0');
   } catch {
     /* storage blocked */
   }
