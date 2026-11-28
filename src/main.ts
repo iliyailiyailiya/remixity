@@ -856,11 +856,13 @@ const mixUi = initMix({
     if (!player.playing) player.play();
     render();
   },
-  editSong: (id) => {
+  editSong: (id, back) => {
     void (async () => {
       const i = queue.indexOf(id);
       if (libraryId !== id && i >= 0) await playFromQueue(i, false);
-      if (libraryId === id) $('openTimeline').click();
+      if (libraryId !== id) return back();
+      afterTimeline = back;
+      $('openTimeline').click();
     })();
   },
   startStudio: async ([f1, f2]) => {
@@ -2172,12 +2174,17 @@ $('openTimeline').addEventListener('click', () => {
   timelineUsed = true; // from now on this song's timeline is kept
   timeline.open();
 });
+/** Where closing the timeline goes back to (the Mix editor, when opened from there). */
+let afterTimeline: (() => void) | null = null;
 document.querySelectorAll('[data-tl-close]').forEach((b) =>
   b.addEventListener('click', () => {
     timeline.close();
     timelineEl.hidden = true;
     document.body.classList.remove('timeline-open');
     backdrop.covered = libraryOpen();
+    const back = afterTimeline;
+    afterTimeline = null;
+    back?.();
   }),
 );
 tlAdd.addEventListener('change', () => {

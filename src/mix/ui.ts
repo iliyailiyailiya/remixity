@@ -67,8 +67,11 @@ export interface MixHost {
   incoming(): Incoming | null;
   /** Play the transition a → b from a few seconds before it (loading a if needed). */
   preview(a: string, b: string): Promise<void>;
-  /** Open a song's own automation (the timeline), loading the song if needed. */
-  editSong(id: string): void;
+  /**
+   * Open a song's own automation (the timeline), loading the song if needed.
+   * `back` runs when the timeline is closed (to come back to the mix).
+   */
+  editSong(id: string, back: () => void): void;
   /** Add two files to the library, queue them in this order; their ids. */
   startStudio(files: [File, File]): Promise<[string, string] | null>;
   /** The cover colours behind full-screen views are held still while covered. */
@@ -383,18 +386,23 @@ export function initMix(host: MixHost) {
   $('mixPreview').addEventListener('click', () => {
     if (ed) void host.preview(ed.a.id, ed.b.id);
   });
-  $('mixSongA').addEventListener('click', () => {
-    if (!ed) return;
-    const id = ed.a.id;
-    closeFull();
-    host.editSong(id);
-  });
-  $('mixSongB').addEventListener('click', () => {
-    if (!ed) return;
-    const id = ed.b.id;
-    closeFull();
-    host.editSong(id);
-  });
+  for (const [btn, side] of [
+    ['mixSongA', 'a'],
+    ['mixSongB', 'b'],
+  ] as const)
+    $(btn).addEventListener('click', () => {
+      if (!ed) return;
+      const pair = [ed.a.id, ed.b.id] as const;
+      const back = backTo;
+      closeFull();
+      // Closing the timeline brings you back here, to this transition.
+      host.editSong(side === 'a' ? pair[0] : pair[1], () => {
+        backTo = back;
+        cache.delete(pair[0]); // its cuts or automation may have changed
+        cache.delete(pair[1]);
+        void openEditor(pair[0], pair[1]);
+      });
+    });
 
   let exporting = false;
   $('mixExport').addEventListener('click', async () => {
