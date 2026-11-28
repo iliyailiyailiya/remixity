@@ -24,6 +24,8 @@ export interface Transition {
   seconds: number;
   /** Where B comes in, relative to the automatic point (seconds of real time, + = later). */
   shift: number;
+  /** Line the beats up when the tempos are close enough (default on). */
+  sync?: boolean;
   /** Chosen by hand (true) or the automatic default. */
   custom?: boolean;
 }
@@ -38,7 +40,105 @@ export const PRESETS = {
 } as const satisfies Record<string, Pick<Transition, 'volume' | 'eq' | 'effect'>>;
 export type PresetName = keyof typeof PRESETS;
 
-export const DEFAULT_TRANSITION: Transition = { ...PRESETS.fade, bars: 8, seconds: 8, shift: 0 };
+export const DEFAULT_TRANSITION: Transition = { ...PRESETS.fade, bars: 8, seconds: 8, shift: 0, sync: true };
+
+/** How far apart two tempos may be and still be matched (8%, as DJs nudge). */
+export const MAX_NUDGE = 0.08;
+
+/** A song's beat grid (as detectGrid gives it): beat length and a downbeat, in its own seconds. */
+export interface Grid {
+  beat: number;
+  offset: number;
+}
+
+export interface PlanInput {
+  tr: Transition;
+  /** A's music ends here, B's starts here (their own seconds). */
+  aEnd: number;
+  bStart: number;
+  /** A's speed now; B's speed after the transition. */
+  rateA: number;
+  rateB: number;
+  gridA: Grid | null;
+  gridB: Grid | null;
+  bDuration: number;
+}
+
+export interface Plan {
+  /** Real seconds. */
+  dur: number;
+  /** A's own second where the transition begins (x = 0). */
+  startA: number;
+  /** B's own second that plays at x = 0. */
+  bIn: number;
+  /** B's speed during the transition (its tempo matched to A's). */
+  rateIn: number;
+  /** The beats are lined up. */
+  synced: boolean;
+  /** How far B's speed is nudged (rateIn / rateB − 1). */
+  nudge: number;
+  /** The transition actually used (Auto resolved). */
+  tr: Transition;
+  /** One bar of A, in real seconds (when synced or the tempo is known). */
+  bar: number | null;
+}
+
+/**
+ * Where and how a transition happens. With both beat grids and tempos within
+ * 8% (or half / double), B is sped up or slowed down to A's tempo and comes
+ * in on its first downbeat exactly when A reaches a downbeat; the transition
+ * is counted in A's bars and ends at A's last note (moved by whole bars).
+ * Otherwise it's a plain fade by the clock. Auto picks for you: an 8-bar
+ * beat-matched Fade when the songs fit, a 6-second Fade when they don't.
+ */
+export function planTransition(i: PlanInput): Plan {
+  const auto = !i.tr.custom;
+  const { gridA, gridB } = i;
+  if (i.tr.sync !== false && gridA && gridB && gridA.beat > 0.2 && gridB.beat > 0.2) {
+    const heard = i.rateA / gridA.beat; // A's beats per real second
+    let best: { rate: number; dev: number } | null = null;
+    for (const k of [0.5, 1, 2]) {
+      const rate = (heard * gridB.beat) / k; // B's speed that puts k of its beats on each of A's
+      const dev = Math.abs(rate / i.rateB - 1);
+      if (dev <= MAX_NUDGE && (!best || dev < best.dev)) best = { rate, dev };
+    }
+    if (best) {
+      const tr: Transition = auto ? { ...i.tr, ...PRESETS.fade, bars: 8 } : i.tr;
+      const barA = 4 * gridA.beat; // A's seconds
+      const len = tr.bars * barA;
+      const shiftBars = Math.round((tr.shift * i.rateA) / barA);
+      const lastFit = gridA.offset + Math.floor((i.aEnd - len - gridA.offset) / barA) * barA;
+      const startA = Math.max(gridA.offset, lastFit + shiftBars * barA);
+      const barB = 4 * gridB.beat;
+      let bIn = gridB.offset + Math.ceil((i.bStart - 0.02 - gridB.offset) / barB) * barB;
+      while (bIn < 0) bIn += barB;
+      if (bIn > i.bDuration - 5) bIn = Math.max(0, i.bStart);
+      return {
+        dur: len / i.rateA,
+        startA,
+        bIn,
+        rateIn: best.rate,
+        synced: true,
+        nudge: best.rate / i.rateB - 1,
+        tr,
+        bar: barA / i.rateA,
+      };
+    }
+  }
+  const tr: Transition = auto ? { ...i.tr, ...PRESETS.fade } : i.tr;
+  const bar = gridA ? (4 * gridA.beat) / i.rateA : null;
+  const dur = auto ? 6 : bar ? Math.max(1, Math.min(45, tr.bars * bar)) : tr.seconds;
+  return {
+    dur,
+    startA: Math.max(0, i.aEnd - (dur - tr.shift) * i.rateA),
+    bIn: i.bStart,
+    rateIn: i.rateB,
+    synced: false,
+    nudge: 0,
+    tr,
+    bar,
+  };
+}
 
 /** Which preset (if any) a transition matches. */
 export function presetOf(tr: Transition): PresetName | null {

@@ -6,15 +6,18 @@
 import { t } from '../i18n';
 import { getAudio, getTrack } from '../library/db';
 import { decodeData } from '../engine/decode';
-import { detectBpm } from '../engine/bpm';
+import { detectBpm, detectGrid } from '../engine/bpm';
 import {
   DEFAULT_TRANSITION,
   PRESETS,
   musicEdges,
+  planTransition,
   presetOf,
   stripAt,
   type EffectShape,
   type EqShape,
+  type Grid,
+  type Plan,
   type PresetName,
   type Transition,
   type VolumeShape,
@@ -31,11 +34,14 @@ export interface MixHost {
   /** The playing song's buffer (if it's the queue's current song). */
   playingBuffer(): AudioBuffer | null;
   playingBpm(): number | null;
+  playingGrid(): Grid | null;
   /** The next song, if it's already decoded. */
   aheadBuffer(id: string): AudioBuffer | null;
   ratio(): number;
+  /** The speed a new song starts at (1, or the locked pedal). */
+  lockedRatio(): number;
   /** Play the current transition from a few seconds before it. */
-  preview(tr: Transition): void;
+  preview(): void | Promise<void>;
 }
 
 // ---------- saved transitions (per pair of songs) ----------
@@ -72,11 +78,6 @@ function saveTransition(a: string, b: string, tr: Transition | null) {
   store(all);
 }
 
-/** A transition's length in real seconds (bars need the tempo you hear). */
-export function mixSeconds(tr: Transition, bpm: number | null): number {
-  if (bpm && bpm > 40) return Math.max(1, Math.min(45, (tr.bars * 4 * 60) / bpm));
-  return tr.seconds;
-}
 
 // ---------- options ----------
 
@@ -102,13 +103,14 @@ interface Song {
   artist: string;
   buffer: AudioBuffer | null;
   bpm: number | null;
+  grid: Grid | null;
   edges: { start: number; end: number } | null;
 }
 const cache = new Map<string, Promise<Song>>();
 
 async function songInfo(id: string, host: MixHost, wantAudio: boolean): Promise<Song> {
   const tr = await getTrack(id);
-  const base: Song = { id, title: tr?.title ?? '—', artist: tr?.artist ?? '', buffer: null, bpm: null, edges: null };
+  const base: Song = { id, title: tr?.title ?? '—', artist: tr?.artist ?? '', buffer: null, bpm: null, grid: null, edges: null };
   if (!wantAudio) return base;
   const hit = cache.get(id);
   if (hit) return hit;
@@ -119,8 +121,10 @@ async function songInfo(id: string, host: MixHost, wantAudio: boolean): Promise<
       if (!audio) return base;
       buffer = await decodeData(await audio.arrayBuffer());
     }
-    const bpm = id === host.playingId() && host.playingBpm() ? host.playingBpm() : await detectBpm(buffer).catch(() => null);
-    return { ...base, buffer, bpm, edges: musicEdges(buffer) };
+    const playing = id === host.playingId();
+    const bpm = playing && host.playingBpm() ? host.playingBpm() : await detectBpm(buffer).catch(() => null);
+    const grid = (playing ? host.playingGrid() : null) ?? (bpm ? await detectGrid(buffer, bpm).catch(() => null) : null);
+    return { ...base, buffer, bpm: grid ? 60 / grid.beat : bpm, grid, edges: musicEdges(buffer) };
   })();
   cache.set(id, p);
   // Keep only a few songs' audio around (each is tens of MB).
@@ -212,10 +216,23 @@ export function initMix(host: MixHost) {
     void renderList();
   }
   $('mixBack').addEventListener('click', backToList);
-  $('mixPreview').addEventListener('click', () => ed && host.preview(ed.tr));
+  $('mixPreview').addEventListener('click', () => void host.preview());
 
-  /** The tempo the transition is counted in: A's, as you hear it. */
-  const bpmOf = () => (ed?.a.bpm ? ed.a.bpm * (ed.current ? host.ratio() : 1) : null);
+  /** Where and how the transition happens (the same planner playback uses). */
+  function plan(): Plan | null {
+    if (!ed || !ed.a.buffer || !ed.b.buffer) return null;
+    return planTransition({
+      tr: ed.tr,
+      aEnd: ed.a.edges?.end ?? ed.a.buffer.duration,
+      bStart: ed.b.edges?.start ?? 0,
+      rateA: ed.current ? host.ratio() : host.lockedRatio(),
+      rateB: host.lockedRatio(),
+      gridA: ed.a.grid,
+      gridB: ed.b.grid,
+      bDuration: ed.b.buffer.duration,
+    });
+  }
+  const rateA = () => (ed?.current ? host.ratio() : host.lockedRatio());
 
   function change(next: Partial<Transition>) {
     if (!ed) return;
@@ -237,12 +254,15 @@ export function initMix(host: MixHost) {
   function renderControls() {
     if (!ed) return;
     const tr = ed.tr;
-    const bpm = bpmOf();
-    $('mixLen').replaceChildren(
-      ...(bpm
-        ? BARS.map((n) => chip(`${n} ${t('mixBars')}`, tr.bars === n, () => change({ bars: n })))
-        : SECONDS.map((n) => chip(`${n} s`, tr.seconds === n, () => change({ seconds: n })))),
-    );
+    const pl = plan();
+    const shown = pl?.tr ?? tr;
+    const len = pl?.bar
+      ? BARS.map((n) => chip(`${n} ${t('mixBars')}`, tr.custom ? tr.bars === n : !!pl.synced && shown.bars === n, () => change({ bars: n })))
+      : SECONDS.map((n) => chip(`${n} s`, tr.custom ? tr.seconds === n : false, () => change({ seconds: n })));
+    const sync = chip(t('mixSync'), tr.sync !== false, () => change({ sync: tr.sync === false }));
+    sync.className = 'sync' + (pl?.synced ? '' : ' idle'); // on, but these two can't be synced
+    sync.disabled = !(ed.a.grid && ed.b.grid);
+    $('mixLen').replaceChildren(...len, sync);
     const p = tr.custom ? presetOf(tr) : null;
     $('mixPresets').replaceChildren(
       chip(t('mixAuto'), !tr.custom, () => {
@@ -275,13 +295,10 @@ export function initMix(host: MixHost) {
 
   // ---------- the stage: two waveforms, stacked, as in Spotify ----------
 
-  /** The view, in real seconds around A's last note (0). */
-  function view() {
-    const dur = ed ? mixSeconds(ed.tr, bpmOf()) : 8;
-    const shift = ed?.tr.shift ?? 0;
-    const start = -(dur - shift);
-    const pad = Math.max(4, dur * 0.45);
-    return { dur, start, from: Math.min(start - pad, -dur - pad), to: Math.max(shift + pad * 0.6, 3) };
+  /** The view, in real seconds from the transition's start (0). */
+  function view(pl: Plan) {
+    const pad = Math.max(4, pl.dur * 0.4);
+    return { from: -pad, to: pl.dur + pad * 0.7 };
   }
 
   /** Peak per pixel column, of `buffer` between seconds a and b. */
@@ -312,37 +329,42 @@ export function initMix(host: MixHost) {
     if (canvas.height !== h) canvas.height = h;
     const g = canvas.getContext('2d')!;
     g.clearRect(0, 0, w, h);
-    if (!ed) return;
-    info.textContent = '';
-    const { a, b, tr } = ed;
-    const v = view();
+    const pl = plan();
+    if (!ed || !pl) return;
+    const { a, b } = ed;
+    const tr = pl.tr;
+    const v = view(pl);
     const x = (u: number) => ((u - v.from) / (v.to - v.from)) * w;
     const rowH = h / 2;
-    const ra = ed.current ? host.ratio() : 1;
-    const rb = 1;
+    const ra = rateA();
+    const rb = pl.rateIn;
+    const secA = (u: number) => pl.startA + u * ra;
+    const secB = (u: number) => pl.bIn + u * rb;
 
     // The transition region.
     g.fillStyle = 'rgba(255,255,255,0.07)';
-    const x0 = x(v.start);
-    const x1 = x(v.start + v.dur);
-    g.fillRect(x0, 0, x1 - x0, h);
+    g.fillRect(x(0), 0, x(pl.dur) - x(0), h);
 
-    // Bars, counted from the transition's start.
-    const bpm = bpmOf();
-    if (bpm) {
-      const beat = 60 / bpm;
-      const first = Math.ceil((v.from - v.start) / beat);
-      for (let k = first; v.start + k * beat < v.to; k++) {
-        const xx = x(v.start + k * beat);
-        const bar = k % 4 === 0;
-        g.fillStyle = bar ? (k === 0 ? 'rgba(80,255,150,0.85)' : 'rgba(255,255,255,0.28)') : 'rgba(255,255,255,0.1)';
-        g.fillRect(xx - dpr / 2, bar ? 0 : rowH - 6 * dpr, dpr, bar ? h : 12 * dpr);
+    // Each song's own beats; bar lines (beat 1) in green, as in Spotify:
+    // when the songs are in sync, the green lines meet.
+    const beats = (grid: Grid | null, start: number, rate: number, top: number) => {
+      if (!grid) return;
+      const k0 = Math.ceil((start + v.from * rate - grid.offset) / grid.beat);
+      for (let k = k0; ; k++) {
+        const u = (grid.offset + k * grid.beat - start) / rate;
+        if (u > v.to) break;
+        const xx = x(u);
+        const bar = ((k % 4) + 4) % 4 === 0;
+        g.fillStyle = bar ? (pl.synced ? 'rgba(80,255,150,0.8)' : 'rgba(255,255,255,0.35)') : 'rgba(255,255,255,0.1)';
+        g.fillRect(xx - dpr / 2, top, dpr, rowH);
       }
-    }
+    };
+    beats(a.grid, pl.startA, ra, 0);
+    beats(b.grid, pl.bIn, rb, rowH);
 
     // Waveforms: A on top (its end), B below (its start).
     const cols = Math.floor(w / (2 * dpr));
-    const lane = (buf: AudioBuffer | null, sec: (u: number) => number, top: number, live: (u: number) => boolean, color: string) => {
+    const lane = (buf: AudioBuffer | null, sec: (u: number) => number, top: number, live: (u: number) => boolean) => {
       if (!buf) return;
       const pk = peaks(buf, sec(v.from), sec(v.to), cols);
       const mid = top + rowH / 2;
@@ -351,14 +373,12 @@ export function initMix(host: MixHost) {
         const s = sec(u);
         if (s < 0 || s > buf.duration) continue;
         const amp = Math.min(1, pk[c] * 1.6) * (rowH / 2 - 6 * dpr);
-        g.fillStyle = live(u) ? color : 'rgba(255,255,255,0.16)';
+        g.fillStyle = live(u) ? 'rgba(255,255,255,0.75)' : 'rgba(255,255,255,0.16)';
         g.fillRect(c * 2 * dpr, mid - amp, dpr * 1.4, Math.max(dpr, amp * 2));
       }
     };
-    const aEnd = a.edges?.end ?? a.buffer?.duration ?? 0;
-    const bIn = b.edges?.start ?? 0;
-    lane(a.buffer, (u) => aEnd + u * ra, 0, (u) => u <= v.start + v.dur, 'rgba(255,255,255,0.75)');
-    lane(b.buffer, (u) => bIn + (u - v.start) * rb, rowH, (u) => u >= v.start, 'rgba(255,255,255,0.75)');
+    lane(a.buffer, secA, 0, (u) => u <= pl.dur);
+    lane(b.buffer, secB, rowH, (u) => u >= 0);
 
     // The divider and the curves of the chosen control.
     g.fillStyle = 'rgba(255,255,255,0.12)';
@@ -372,7 +392,7 @@ export function initMix(host: MixHost) {
       for (let i = 0; i <= n; i++) {
         const xx = i / n;
         const yy = top + 6 * dpr + (1 - val(stripAt(tr, deck, xx))) * (rowH - 12 * dpr);
-        const px = x(v.start + xx * v.dur);
+        const px = x(xx * pl.dur);
         if (i === 0) g.moveTo(px, yy);
         else g.lineTo(px, yy);
       }
@@ -395,7 +415,16 @@ export function initMix(host: MixHost) {
         curve(deck, top, (s) => hz(s.lp), COLORS.effect, 0.55);
       }
     }
-    info.textContent = `${a.bpm ? Math.round(a.bpm) : '–'} → ${b.bpm ? Math.round(b.bpm) : '–'} BPM · ${v.dur.toFixed(1)} s`;
+    const bpmA = a.bpm ? Math.round(a.bpm * ra) : '–';
+    const bpmB = b.bpm ? Math.round(b.bpm * host.lockedRatio()) : '–';
+    const state = pl.synced
+      ? `${t('mixInSync')} ${pl.nudge >= 0 ? '+' : '−'}${Math.abs(pl.nudge * 100).toFixed(1)}%`
+      : !a.grid || !b.grid
+        ? t('mixNoBeat')
+        : ed.tr.sync === false
+          ? `${pl.dur.toFixed(1)} s`
+          : t('mixTooFar');
+    info.textContent = `${bpmA} → ${bpmB} BPM · ${state}`;
   }
 
   // Drag the stage sideways to move where B comes in.
@@ -411,13 +440,16 @@ export function initMix(host: MixHost) {
   });
   canvas.addEventListener('pointermove', (e) => {
     if (!drag || !ed) return;
-    const v = view();
+    const pl = plan();
+    if (!pl) return;
+    const v = view(pl);
     const secPerPx = (v.to - v.from) / canvas.clientWidth;
+    // Dragging B right = it comes in later (the transition moves later).
     let shift = drag.shift + (e.clientX - drag.x) * secPerPx;
-    // Snap to beats when the tempo is known.
-    const bpm = bpmOf();
-    if (bpm) shift = Math.round(shift / (60 / bpm)) * (60 / bpm);
-    shift = Math.max(-40, Math.min(v.dur * 0.5, shift));
+    // In sync: whole bars, so the downbeats stay together. Otherwise beats.
+    const step = pl.bar ? (pl.synced ? pl.bar : pl.bar / 4) : 0.1;
+    shift = Math.round(shift / step) * step;
+    shift = Math.max(-40, Math.min(pl.dur * 0.5, shift));
     if (shift !== ed.tr.shift) {
       ed.tr = { ...ed.tr, shift };
       draw();

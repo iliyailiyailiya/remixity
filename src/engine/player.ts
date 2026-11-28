@@ -210,6 +210,27 @@ export class Player {
     return this.elapsed;
   }
 
+  /**
+   * Start the next play() so that buffer second `offset` sounds at context
+   * time `time` (already past): it picks up where it would be by now. Beat
+   * matching needs this, since loading the song takes a moment.
+   */
+  alignTo(time: number, offset: number) {
+    this.anchor = { time, offset };
+  }
+  private anchor: { time: number; offset: number } | null = null;
+  private takeAnchor() {
+    const a = this.anchor;
+    this.anchor = null;
+    if (a) this.offset = Math.min(this.duration, a.offset + Math.max(0, this.ctx.currentTime - a.time) * this.ratio);
+  }
+
+  /** The position from the audio clock (exact for a plain source), for lining up beats. */
+  get exactPosition() {
+    if (this.src && !this.src.loop && this.playing) return this.srcOff0 + (this.ctx.currentTime - this.srcCtx0) * this.ratio;
+    return this.position;
+  }
+
   /** Current position in source seconds. */
   get position() {
     if (!this.playing || this.waitingForStretch) return this.offset;
@@ -233,6 +254,7 @@ export class Player {
     if (this.ctx.state !== 'running') void this.ctx.resume();
     this.onPlay();
     if (this.offset >= this.duration - 0.01) this.offset = 0;
+    if (this.anchor && !this.keepPitch) this.takeAnchor();
     if (this.keepPitch) {
       this.playStretched();
       return;
@@ -378,6 +400,7 @@ export class Player {
         this.stretchHas = this.buffer;
         if (token !== this.startToken || !this.playing) return;
       }
+      if (this.anchor) this.takeAnchor(); // the stretcher took a moment to fill
       const region = this.loopRegion();
       if (region && (this.offset < region[0] || this.offset >= region[1])) this.offset = region[0];
       void node.schedule({

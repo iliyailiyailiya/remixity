@@ -29,8 +29,8 @@ import { Pedal, MAX_RATIO, MIN_RATIO } from './ui/pedal';
 import { AUTO_PARAMS, addLane, emptyAutomation, moveLanesWithSection, moveSection, paramsAt, removeLane, split, valueAt, type Automation, type AutoParam, type Lane } from './automation/model';
 import { Timeline } from './automation/timeline';
 import { deleteTimeline, loadTimeline, saveTimeline, songKey } from './automation/store';
-import { musicEdges, type Transition } from './engine/mix';
-import { initMix, mixSeconds, transitionFor } from './mix/ui';
+import { musicEdges, planTransition, type Grid, type Plan, type Transition } from './engine/mix';
+import { initMix, transitionFor } from './mix/ui';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -209,6 +209,12 @@ async function load(file: File, known?: Track, ready?: Promise<Prepared>) {
     // (Keep pitch is a way of listening, not a song setting: it carries over.)
     // Locked speed carries over to the next song too.
     Object.assign(params, DEFAULT_PARAMS, { keepPitch: params.keepPitch }, speedLocked ? { ratio: params.ratio } : {});
+    speedEase = null;
+    if (mix && Math.abs(mix.rateIn - params.ratio) > 0.0005) {
+      // Beat-matched: it comes in at the old song's tempo, then eases back.
+      speedEase = { from: mix.rateIn, to: params.ratio, at: mix.at + mix.dur, len: mix.ease };
+      params.ratio = mix.rateIn;
+    }
     autoSpace = true;
     origBpm = null;
     detectingBpm = true;
@@ -255,10 +261,12 @@ async function load(file: File, known?: Track, ready?: Promise<Prepared>) {
     player.load(decoded, mix ? mix.bIn : undefined);
     if (mix) {
       // In a transition, the new song comes in right away (the cover and
-      // the rest of the page follow), catching up with the old song's fade.
+      // the rest of the page follow), where it would be by now: its first
+      // downbeat was due at mix.at, on the old song's downbeat.
       incomingMix = null;
+      player.alignTo(mix.at, mix.bIn);
       player.play();
-      const x0 = mix.x0 + (player.ctx.currentTime - mix.at) / mix.dur;
+      const x0 = (player.ctx.currentTime - mix.at) / mix.dur;
       player.mixIn(mix.tr, mix.dur, Math.min(1, Math.max(0, x0)));
     }
     estDuration = null;
@@ -397,6 +405,7 @@ function startBpm(token: number, decoded: AudioBuffer) {
 const pedal = new Pedal($('pedal'), (r) => setRatio(r));
 
 function setRatio(r: number) {
+  speedEase = null; // your hand on the pedal wins
   params.ratio = Math.round(Math.min(MAX_RATIO, Math.max(MIN_RATIO, r)) * 100000) / 100000;
   apply();
 }
@@ -520,6 +529,9 @@ interface Ahead {
   /** Decoded and measured: a transition can start. */
   decoded?: AudioBuffer;
   edges?: { start: number; end: number };
+  /** Its beat grid, for beat-matched transitions (null = none found). */
+  grid?: Grid | null;
+  analysis?: Promise<void>;
 }
 let ahead: Ahead | null = null;
 
@@ -542,6 +554,10 @@ function decodeAhead() {
     (p) => {
       a.edges = musicEdges(p.decoded);
       a.decoded = p.decoded;
+      a.analysis = (async () => {
+        const bpm = await detectBpm(p.decoded).catch(() => null);
+        a.grid = bpm ? await detectGrid(p.decoded, bpm).catch(() => null) : null;
+      })();
     },
     () => {
       if (ahead === a) ahead = null;
@@ -595,7 +611,7 @@ function nextInQueue(auto: boolean): boolean {
     const tr = { volume: 'fade', eq: 'none', effect: 'none' } as const;
     if (player.detachTail(tr, 1.2)) {
       const next = ahead?.id === queue[queueIndex + 1] ? ahead.edges : undefined;
-      incomingMix = { tr, dur: 1.2, x0: 0, at: player.ctx.currentTime, bIn: next?.start ?? 0 };
+      incomingMix = { tr, dur: 1.2, at: player.ctx.currentTime, bIn: next?.start ?? 0, rateIn: speedLocked ? params.ratio : 1, ease: 0 };
     }
   }
   void playFromQueue(queueIndex + 1);
@@ -606,9 +622,21 @@ function nextInQueue(auto: boolean): boolean {
 
 let mixOn = localStorage.getItem('mixOn') === '1';
 /** A transition handing over to the song being loaded (load() and playFromQueue read it). */
-let incomingMix: { tr: Pick<Transition, 'volume' | 'eq' | 'effect'>; dur: number; x0: number; at: number; bIn: number } | null = null;
+let incomingMix: {
+  tr: Pick<Transition, 'volume' | 'eq' | 'effect'>;
+  dur: number;
+  /** Context time of the transition's start (x = 0), when B's bIn was due. */
+  at: number;
+  bIn: number;
+  /** B's speed during the transition, and how long it then takes to ease back (s). */
+  rateIn: number;
+  ease: number;
+} | null = null;
 let mixStarting = false;
+/** After a beat-matched transition: the new song's speed glides back to its own. */
+let speedEase: { from: number; to: number; at: number; len: number } | null = null;
 let edgesFor: { buffer: AudioBuffer; edges: { start: number; end: number } } | null = null;
+let gridFor: { buffer: AudioBuffer; grid: Grid | null; done: boolean } | null = null;
 
 /** Where the playing song's music really ends (cached per buffer). */
 function playingEdges() {
@@ -617,38 +645,101 @@ function playingEdges() {
   return edgesFor.edges;
 }
 
+/** The playing song's beat grid: the timeline's (you may have set beat 1), else detected once. */
+function playingGrid(): { grid: Grid | null; done: boolean } {
+  if (gridInfo) return { grid: gridInfo, done: true };
+  if (!buffer) return { grid: null, done: true };
+  if (gridFor?.buffer !== buffer) {
+    const entry: { buffer: AudioBuffer; grid: Grid | null; done: boolean } = { buffer, grid: null, done: false };
+    gridFor = entry;
+    const b = buffer;
+    void (async () => {
+      const bpm = origBpm ?? (await detectBpm(b).catch(() => null));
+      entry.grid = bpm ? await detectGrid(b, bpm).catch(() => null) : null;
+      entry.done = true;
+    })();
+  }
+  return gridFor;
+}
+
+/** The transition from the playing song into the next one (null: nothing to plan yet). */
+function planNext(): Plan | null {
+  const a = ahead;
+  if (!a || !libraryId || a.id !== queue[queueIndex + 1] || !a.decoded || !a.edges) return null;
+  const e = playingEdges();
+  if (!e) return null;
+  return planTransition({
+    tr: transitionFor(libraryId, a.id),
+    aEnd: e.end,
+    bStart: a.edges.start,
+    rateA: params.ratio,
+    rateB: speedLocked ? params.ratio : 1,
+    gridA: playingGrid().grid,
+    gridB: a.grid ?? null,
+    bDuration: a.decoded.duration,
+  });
+}
+
+/** Both songs are analysed (or it's too late to wait). */
+const analysed = () => !!ahead?.decoded && ahead.grid !== undefined && playingGrid().done;
+
+function easeSpeed() {
+  const e = speedEase;
+  if (!e || !player) return;
+  const now = player.ctx.currentTime;
+  if (now < e.at) return;
+  const k = e.len > 0 ? Math.min(1, (now - e.at) / e.len) : 1;
+  params.ratio = e.from + (e.to - e.from) * (k * k * (3 - 2 * k));
+  if (k >= 1) {
+    params.ratio = e.to;
+    speedEase = null;
+  }
+  if (autoSpace) Object.assign(params, spaceFor(params.ratio));
+  player.setParams({ ...params }, true);
+  render();
+}
+
 /** The transition into the next song, if one should start now. */
 function mixWatch() {
+  easeSpeed();
   if (!mixOn || mixStarting || !player?.playing || player.mixing) return;
   if (player.repeating || player.looping || player.provisional || estDuration) return;
   if (!libraryId || libraryId !== queue[queueIndex] || queueIndex + 1 >= queue.length) return;
   const remaining = (player.duration - player.position) / params.ratio;
-  if (remaining < 80) {
+  if (remaining < 90) {
     if (ahead && !ahead.ready) decodeAhead();
+    playingGrid(); // start detecting the beat now, not at the last moment
   }
-  const a = ahead;
-  if (!a || a.id !== queue[queueIndex + 1] || !a.decoded || !a.edges) return;
-  const e = playingEdges();
-  if (!e) return;
-  const tr = transitionFor(libraryId, a.id);
-  const bpm = origBpm ? origBpm * params.ratio : null;
-  const dur = mixSeconds(tr, bpm);
-  // A's music ends at e.end; the transition ends there (moved by the shift).
-  const startAt = e.end - (dur - tr.shift) * params.ratio; // A's seconds
-  const lead = (startAt - player.position) / params.ratio;
-  if (lead > 0.12) return;
-  const x0 = Math.max(0, -lead / dur);
+  const plan = planNext();
+  if (!plan || !ahead) return;
+  const pos = player.exactPosition;
+  const lead = (plan.startA - pos) / params.ratio;
+  if (lead > 0.02) return;
+  if (!analysed() && lead > -0.5) return; // a little grace for the beat analysis
+  const x0 = -lead / plan.dur;
   if (x0 > 0.85) return; // too late for this one
+  const at = player.ctx.currentTime + lead;
   mixStarting = true;
-  if (!player.detachTail(tr, dur, x0)) {
+  if (!player.detachTail(plan.tr, plan.dur, x0)) {
     mixStarting = false;
     return;
   }
-  npLog(`mix → ${a.id} (${tr.volume}/${tr.eq}/${tr.effect}, ${dur.toFixed(1)} s)`);
-  incomingMix = { tr, dur, x0, at: player.ctx.currentTime, bIn: a.edges.start };
+  npLog(
+    `mix → ${ahead.id} (${plan.tr.volume}/${plan.tr.eq}/${plan.tr.effect}, ${plan.dur.toFixed(1)} s` +
+      `${plan.synced ? `, synced ${(plan.nudge * 100).toFixed(1)}%` : ''})`,
+  );
+  incomingMix = {
+    tr: plan.tr,
+    dur: plan.dur,
+    at,
+    bIn: plan.bIn,
+    rateIn: plan.rateIn,
+    ease: plan.synced && plan.bar ? plan.bar * 4 : 0,
+  };
+  if (import.meta.env.DEV) (window as unknown as { __lastMix: unknown }).__lastMix = { ...incomingMix, plan, gridA: playingGrid().grid, gridB: ahead.grid };
   void playFromQueue(queueIndex + 1).finally(() => (mixStarting = false));
 }
-setInterval(mixWatch, 100);
+setInterval(mixWatch, 50);
 
 const mixUi = initMix({
   showSheet,
@@ -663,19 +754,22 @@ const mixUi = initMix({
   },
   playingBuffer: () => (libraryId === queue[queueIndex] ? buffer : null),
   playingBpm: () => origBpm,
+  playingGrid: () => (libraryId === queue[queueIndex] ? (gridInfo ?? (gridFor?.buffer === buffer ? gridFor.grid : null)) : null),
   aheadBuffer: (id) => (ahead?.id === id && ahead.decoded ? ahead.decoded : null),
   ratio: () => params.ratio,
-  preview: (tr) => {
-    // Hear the transition: jump to a few seconds before it starts.
+  lockedRatio: () => (speedLocked ? params.ratio : 1),
+  preview: async () => {
+    // Hear the transition: get both songs analysed, then jump to a few
+    // seconds before it starts.
     if (!player || !buffer || queueIndex + 1 >= queue.length) return;
-    const e = playingEdges();
-    if (!e) return;
-    const bpm = origBpm ? origBpm * params.ratio : null;
-    const dur = mixSeconds(tr, bpm);
-    const startAt = e.end - (dur - tr.shift) * params.ratio;
-    player.seek(Math.max(0, startAt - 4 * params.ratio));
-    if (!player.playing) player.play();
     if (!mixOn) mixUi.turnOn();
+    decodeAhead();
+    playingGrid();
+    for (let i = 0; i < 100 && !(analysed() && planNext()); i++) await wait(100);
+    const plan = planNext();
+    if (!plan) return;
+    player.seek(Math.max(0, plan.startA - 4 * params.ratio));
+    if (!player.playing) player.play();
     render();
   },
 });
@@ -2533,6 +2627,13 @@ if (import.meta.env.DEV) {
     },
     touchAutomation: () => (autoDirty = true),
     nowPlaying: () => nowPlaying.active,
+    planNext,
+    get grid() {
+      return playingGrid();
+    },
+    get ahead() {
+      return ahead;
+    },
   };
 }
 

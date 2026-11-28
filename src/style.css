@@ -3397,6 +3397,23 @@ body.timeline-open {
 }
 #mixLen button {
   flex: 1;
+  padding-left: 0;
+  padding-right: 0;
+}
+#mixLen .sync {
+  flex: none;
+  padding: 8px 12px;
+}
+#mixLen .sync[aria-pressed='true'] {
+  background: #50ff96;
+}
+#mixLen .sync.idle[aria-pressed='true'] {
+  background: transparent;
+  color: #50ff96;
+  border-color: rgba(80, 255, 150, 0.5);
+}
+#mixLen .sync:disabled {
+  opacity: 0.35;
 }
 .mix-chips button[aria-pressed='true'] {
   background: var(--text);

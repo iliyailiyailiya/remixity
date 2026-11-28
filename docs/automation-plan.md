@@ -188,6 +188,19 @@ every two songs; the editor has the two waveforms stacked, beat lines, drag
 to move where B comes in (snaps to beats), saved per pair in localStorage
 `mixPairs`. Off by default (switch in the sheet; editing turns it on).
 
+**Shipped (step 3, Nov 28): beat-matched Auto.** `planTransition` (mix.ts) is
+shared by playback and the editor. Both songs get a beat grid ahead of time
+(next song: when it's decoded; this one: 90 s before its end). Tempos within
+8% (or half/double): B plays at A's tempo, its first downbeat lands on one of
+A's downbeats (the player starts it aligned to the audio clock with
+`alignTo`, so loading time doesn't matter), the length counts A's bars, and
+after the transition B glides back to its own speed over 4 bars (the pedal
+shows it; touching the pedal stops the glide). Auto = 8-bar Fade in sync, or a
+6 s Fade when the songs don't fit. Editor: each row has its own beats with
+green bar lines (they meet when in sync), drag snaps to whole bars, a Sync
+beats switch. Measured on test tracks 120 → 124 BPM: beat phases equal
+within 0.1 ms, nudge −3.2%.
+
 **Order:**
 1. Two decks + Fade/Slam with seconds (Settings: Off / 3 / 6 / 12 s / Auto).
 2. Per-deck EQ + filter → Rise, Blend, Wave, Melt.
