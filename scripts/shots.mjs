@@ -144,6 +144,60 @@ const loadDemo = async (seconds = 41) => {
   await sleep(1500);
 };
 
+// Only some screenshots: ONLY=mix node scripts/shots.mjs
+const ONLY = process.env.ONLY;
+
+if (!ONLY || ONLY === 'mix') {
+  console.log('mix…');
+  await open();
+  await run(`
+    localStorage.setItem('mixOn', '1');
+    localStorage.setItem('mixBefore', '1');
+    localStorage.removeItem('mixPairs');
+  `);
+  await open(); // (Mix reads its switch when the page starts)
+  await run(`
+    window.__remixity.library.open();
+    await new Promise((r) => setTimeout(r, 800));
+    document.getElementById('libPlayAll').click();
+    await new Promise((r) => setTimeout(r, 3000));
+    document.getElementById('libBack').click();
+    const R = window.__remixity;
+    R.player.seek(Math.max(0, R.player.duration - 70));
+    await new Promise((r) => setTimeout(r, 800));
+    R.player.pause();
+    R.render();
+  `);
+  await sleep(6000); // tempo, beat and key of both songs
+  await run(`document.getElementById('openMix').click()`);
+  await sleep(1500);
+  await shot('app-mix-list');
+  await run(`document.querySelector('.mix-link.live .mix-pill').click()`);
+  await sleep(4000);
+  await run(`[...document.querySelectorAll('#mixPresets button')].find((b) => b.textContent === 'Blend' || b.textContent === 'Blend')?.click()`);
+  await sleep(800);
+  await shot('app-mix-editor');
+  await run(`document.getElementById('mixBack').click(); document.getElementById('sheetScrim').click(); window.__remixity.goPage(6)`);
+  await sleep(3000);
+  await shot('app-mix-card');
+  await open();
+  await run(`
+    const audio = await (await fetch('/_test/zhivotnye.mp3')).blob();
+    document.getElementById('mixTwoHome').click();
+    await new Promise((r) => setTimeout(r, 400));
+    for (const [id, name] of [['mixFile1', 'Midnight Drive.mp3'], ['mixFile2', 'Paper Moons.mp3']]) {
+      const dt = new DataTransfer();
+      dt.items.add(new File([audio], name, { type: 'audio/mpeg' }));
+      const el = document.getElementById(id);
+      el.files = dt.files;
+      el.dispatchEvent(new Event('change'));
+    }
+  `);
+  await shot('app-mix-two');
+  await run(`localStorage.removeItem('mixPairs'); localStorage.setItem('mixOn', '0')`);
+}
+
+if (!ONLY) {
 console.log('player…');
 await loadDemo();
 await shot('app-player');
@@ -228,6 +282,8 @@ for (const [name, url] of Object.entries(stories)) {
     execFileSync('sips', ['-s', 'format', 'jpeg', '-s', 'formatOptions', '86', png, '--out', join(OUT, 'og.jpg')], { stdio: 'ignore' });
     console.log('  ✓ og.jpg');
   } else dataUrlTo(url, `story-${name}`, 540);
+}
+
 }
 
 rmSync(TMP, { recursive: true, force: true });

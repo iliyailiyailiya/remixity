@@ -43,7 +43,7 @@ EN = [
       ("Can I make a sped up or nightcore version?", "Yes. Slide the pedal up instead of down: a little for sped up, past ×1.25 for nightcore."),
       ("What's the difference between slowed + reverb and daycore?", "Both are the song slowed down and lower. Slowed + reverb adds a big reverb; daycore usually keeps it dry. THE REMIXITY adds the reverb automatically, and you can turn it down for daycore."),
     ],
-    "related": ["audio-editor", "instagram-story-maker", "music-library"],
+    "related": ["mix-songs", "audio-editor", "instagram-story-maker"],
   },
   {
     "slug": "audio-editor",
@@ -116,7 +116,7 @@ EN = [
       ("Where do the lyrics come from?", "From LRCLIB, an open, community-made lyrics database. Only the artist and title are used to look them up."),
       ("Can I use it on a computer?", "Yes, in Chrome, Edge, Safari or Firefox. In Chrome and Edge on a computer you can even rewrite the original files in your music folder with the cleaned names, tags and covers."),
     ],
-    "related": ["instagram-story-maker", "slow-reverb", "audio-editor"],
+    "related": ["mix-songs", "instagram-story-maker", "slow-reverb"],
   },
   {
     "slug": "instagram-story-maker",
@@ -228,7 +228,7 @@ RU = [
       ("Можно сделать ускоренную версию или nightcore?", "Да. Сдвинь педаль не вниз, а вверх: немного — для sped up, дальше ×1.25 — для nightcore."),
       ("Чем slowed + reverb отличается от daycore?", "Оба — это замедленная и более низкая песня. В slowed + reverb добавляется большой реверб, а daycore обычно без него. THE REMIXITY добавляет реверб сам, а для daycore его можно убрать."),
     ],
-    "related": ["audio-editor", "instagram-story-maker", "music-library"],
+    "related": ["mix-songs", "audio-editor", "instagram-story-maker"],
   },
   {
     "slug": "audio-editor",
@@ -301,7 +301,7 @@ RU = [
       ("Откуда берутся тексты?", "Из LRCLIB, открытой базы текстов, которую ведёт сообщество. Для поиска используются только исполнитель и название."),
       ("Можно пользоваться на компьютере?", "Да, в Chrome, Edge, Safari или Firefox. В Chrome и Edge на компьютере можно даже перезаписать оригинальные файлы в папке с музыкой, с исправленными названиями, тегами и обложками."),
     ],
-    "related": ["instagram-story-maker", "slow-reverb", "audio-editor"],
+    "related": ["mix-songs", "instagram-story-maker", "slow-reverb"],
   },
   {
     "slug": "instagram-story-maker",
@@ -413,7 +413,7 @@ RO = [
       ("Pot face o versiune sped up sau nightcore?", "Da. Trage pedala în sus în loc de jos: puțin pentru sped up, peste ×1.25 pentru nightcore."),
       ("Care e diferența dintre slowed + reverb și daycore?", "Ambele sunt melodia încetinită și mai joasă. Slowed + reverb adaugă mult reverb; daycore de obicei rămâne fără. THE REMIXITY adaugă reverbul singur, iar pentru daycore îl poți scădea."),
     ],
-    "related": ["audio-editor", "instagram-story-maker", "music-library"],
+    "related": ["mix-songs", "audio-editor", "instagram-story-maker"],
   },
   {
     "slug": "audio-editor",
@@ -486,7 +486,7 @@ RO = [
       ("De unde vin versurile?", "Din LRCLIB, o bază de date deschisă de versuri, făcută de comunitate. Pentru căutare se folosesc doar artistul și titlul."),
       ("Pot să-l folosesc pe calculator?", "Da, în Chrome, Edge, Safari sau Firefox. În Chrome și Edge pe calculator poți chiar rescrie fișierele originale din folderul cu muzică, cu numele, etichetele și copertele curățate."),
     ],
-    "related": ["instagram-story-maker", "slow-reverb", "audio-editor"],
+    "related": ["mix-songs", "instagram-story-maker", "slow-reverb"],
   },
   {
     "slug": "instagram-story-maker",
@@ -574,3 +574,135 @@ UI = {
          "how": "Cum se face", "try": "Încearcă acum", "questions": "Întrebări", "more": "Ce mai poți face cu THE REMIXITY",
          "privacy": "Confidențialitate", "terms": "Termeni", "made": "Făcut de", "features": "Funcții", "language": "Limbă"},
 }
+
+
+# ---------- Mix: transitions between songs (added after the first five) ----------
+
+EN.append({
+    "slug": "mix-songs",
+    "nav": "Mix songs",
+    "title": "Mix Two Songs Online: Free DJ Transitions, Beat-Matched · THE REMIXITY",
+    "desc": "Mix songs online for free: beat-matched DJ transitions between the songs in your queue, crossfade styles, EQ and filter sweeps, song keys, and export two songs as one MP3. In your browser.",
+    "h1": "Mix songs like a DJ, free and in your browser",
+    "lead": "Turn on Mix and the songs in your queue blend into each other: the tempos are matched, the beats line up, and each change is a real DJ transition, not a plain fade. Shape any transition yourself, hear it, and export two songs as one mix. No subscription, nothing uploaded.",
+    "hero": ("app-mix-editor", "The Mix editor: two songs stacked, their beats lined up, the transition's curves on top"),
+    "sections": [
+      ("Beat-matched transitions", [
+        "THE REMIXITY finds each song's tempo and beat. When two songs are within 8% of each other (or half or double), the next song comes in at the tempo you're hearing, its first downbeat landing on a downbeat of the song that's ending. After the transition it glides back to its own speed.",
+        "Songs that don't fit together get a clean fade instead, so nothing is forced.",
+      ], None),
+      ("Every transition, your way", [
+        "Tap any transition between two songs to open it. Both waveforms are stacked with their own bar lines, so you can see the beats meet. Drag the next song to move where it comes in, a whole bar at a time, and choose the length: 2, 4, 8 or 16 bars.",
+        "Pick a style (Fade, Rise, Blend, Wave, Melt or Slam) or build your own from three controls: Volume, EQ (bass swap or a 3-band blend) and Effect (high- and low-pass filter sweeps). Every curve is drawn on the waveforms. Hear it plays just that transition, from one bar before it if you like.",
+      ], ("app-mix-list", "Your queue with a transition between every two songs; the one coming up is lit")),
+      ("Keys and tempo for every song", [
+        "Each song gets its BPM and its key, shown the way DJs read it (8A, 9B…). The editor tells you whether two keys go together, so you can find the transitions that sound best.",
+      ], None),
+      ("Mix two songs and export them as one", [
+        "On the home screen, tap Mix two songs, pick two files and their order. Each song keeps its own speed, effects and automation; the transition between them is yours to shape. Export the mix as one MP3, made on your device.",
+      ], ("app-mix-two", "Mix two songs: pick two files and their order")),
+      ("Always in view", [
+        "The Mix card under the player shows the transition that's coming: the end of this song over the start of the next, with its curves and a countdown. Tap it to change the transition. Don't want a mix between two particular songs? Switch that one off and the rest still mix.",
+      ], ("app-mix-card", "The Mix card: the coming transition with its curves")),
+    ],
+    "steps": [
+      "Play songs from your library or a playlist, or tap Mix two songs on the home screen.",
+      "Tap the Mix button next to Export and turn Mix on.",
+      "Tap a transition to shape it, tap Hear it, and export the mix if you want a file.",
+    ],
+    "faq": [
+      ("Is it free?", "Yes. No subscription, no account, no watermark on the audio."),
+      ("Do the beats really line up?", "When the two tempos are close enough, yes: the next song is sped up or slowed down by up to 8% and starts on a downbeat. If they're too far apart, you get a fade instead of a clash."),
+      ("Can I export a mix?", "Yes. Export the mix renders two songs and their transition as one MP3, with each song's speed, effects and automation."),
+      ("Does it work with slowed songs?", "Yes. Mix follows the pedal: the transition matches the tempo you're hearing, and moving the pedal during a transition keeps both songs in step."),
+      ("Can I skip the transition between two songs?", "Yes. Open that transition and choose Off: those two play back to back, every other transition still mixes."),
+      ("Is my music uploaded?", "No. Tempo, key and the mix are all worked out on your device."),
+    ],
+    "related": ["slow-reverb", "music-library", "audio-editor"],
+})
+
+RU.append({
+    "slug": "mix-songs",
+    "nav": "Сведение песен",
+    "title": "Свести две песни онлайн: бесплатные DJ-переходы с синхронизацией бита · THE REMIXITY",
+    "desc": "Сводите песни онлайн бесплатно: DJ-переходы между песнями очереди с совпадением темпа и бита, стили кроссфейда, EQ и фильтры, тональности песен и экспорт двух песен одним MP3. В браузере.",
+    "h1": "Своди песни как диджей, бесплатно и в браузере",
+    "lead": "Включи Микс, и песни в очереди будут перетекать друг в друга: темп подстраивается, биты совпадают, и каждая смена — настоящий диджейский переход, а не просто затухание. Настрой любой переход сам, послушай его и экспортируй две песни одним миксом. Без подписки, ничего не загружается.",
+    "hero": ("app-mix-editor", "Редактор микса: две песни друг над другом, биты совпадают, кривые перехода поверх"),
+    "sections": [
+      ("Переходы с совпадением бита", [
+        "THE REMIXITY находит темп и бит каждой песни. Если темпы отличаются не больше чем на 8% (или вдвое), следующая песня входит в том темпе, который ты слышишь, а её первая сильная доля ложится на сильную долю уходящей песни. После перехода она плавно возвращается к своей скорости.",
+        "Песни, которые не подходят друг к другу, сменяются чистым затуханием, ничего не навязывается.",
+      ], None),
+      ("Каждый переход — как хочешь ты", [
+        "Нажми на любой переход между двумя песнями. Обе волновые формы стоят друг над другом со своими тактами, так что видно, как сходятся биты. Перетащи следующую песню, чтобы сдвинуть её вход на целый такт, и выбери длину: 2, 4, 8 или 16 тактов.",
+        "Выбери стиль (Fade, Rise, Blend, Wave, Melt или Slam) или собери свой из трёх настроек: Громкость, EQ (смена баса или смесь трёх полос) и Эффект (развёртка фильтров высоких и низких частот). Все кривые нарисованы на волнах. «Послушать» играет только этот переход, по желанию — с такта до него.",
+      ], ("app-mix-list", "Очередь с переходом между каждыми двумя песнями; ближайший подсвечен")),
+      ("Темп и тональность каждой песни", [
+        "У каждой песни есть BPM и тональность в записи диджеев (8A, 9B…). Редактор подскажет, сочетаются ли две тональности, чтобы ты находил переходы, которые звучат лучше всего.",
+      ], None),
+      ("Сведи две песни и экспортируй одним файлом", [
+        "На главном экране нажми «Свести две песни», выбери два файла и их порядок. У каждой песни остаются своя скорость, эффекты и автоматизации; переход между ними настраиваешь ты. Экспортируй микс одним MP3, он делается на твоём устройстве.",
+      ], ("app-mix-two", "Свести две песни: выбери два файла и их порядок")),
+      ("Всегда перед глазами", [
+        "Карточка «Микс» под плеером показывает ближайший переход: конец этой песни над началом следующей, с кривыми и обратным отсчётом. Нажми на неё, чтобы изменить переход. Не нужен микс между двумя конкретными песнями? Выключи только его, остальные продолжат сводиться.",
+      ], ("app-mix-card", "Карточка «Микс»: ближайший переход с его кривыми")),
+    ],
+    "steps": [
+      "Включи песни из библиотеки или плейлиста или нажми «Свести две песни» на главном экране.",
+      "Нажми кнопку Микса рядом с экспортом и включи Микс.",
+      "Нажми на переход, чтобы его настроить, нажми «Послушать» и экспортируй микс, если нужен файл.",
+    ],
+    "faq": [
+      ("Это бесплатно?", "Да. Без подписки, без аккаунта, без водяных знаков на звуке."),
+      ("Биты правда совпадают?", "Когда темпы достаточно близки — да: следующая песня ускоряется или замедляется до 8% и начинается с сильной доли. Если они слишком далеки, будет затухание, а не каша."),
+      ("Можно экспортировать микс?", "Да. «Экспорт микса» сводит две песни и переход между ними в один MP3, с их скоростью, эффектами и автоматизациями."),
+      ("Работает с замедленными песнями?", "Да. Микс следует за педалью: переход совпадает с темпом, который ты слышишь, а если двигать педаль во время перехода, обе песни остаются в такт."),
+      ("Можно убрать переход между двумя песнями?", "Да. Открой этот переход и выбери «Выкл»: эти две песни сыграют одна за другой, остальные переходы останутся."),
+      ("Моя музыка куда-то загружается?", "Нет. Темп, тональность и сам микс считаются на твоём устройстве."),
+    ],
+    "related": ["slow-reverb", "music-library", "audio-editor"],
+})
+
+RO.append({
+    "slug": "mix-songs",
+    "nav": "Mixează melodii",
+    "title": "Mixează două melodii online: tranziții DJ gratuite, pe ritm · THE REMIXITY",
+    "desc": "Mixează melodii online gratuit: tranziții DJ între melodiile din coadă, cu tempo și ritm potrivite, stiluri de crossfade, EQ și filtre, tonalitățile melodiilor și export a două melodii într-un singur MP3. În browser.",
+    "h1": "Mixează melodii ca un DJ, gratuit și în browser",
+    "lead": "Pornește Mixul și melodiile din coadă trec una în alta: tempoul se potrivește, bătăile se aliniază, iar fiecare schimbare e o tranziție DJ adevărată, nu un simplu fade. Modelează orice tranziție, ascult-o și exportă două melodii ca un singur mix. Fără abonament, nimic încărcat.",
+    "hero": ("app-mix-editor", "Editorul de mix: două melodii una peste alta, bătăile aliniate, curbele tranziției deasupra"),
+    "sections": [
+      ("Tranziții pe ritm", [
+        "THE REMIXITY găsește tempoul și bătaia fiecărei melodii. Când două melodii diferă cu cel mult 8% (sau dublu ori jumătate), următoarea intră în tempoul pe care îl auzi, cu primul timp tare pe un timp tare al melodiei care se termină. După tranziție revine lin la viteza ei.",
+        "Melodiile care nu se potrivesc primesc un fade curat, nimic nu e forțat.",
+      ], None),
+      ("Fiecare tranziție, cum vrei tu", [
+        "Atinge orice tranziție dintre două melodii. Ambele forme de undă stau una peste alta, cu măsurile lor, ca să vezi cum se întâlnesc bătăile. Trage melodia următoare ca să muți intrarea, câte o măsură întreagă, și alege lungimea: 2, 4, 8 sau 16 măsuri.",
+        "Alege un stil (Fade, Rise, Blend, Wave, Melt sau Slam) sau fă-ți-l din trei controale: Volum, EQ (schimb de bas sau amestec pe 3 benzi) și Efect (filtre trece-sus și trece-jos). Toate curbele sunt desenate pe unde. «Ascultă» redă doar acea tranziție, dacă vrei cu o măsură înainte.",
+      ], ("app-mix-list", "Coada ta, cu o tranziție între fiecare două melodii; următoarea e luminată")),
+      ("Tempo și tonalitate pentru fiecare melodie", [
+        "Fiecare melodie își primește BPM-ul și tonalitatea, scrisă cum o citesc DJ-ii (8A, 9B…). Editorul îți spune dacă două tonalități se potrivesc, ca să găsești tranzițiile care sună cel mai bine.",
+      ], None),
+      ("Mixează două melodii și exportă-le ca una", [
+        "Pe ecranul principal atinge «Mixează două melodii», alege două fișiere și ordinea lor. Fiecare melodie își păstrează viteza, efectele și automatizările; tranziția dintre ele o modelezi tu. Exportă mixul ca un singur MP3, făcut pe dispozitivul tău.",
+      ], ("app-mix-two", "Mixează două melodii: alege două fișiere și ordinea lor")),
+      ("Mereu la vedere", [
+        "Cardul Mix de sub player arată tranziția care urmează: finalul acestei melodii peste începutul următoarei, cu curbele și o numărătoare inversă. Atinge-l ca s-o schimbi. Nu vrei mix între două anumite melodii? Oprește doar acea tranziție, restul se mixează în continuare.",
+      ], ("app-mix-card", "Cardul Mix: tranziția care urmează, cu curbele ei")),
+    ],
+    "steps": [
+      "Pornește melodii din bibliotecă sau dintr-un playlist, ori atinge «Mixează două melodii» pe ecranul principal.",
+      "Atinge butonul Mix de lângă export și pornește Mixul.",
+      "Atinge o tranziție ca s-o modelezi, apasă «Ascultă» și exportă mixul dacă vrei un fișier.",
+    ],
+    "faq": [
+      ("E gratuit?", "Da. Fără abonament, fără cont, fără filigran pe sunet."),
+      ("Chiar se aliniază bătăile?", "Când tempourile sunt destul de apropiate, da: următoarea melodie e accelerată sau încetinită cu până la 8% și începe pe un timp tare. Dacă sunt prea diferite, primești un fade, nu o încurcătură."),
+      ("Pot exporta un mix?", "Da. «Exportă mixul» face din două melodii și tranziția lor un singur MP3, cu viteza, efectele și automatizările fiecăreia."),
+      ("Merge cu melodii încetinite?", "Da. Mixul urmează pedala: tranziția se potrivește cu tempoul pe care îl auzi, iar dacă miști pedala în timpul tranziției, ambele melodii rămân pe ritm."),
+      ("Pot sări peste tranziția dintre două melodii?", "Da. Deschide acea tranziție și alege «Oprit»: cele două se cântă una după alta, celelalte tranziții rămân."),
+      ("Muzica mea e încărcată undeva?", "Nu. Tempoul, tonalitatea și mixul sunt calculate pe dispozitivul tău."),
+    ],
+    "related": ["slow-reverb", "music-library", "audio-editor"],
+})
