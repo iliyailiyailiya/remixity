@@ -263,3 +263,14 @@ speed instead of ×1.00 (the reverb still follows the pedal). Remembered in
   shapes aliased into fake big triangles); dots hide when there are too many
   to grab — zoom in to edit them.
 - "Beat 1 here" confirms in the bar; Undo greys out when there's nothing to undo.
+
+## First-time tips (Nov 28)
+`src/ui/tour.ts` + texts in `src/ui/tourText.ts` (EN/RO/RU): a spotlight on one
+real button at a time with a bubble (Next / Skip / "2 of 9"), each tour once
+(localStorage `tourSeen`). Steps whose button isn't on screen are skipped; the
+spotlight follows a button that's still moving (a sheet sliding in).
+Tours: welcome (home), player (first song), each dashboard card the first time
+you land on it, the Mix sheet, the Mix editor, the timeline (only once the
+phone is sideways), library, export, story. ⋯ → Help → "Show the tutorial
+again" forgets them all. `localStorage.tour = 'off'` switches them off (the
+screenshot script does).

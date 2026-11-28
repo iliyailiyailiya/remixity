@@ -26,6 +26,8 @@ import { debugOn, initDebugPanel, npLog } from './debugLog';
 import { initFix } from './library/fix';
 import { Backdrop } from './ui/backdrop';
 import { marquee } from './ui/marquee';
+import { forgetTours, onFirstShow, runTour, tourActive } from './ui/tour';
+import { tourText } from './ui/tourText';
 import { defaultPalette, generatedCover, paletteFrom } from './ui/palette';
 import { Pedal, MAX_RATIO, MIN_RATIO } from './ui/pedal';
 import { AUTO_PARAMS, addLane, emptyAutomation, moveLanesWithSection, moveSection, paramsAt, removeLane, split, valueAt, type Automation, type AutoParam, type Lane } from './automation/model';
@@ -912,6 +914,43 @@ const mixUi = initMix({
 $('openMix').classList.toggle('on', mixOn);
 $('openMix').addEventListener('click', () => mixUi.open());
 $('mixTwoHome').addEventListener('click', () => mixUi.openStudio());
+// ---------- first-time tips ----------
+
+/** Run a tour by name (once, unless forced). */
+function tour(id: string, force = false) {
+  const { tours, labels } = tourText(getLang());
+  const steps = tours[id];
+  if (steps) runTour(id, steps, labels, { force });
+}
+const isShown = (el: HTMLElement) => !el.hidden && el.getAttribute('aria-hidden') !== 'true' && el.offsetWidth > 0;
+// The home screen, then the player the first time a song is in it.
+setTimeout(() => {
+  if (!home.hidden && $('player').hidden) tour('welcome');
+}, 1200);
+onFirstShow($('player'), 'player', () => tour('player'), () => isShown($('player')) && !libraryOpen() && !openSheet);
+// Each screen, the first time it opens.
+onFirstShow($('mixSheet'), 'mixSheet', () => tour('mixSheet'), () => $('mixSheet').classList.contains('open'));
+onFirstShow($('mixEditView'), 'mixEdit', () => tour('mixEdit'), () => isShown($('mixEditView')) && $('mixCanvas').offsetWidth > 0);
+// (The timeline needs the phone sideways: its tips wait for that.)
+const timelineUsable = () =>
+  isShown($('timeline')) && $('tlCanvas').offsetWidth > 0 && !matchMedia('(orientation: portrait) and (pointer: coarse)').matches;
+onFirstShow($('timeline'), 'timeline', () => tour('timeline'), timelineUsable);
+addEventListener('resize', () => {
+  if (timelineUsable()) setTimeout(() => timelineUsable() && tour('timeline'), 700);
+});
+onFirstShow($('library'), 'library', () => tour('library'), () => isShown($('library')));
+onFirstShow($('exportSheet'), 'export', () => tour('export'), () => $('exportSheet').classList.contains('open'));
+onFirstShow($('storySheet'), 'story', () => tour('story'), () => $('storySheet').classList.contains('open'));
+$('tourAgain').addEventListener('click', () => {
+  forgetTours();
+  closeSheets();
+  setTimeout(() => {
+    if (tourActive()) return;
+    if (!$('player').hidden) tour('player', true);
+    else tour('welcome', true);
+  }, 450);
+});
+
 // Long names scroll instead of ending in "…".
 for (const id of ['title', 'artist', 'lyFullTitle', 'lyFullArtist']) marquee($(id));
 
@@ -1652,6 +1691,12 @@ function syncPage() {
   if (page === 'eq') eq.draw();
   if (page === 'chop') renderEdit();
   if (page === 'mix') mixUi.tickWidget();
+  // Each card explains itself the first time you land on it.
+  const shownPage = page;
+  if (shownPage !== 'play')
+    setTimeout(() => {
+      if (page === shownPage && !openSheet && !lyricsOpen) tour(`page-${shownPage}`);
+    }, 700);
 }
 pagesEl.addEventListener('scroll', syncPage, { passive: true });
 

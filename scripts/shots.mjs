@@ -120,6 +120,7 @@ await run(`
     i++;
   }
   localStorage.setItem('swiped', '1');
+  localStorage.setItem('tour', 'off'); // no first-time tips in the screenshots
   localStorage.setItem('lang', '${LANG}');
   localStorage.setItem('artistPhotos', '{}');
   // Demo songs are fictional: no online lookups (they'd replace the demo lyrics).
