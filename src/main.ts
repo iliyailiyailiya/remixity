@@ -20,6 +20,7 @@ import { findLyrics, findLyricsEnabled, LyricsView, setFindLyrics } from './ui/l
 import { getAudio, getTrack, updateTrack, type Track } from './library/db';
 import { initLibrary } from './library/ui';
 import { initMove } from './move';
+import { NowPlaying } from './nowPlaying';
 import { initFix } from './library/fix';
 import { Backdrop } from './ui/backdrop';
 import { defaultPalette, generatedCover, paletteFrom } from './ui/palette';
@@ -182,7 +183,10 @@ async function load(file: File, known?: Track, ready?: Promise<Prepared>) {
       player.setRepeat(repeatOn);
       player.onEnded = () => (nextInQueue(true) ? undefined : render());
       player.onInterrupted = render;
-      player.onPlay = announcePlaying;
+      player.onPlay = () => {
+        announcePlaying();
+        nowPlaying.set(true); // the lock screen's controls follow
+      };
     }
     void player.ctx.resume();
 
@@ -814,6 +818,7 @@ function togglePlay() {
   if (!player || !buffer) return;
   if (player.playing) player.pause();
   else player.play();
+  nowPlaying.set(player.playing);
   render();
 }
 
@@ -2190,6 +2195,33 @@ exportBtn.addEventListener('click', async () => {
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 
 let lastPositionSync = 0;
+// The lock screen / Control Center: its controls only work while a media
+// element plays along (see nowPlaying.ts).
+const nowPlaying = new NowPlaying();
+
+/** Play state and position for the lock screen. Also runs with the screen off. */
+function syncLockScreen() {
+  if (!player) return;
+  nowPlaying.set(player.playing);
+  if (!('mediaSession' in navigator)) return;
+  const ms = navigator.mediaSession;
+  const state = player.playing ? 'playing' : 'paused';
+  const dur = estDuration ?? (player.duration || 1);
+  const r = params.ratio;
+  // The lock screen extrapolates on its own; update it about once a second.
+  const wall = performance.now();
+  if (wall - lastPositionSync > 1000 || ms.playbackState !== state) {
+    lastPositionSync = wall;
+    try {
+      ms.setPositionState({ duration: dur / r, position: Math.min(player.position, dur) / r, playbackRate: 1 });
+    } catch {
+      /* not supported */
+    }
+  }
+  if (ms.playbackState !== state) ms.playbackState = state;
+}
+// The animation loop stops while the screen is off; this doesn't.
+setInterval(syncLockScreen, 500);
 // Last values written by renderTransport: it runs every frame, so it only
 // touches the page when something visible actually changed.
 const shown = { bar: '', now: '', left: '', playing: null as boolean | null };
@@ -2215,21 +2247,7 @@ function renderTransport() {
     $('timeline').classList.toggle('playing', player.playing);
     playToggles.forEach((b) => b.setAttribute('aria-label', t(player!.playing ? 'pause' : 'play')));
   }
-  if ('mediaSession' in navigator) {
-    const ms = navigator.mediaSession;
-    const state = player.playing ? 'playing' : 'paused';
-    // The lock screen extrapolates on its own; update it about once a second.
-    const wall = performance.now();
-    if (wall - lastPositionSync > 1000 || ms.playbackState !== state) {
-      lastPositionSync = wall;
-      try {
-        ms.setPositionState({ duration: dur / r, position: Math.min(pos, dur) / r, playbackRate: 1 });
-      } catch {
-        /* not supported */
-      }
-    }
-    if (ms.playbackState !== state) ms.playbackState = state;
-  }
+  syncLockScreen();
   backdrop.speed = (player.playing ? 1 : 0.3) * r;
   if (page === 'chop') wave.setProgress(pos / dur);
   if (page === 'lyrics' || lyricsOpen) lyricsView.update(toOriginal(pos));
@@ -2341,5 +2359,6 @@ if (import.meta.env.DEV) {
       return automation;
     },
     touchAutomation: () => (autoDirty = true),
+    nowPlaying: () => nowPlaying.active,
   };
 }
