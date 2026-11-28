@@ -3467,3 +3467,196 @@ body.timeline-open {
   background: rgba(255, 255, 255, 0.12);
   border-color: rgba(255, 255, 255, 0.3);
 }
+
+/* Mix, full screen (over the cover colours, like the big lyrics) */
+body.mix-open {
+  overflow: hidden;
+}
+body.mix-open .player,
+body.mix-open .home {
+  visibility: hidden;
+}
+.mix-full .mix-pair {
+  font-size: 0.9rem;
+}
+.mix-full-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  width: min(100%, 900px);
+  margin: 0 auto;
+  padding: 6px 16px max(24px, env(safe-area-inset-bottom));
+  box-sizing: border-box;
+}
+.mix-full .mix-stage {
+  background: rgba(0, 0, 0, 0.42);
+}
+.mix-full .mix-canvas {
+  height: clamp(170px, 34 * var(--vh), 300px);
+}
+.mix-stage-info[data-harmony='match'] {
+  color: #50ff96;
+}
+.mix-stage-info[data-harmony='clash'] {
+  color: #ffb36b;
+}
+.mix-song-btn {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#mixPreview[hidden] {
+  display: none;
+}
+
+/* The two-song mixer */
+.mix-studio {
+  max-width: 520px;
+  margin: 4vh auto 0;
+}
+.mix-slots {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin: 18px 0;
+}
+.mix-slot {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  border-radius: 18px;
+  border: 1px dashed rgba(255, 255, 255, 0.3);
+  background: rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+  min-width: 0;
+}
+.mix-slot b {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.14);
+}
+.mix-slot span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dim);
+}
+.mix-slot.set {
+  border-style: solid;
+  border-color: rgba(41, 200, 255, 0.5);
+}
+.mix-slot.set span {
+  color: var(--text);
+  font-weight: 600;
+}
+.mix-swap {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.08);
+  display: grid;
+  place-items: center;
+}
+.mix-swap svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.mix-go {
+  width: 100%;
+  border: 0;
+}
+.mix-go:disabled {
+  opacity: 0.4;
+}
+
+/* The Mix card in the dashboard */
+.page-mix .mix-mini {
+  flex: 1;
+  min-height: 44px;
+  width: 100%;
+  contain: size; /* see .eq-canvas */
+  cursor: pointer;
+  border-radius: 12px;
+}
+#mixMiniInfo {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+/* The playing song and its transition, lit up in the list */
+.mix-song {
+  position: relative;
+  overflow: hidden;
+}
+.mix-song.now {
+  background: linear-gradient(90deg, rgba(41, 200, 255, 0.16), rgba(41, 200, 255, 0.05));
+  border-color: rgba(41, 200, 255, 0.55);
+  box-shadow: 0 0 18px rgba(41, 200, 255, 0.18);
+}
+.mix-song.now b::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--cold-2);
+  margin-right: 8px;
+  vertical-align: 2px;
+  box-shadow: 0 0 8px var(--cold-2);
+}
+.mix-progress {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 3px;
+  width: 100%;
+  background: var(--cold-2);
+  transform-origin: left;
+  transform: scaleX(var(--p, 0));
+  transition: transform 0.5s linear;
+}
+.mix-song:not(.now) {
+  opacity: 0.72;
+}
+.mix-link.live .mix-pill {
+  border-color: var(--cold-2);
+  box-shadow: 0 0 14px rgba(41, 200, 255, 0.35);
+}
+.mix-link.live::before {
+  border-left: 2px solid var(--cold-2);
+}
+.mix-link.live.mixing .mix-pill {
+  animation: mix-pulse 1s ease-in-out infinite;
+}
+@keyframes mix-pulse {
+  50% {
+    box-shadow: 0 0 22px rgba(41, 200, 255, 0.7);
+  }
+}
+.mix-when {
+  font-style: normal;
+  color: var(--cold-2);
+  font-weight: 600;
+  margin-left: 4px;
+}
+.mix-when:empty {
+  display: none;
+}

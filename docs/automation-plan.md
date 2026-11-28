@@ -201,6 +201,26 @@ green bar lines (they meet when in sync), drag snaps to whole bars, a Sync
 beats switch. Measured on test tracks 120 → 124 BPM: beat phases equal
 within 0.1 ms, nudge −3.2%.
 
+**Shipped (Nov 28, round 3):**
+- Mix list: the playing song is lit (dot, glow, progress bar), its transition
+  pill glows with a countdown ("in 0:20", then "mixing now"); BPM and key
+  under every song that has been measured.
+- Key detection (`src/engine/key.ts`): chroma + Krumhansl–Schmuckler, shown
+  in Camelot (8A, 9B …), as you hear it (shifted with the speed unless keep
+  pitch). The editor says whether the two keys match on the Camelot wheel
+  (✓ / ~ / ✕). Tempo, grid and key per library song are measured once and
+  kept (`src/mix/info.ts`, localStorage `mixSongInfo`).
+- The editor is full screen over the cover colours (like the big lyrics),
+  with a live playhead. "Hear it" plays *that* transition every time
+  (loading its first song if needed), not the next one in line.
+- Mix card in the dashboard (7th): the playing song's waveform with the
+  Volume / EQ / Effect curves of its transitions in and out, no labels; tap
+  = the editor for the transition into the next song.
+- Home: "Mix two songs" — pick two files, swap the order, "Mix them": they go
+  into the library (so each keeps its own automation), are queued, Mix turns
+  on and the editor opens. "Each song's automation" buttons open a song's
+  timeline (loading it first).
+
 **Order:**
 1. Two decks + Fade/Slam with seconds (Settings: Off / 3 / 6 / 12 s / Auto).
 2. Per-deck EQ + filter → Rise, Blend, Wave, Melt.

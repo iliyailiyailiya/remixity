@@ -17,7 +17,8 @@ import { initAds } from './ads';
 import { findCover, findCoversEnabled, includesArtist, sameName, searchLog, setFindCovers } from './ui/coverSearch';
 import { withTags } from './engine/tags';
 import { findLyrics, findLyricsEnabled, LyricsView, setFindLyrics } from './ui/lyrics';
-import { getAudio, getTrack, updateTrack, type Track } from './library/db';
+import { allTracks, getAudio, getTrack, updateTrack, type Track } from './library/db';
+import { importFiles } from './library/import';
 import { initLibrary } from './library/ui';
 import { initMove } from './move';
 import { NowPlaying } from './nowPlaying';
@@ -30,7 +31,8 @@ import { AUTO_PARAMS, addLane, emptyAutomation, moveLanesWithSection, moveSectio
 import { Timeline } from './automation/timeline';
 import { deleteTimeline, loadTimeline, saveTimeline, songKey } from './automation/store';
 import { musicEdges, planTransition, type Grid, type Plan, type Transition } from './engine/mix';
-import { initMix, transitionFor } from './mix/ui';
+import { initMix, transitionFor, type Incoming } from './mix/ui';
+import { knownInfo, songInfo } from './mix/info';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -554,10 +556,15 @@ function decodeAhead() {
     (p) => {
       a.edges = musicEdges(p.decoded);
       a.decoded = p.decoded;
-      a.analysis = (async () => {
-        const bpm = await detectBpm(p.decoded).catch(() => null);
-        a.grid = bpm ? await detectGrid(p.decoded, bpm).catch(() => null) : null;
-      })();
+      a.analysis = songInfo(a.id, p.decoded).then(
+        (info) => {
+          a.grid = info.grid;
+          mixUi.refresh();
+        },
+        () => {
+          a.grid = null;
+        },
+      );
     },
     () => {
       if (ahead === a) ahead = null;
@@ -633,6 +640,8 @@ let incomingMix: {
   ease: number;
 } | null = null;
 let mixStarting = false;
+/** The transition that brought the playing song in (the Mix card draws it). */
+let lastIncoming: Incoming | null = null;
 /** After a beat-matched transition: the new song's speed glides back to its own. */
 let speedEase: { from: number; to: number; at: number; len: number } | null = null;
 let edgesFor: { buffer: AudioBuffer; edges: { start: number; end: number } } | null = null;
@@ -653,30 +662,43 @@ function playingGrid(): { grid: Grid | null; done: boolean } {
     const entry: { buffer: AudioBuffer; grid: Grid | null; done: boolean } = { buffer, grid: null, done: false };
     gridFor = entry;
     const b = buffer;
+    const id = libraryId;
     void (async () => {
-      const bpm = origBpm ?? (await detectBpm(b).catch(() => null));
-      entry.grid = bpm ? await detectGrid(b, bpm).catch(() => null) : null;
+      if (id && b === original) {
+        // The song as it is: measured once, remembered (with its key).
+        const info = await songInfo(id, b, origBpm).catch(() => null);
+        entry.grid = info?.grid ?? null;
+        mixUi.refresh();
+      } else {
+        const bpm = origBpm ?? (await detectBpm(b).catch(() => null));
+        entry.grid = bpm ? await detectGrid(b, bpm).catch(() => null) : null;
+      }
       entry.done = true;
     })();
   }
   return gridFor;
 }
 
-/** The transition from the playing song into the next one (null: nothing to plan yet). */
-function planNext(): Plan | null {
-  const a = ahead;
-  if (!a || !libraryId || a.id !== queue[queueIndex + 1] || !a.decoded || !a.edges) return null;
+/**
+ * The transition from the playing song into the next one. Exact once the next
+ * song is decoded; `rough` = a best guess before that (for showing it).
+ */
+function planNext(rough = false): Plan | null {
+  const nextId = queue[queueIndex + 1];
+  if (!libraryId || libraryId !== queue[queueIndex] || !nextId) return null;
+  const a = ahead?.id === nextId && ahead.decoded && ahead.edges ? ahead : null;
+  if (!a && !rough) return null;
   const e = playingEdges();
   if (!e) return null;
   return planTransition({
-    tr: transitionFor(libraryId, a.id),
+    tr: transitionFor(libraryId, nextId),
     aEnd: e.end,
-    bStart: a.edges.start,
+    bStart: a?.edges?.start ?? 0,
     rateA: params.ratio,
     rateB: speedLocked ? params.ratio : 1,
     gridA: playingGrid().grid,
-    gridB: a.grid ?? null,
-    bDuration: a.decoded.duration,
+    gridB: a ? (a.grid ?? null) : (knownInfo(nextId)?.grid ?? null),
+    bDuration: a?.decoded?.duration ?? 600,
   });
 }
 
@@ -736,6 +758,7 @@ function mixWatch() {
     rateIn: plan.rateIn,
     ease: plan.synced && plan.bar ? plan.bar * 4 : 0,
   };
+  lastIncoming = { id: ahead.id, tr: plan.tr, dur: plan.dur, bIn: plan.bIn, rateIn: plan.rateIn };
   if (import.meta.env.DEV) (window as unknown as { __lastMix: unknown }).__lastMix = { ...incomingMix, plan, gridA: playingGrid().grid, gridB: ahead.grid };
   void playFromQueue(queueIndex + 1).finally(() => (mixStarting = false));
 }
@@ -758,23 +781,60 @@ const mixUi = initMix({
   aheadBuffer: (id) => (ahead?.id === id && ahead.decoded ? ahead.decoded : null),
   ratio: () => params.ratio,
   lockedRatio: () => (speedLocked ? params.ratio : 1),
-  preview: async () => {
-    // Hear the transition: get both songs analysed, then jump to a few
-    // seconds before it starts.
-    if (!player || !buffer || queueIndex + 1 >= queue.length) return;
+  keepPitch: () => params.keepPitch,
+  position: () => player?.position ?? 0,
+  isPlaying: () => !!player?.playing,
+  mixing: () => !!player?.mixing,
+  nextPlan: () => planNext(true),
+  incoming: () => lastIncoming,
+  preview: async (a, b) => {
+    // Hear a transition: load its first song if needed, get both analysed,
+    // then play from a few seconds before it starts. Again = the same one.
+    if (!player) return;
+    void player.ctx.resume();
+    nowPlaying.set(true); // (inside the tap, for the lock screen)
+    const i = queue.findIndex((id, k) => id === a && queue[k + 1] === b);
+    if (i < 0) return;
     if (!mixOn) mixUi.turnOn();
-    decodeAhead();
-    playingGrid();
-    for (let i = 0; i < 100 && !(analysed() && planNext()); i++) await wait(100);
+    if (libraryId !== a || queueIndex !== i) await playFromQueue(i, false);
+    for (let n = 0; n < 150 && !(analysed() && planNext()); n++) {
+      decodeAhead();
+      playingGrid();
+      await wait(100);
+    }
     const plan = planNext();
-    if (!plan) return;
+    if (!plan || !player) return;
     player.seek(Math.max(0, plan.startA - 4 * params.ratio));
     if (!player.playing) player.play();
     render();
   },
+  editSong: (id) => {
+    void (async () => {
+      const i = queue.indexOf(id);
+      if (libraryId !== id && i >= 0) await playFromQueue(i, false);
+      if (libraryId === id) $('openTimeline').click();
+    })();
+  },
+  startStudio: async ([f1, f2]) => {
+    // Both go into the library (their automation and the mix are kept there).
+    await importFiles([f1, f2], () => {});
+    const tracks = await allTracks();
+    const idOf = (f: File) => tracks.find((tr) => tr.fileName === f.name && tr.size === f.size)?.id;
+    const a = idOf(f1);
+    const b = idOf(f2);
+    if (!a || !b || a === b) return null;
+    void library.refresh();
+    setQueue([a, b], 0);
+    await playFromQueue(0, false);
+    return [a, b];
+  },
+  setCovered: (on) => {
+    backdrop.covered = on || libraryOpen();
+  },
 });
 $('openMix').classList.toggle('on', mixOn);
 $('openMix').addEventListener('click', () => mixUi.open());
+$('mixTwoHome').addEventListener('click', () => mixUi.openStudio());
 
 /** Like every player: back to the start first, then the previous song. */
 async function prevInQueue() {
@@ -1495,7 +1555,7 @@ const wave = new Waveform($<HTMLCanvasElement>('wave'), {
 
 // ---------- dashboard pages: swipe like a widget stack ----------
 
-const PAGES = ['play', 'lyrics', 'drive', 'space', 'eq', 'chop'] as const;
+const PAGES = ['play', 'lyrics', 'drive', 'space', 'eq', 'chop', 'mix'] as const;
 const pagesEl = $('pages');
 const dots = [...document.querySelectorAll<HTMLButtonElement>('#dots button')];
 let page: (typeof PAGES)[number] = 'play';
@@ -1512,6 +1572,7 @@ function syncPage() {
   eq.active = page === 'eq';
   if (page === 'eq') eq.draw();
   if (page === 'chop') renderEdit();
+  if (page === 'mix') mixUi.tickWidget();
 }
 pagesEl.addEventListener('scroll', syncPage, { passive: true });
 
@@ -2517,6 +2578,7 @@ function renderTransport() {
   syncLockScreen();
   backdrop.speed = (player.playing ? 1 : 0.3) * r;
   if (page === 'chop') wave.setProgress(pos / dur);
+  if (page === 'mix') mixUi.tickWidget();
   if (page === 'lyrics' || lyricsOpen) lyricsView.update(toOriginal(pos));
   if (ahead && !ahead.ready && player.playing && dur - pos < 30) decodeAhead();
 }

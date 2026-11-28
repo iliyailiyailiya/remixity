@@ -107,6 +107,7 @@
         <p class="tagline" data-i18n="homeTagline"></p>
         <label for="file" class="cta" data-i18n="chooseSong"></label>
         <button id="openLibraryHome" class="cta-secondary"><svg viewBox="0 0 24 24"><path d="M5 4v16M9.5 4v16" /><path d="M14 4.5l5 15" /></svg><span data-i18n="openLibrary"></span></button>
+        <button id="mixTwoHome" class="cta-secondary"><svg viewBox="0 0 24 24"><path d="M3 7h4c4 0 6 10 10 10h4" /><path d="M3 17h4c4 0 6-10 10-10h4" /></svg><span data-i18n="mixTwoBtn"></span></button>
         <p id="status" class="status" role="status" aria-live="polite"></p>
         <p class="fine" data-i18n="privacy"></p>
         <a class="more-link" href="#about"><span data-i18n="homeMore"></span>
@@ -372,6 +373,18 @@
             </div>
             <div id="markerList" class="marker-list"></div>
           </section>
+
+          <section class="page page-mix" data-page="mix">
+            <div class="page-head">
+              <h4 data-i18n="mixTitle"></h4>
+              <span id="mixMiniInfo" class="readout"></span>
+              <button class="mini-play play-toggle" data-i18n-aria="play" aria-label="Play">
+            <svg viewBox="0 0 24 24" class="i-play"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.4-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z" /></svg>
+            <svg viewBox="0 0 24 24" class="i-pause"><rect x="6" y="5" width="4.2" height="14" rx="1.3" /><rect x="13.8" y="5" width="4.2" height="14" rx="1.3" /></svg>
+          </button>
+            </div>
+            <canvas id="mixMini" class="mix-mini" role="button" tabindex="0" data-i18n-aria="mixOpen" aria-label="Edit the transition"></canvas>
+          </section>
         </div>
         <div class="page-dots" id="dots" role="tablist">
           <button data-go="0" aria-label="Play"></button>
@@ -380,6 +393,7 @@
           <button data-go="3" aria-label="Reverb"></button>
           <button data-go="4" aria-label="Equalizer"></button>
           <button data-go="5" aria-label="Chop"></button>
+          <button data-go="6" aria-label="Mix"></button>
         </div>
         <button id="pagePrev" class="page-arrow prev" disabled data-i18n-aria="prevPage" aria-label="Previous">
           <svg viewBox="0 0 24 24"><path d="M14.5 6l-6 6 6 6" /></svg>
@@ -469,6 +483,64 @@
         </button>
       </header>
       <div id="lyricsFullBody" class="lyrics-full-body"></div>
+    </section>
+
+    <!-- Mix: one transition, full screen over the cover colours (like the lyrics) -->
+    <section id="mixFull" class="lyrics-full mix-full" hidden aria-modal="true" role="dialog" data-i18n-aria="mixTitle" aria-label="Mix">
+      <header class="lyrics-full-head">
+        <button id="mixBack" class="lyrics-full-close" data-i18n-aria="back" aria-label="Back">
+          <svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" /></svg>
+        </button>
+        <div class="mix-pair">
+          <span id="mixA"></span>
+          <span id="mixB"></span>
+        </div>
+        <button id="mixPreview" class="mix-preview" data-i18n="mixPreview"></button>
+      </header>
+      <div class="mix-full-body">
+        <div id="mixStudio" class="mix-studio" hidden>
+          <h2 class="sheet-title" data-i18n="mixTwoTitle"></h2>
+          <p class="hint" data-i18n="mixTwoHint"></p>
+          <div class="mix-slots">
+            <label class="mix-slot"><b>1</b><span id="mixSlot1" data-i18n="mixPickSong"></span>
+              <input id="mixFile1" class="visually-hidden" type="file" accept="audio/*,.mp3,.m4a,.aac,.wav,.flac,.ogg,.opus,.aif,.aiff" /></label>
+            <button id="mixSwap" class="mix-swap" data-i18n-aria="mixSwap" aria-label="Swap">
+              <svg viewBox="0 0 24 24"><path d="M8 4v16M4 8l4-4 4 4M16 20V4M12 16l4 4 4-4" /></svg>
+            </button>
+            <label class="mix-slot"><b>2</b><span id="mixSlot2" data-i18n="mixPickSong"></span>
+              <input id="mixFile2" class="visually-hidden" type="file" accept="audio/*,.mp3,.m4a,.aac,.wav,.flac,.ogg,.opus,.aif,.aiff" /></label>
+          </div>
+          <button id="mixGo" class="cta mix-go" disabled data-i18n="mixGo"></button>
+          <p id="mixStudioStatus" class="hint"></p>
+        </div>
+        <div id="mixEditView" hidden>
+          <div class="mix-stage">
+            <canvas id="mixCanvas" class="mix-canvas"></canvas>
+            <p id="mixStageInfo" class="mix-stage-info"></p>
+          </div>
+          <div class="mix-row">
+            <small data-i18n="mixLength"></small>
+            <div id="mixLen" class="mix-chips"></div>
+          </div>
+          <div class="mix-row">
+            <small data-i18n="mixStyle"></small>
+            <div id="mixPresets" class="mix-chips scroll"></div>
+          </div>
+          <div id="mixTabs" class="mix-tabs" role="tablist">
+            <button data-tab="volume" class="vol" aria-pressed="true" data-i18n="mixVolume"></button>
+            <button data-tab="eq" class="eq" aria-pressed="false" data-i18n="mixEq"></button>
+            <button data-tab="effect" class="fx" aria-pressed="false" data-i18n="mixEffect"></button>
+          </div>
+          <div id="mixOptions" class="mix-chips scroll"></div>
+          <div class="mix-row">
+            <small data-i18n="mixSongAuto"></small>
+            <div class="mix-chips">
+              <button id="mixSongA" class="mix-song-btn"></button>
+              <button id="mixSongB" class="mix-song-btn"></button>
+            </div>
+          </div>
+        </div>
+      </div>
     </section>
 
     <!-- ===== Library ===== -->
@@ -848,36 +920,6 @@
           <p class="hint mix-hint" data-i18n="mixHint"></p>
           <ol id="mixQueue" class="mix-queue"></ol>
           <p id="mixEmpty" class="hint" data-i18n="mixEmpty" hidden></p>
-        </div>
-        <div id="mixEditView" hidden>
-          <div class="mix-edit-head">
-            <button id="mixBack" class="icon-btn" data-i18n-aria="back" aria-label="Back">
-              <svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" /></svg>
-            </button>
-            <div class="mix-pair">
-              <span id="mixA"></span>
-              <span id="mixB"></span>
-            </div>
-            <button id="mixPreview" class="mix-preview" data-i18n="mixPreview"></button>
-          </div>
-          <div class="mix-stage">
-            <canvas id="mixCanvas" class="mix-canvas"></canvas>
-            <p id="mixStageInfo" class="mix-stage-info"></p>
-          </div>
-          <div class="mix-row">
-            <small data-i18n="mixLength"></small>
-            <div id="mixLen" class="mix-chips"></div>
-          </div>
-          <div class="mix-row">
-            <small data-i18n="mixStyle"></small>
-            <div id="mixPresets" class="mix-chips scroll"></div>
-          </div>
-          <div id="mixTabs" class="mix-tabs" role="tablist">
-            <button data-tab="volume" class="vol" aria-pressed="true" data-i18n="mixVolume"></button>
-            <button data-tab="eq" class="eq" aria-pressed="false" data-i18n="mixEq"></button>
-            <button data-tab="effect" class="fx" aria-pressed="false" data-i18n="mixEffect"></button>
-          </div>
-          <div id="mixOptions" class="mix-chips scroll"></div>
         </div>
       </div>
     </section>
