@@ -29,6 +29,8 @@ import { Pedal, MAX_RATIO, MIN_RATIO } from './ui/pedal';
 import { AUTO_PARAMS, addLane, emptyAutomation, moveLanesWithSection, moveSection, paramsAt, removeLane, split, valueAt, type Automation, type AutoParam, type Lane } from './automation/model';
 import { Timeline } from './automation/timeline';
 import { deleteTimeline, loadTimeline, saveTimeline, songKey } from './automation/store';
+import { musicEdges, type Transition } from './engine/mix';
+import { initMix, mixSeconds, transitionFor } from './mix/ui';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -201,7 +203,9 @@ async function load(file: File, known?: Track, ready?: Promise<Prepared>) {
     void player.ctx.resume();
 
     // A new song starts fresh: normal speed, its own BPM, no effects.
-    player.pause();
+    // (During a transition the old song is a tail of its own: leave it be.)
+    const mix = incomingMix;
+    if (!mix) player.pause();
     // (Keep pitch is a way of listening, not a song setting: it carries over.)
     // Locked speed carries over to the next song too.
     Object.assign(params, DEFAULT_PARAMS, { keepPitch: params.keepPitch }, speedLocked ? { ratio: params.ratio } : {});
@@ -248,7 +252,15 @@ async function load(file: File, known?: Track, ready?: Promise<Prepared>) {
     sel = null;
     trackName = tidyName(name) || name;
     player.setLoop(null);
-    player.load(decoded);
+    player.load(decoded, mix ? mix.bIn : undefined);
+    if (mix) {
+      // In a transition, the new song comes in right away (the cover and
+      // the rest of the page follow), catching up with the old song's fade.
+      incomingMix = null;
+      player.play();
+      const x0 = mix.x0 + (player.ctx.currentTime - mix.at) / mix.dur;
+      player.mixIn(mix.tr, mix.dur, Math.min(1, Math.max(0, x0)));
+    }
     estDuration = null;
     fullReady = null;
     $('dash').classList.remove('decoding');
@@ -505,6 +517,9 @@ interface Ahead {
   track: Track;
   file: File;
   ready?: Promise<Prepared>;
+  /** Decoded and measured: a transition can start. */
+  decoded?: AudioBuffer;
+  edges?: { start: number; end: number };
 }
 let ahead: Ahead | null = null;
 
@@ -523,9 +538,15 @@ function decodeAhead() {
   // (Only while a queue song is playing, not a file opened on its own.)
   if (!a || a.ready || a.id !== queue[queueIndex + 1] || libraryId !== queue[queueIndex]) return;
   a.ready = prepare(a.file);
-  a.ready.catch(() => {
-    if (ahead === a) ahead = null;
-  });
+  a.ready.then(
+    (p) => {
+      a.edges = musicEdges(p.decoded);
+      a.decoded = p.decoded;
+    },
+    () => {
+      if (ahead === a) ahead = null;
+    },
+  );
 }
 
 /** Load (and by default start) the queue's song at `index`. */
@@ -557,6 +578,7 @@ async function playFromQueue(index: number, autoplay = true): Promise<boolean> {
   }
   await load(file, track, ready);
   if (queue[queueIndex] !== id) return true;
+  incomingMix = null;
   if (autoplay && player && !player.playing) {
     player.play();
     render();
@@ -566,11 +588,99 @@ async function playFromQueue(index: number, autoplay = true): Promise<boolean> {
 }
 
 /** Go to the next song; returns false at the end of the queue. */
-function nextInQueue(_auto: boolean): boolean {
+function nextInQueue(auto: boolean): boolean {
   if (queueIndex + 1 >= queue.length) return false;
+  // ⏭ while Mix is on: a quick 1.2 s fade instead of a cut.
+  if (!auto && mixOn && player?.playing && !player.mixing) {
+    const tr = { volume: 'fade', eq: 'none', effect: 'none' } as const;
+    if (player.detachTail(tr, 1.2)) {
+      const next = ahead?.id === queue[queueIndex + 1] ? ahead.edges : undefined;
+      incomingMix = { tr, dur: 1.2, x0: 0, at: player.ctx.currentTime, bIn: next?.start ?? 0 };
+    }
+  }
   void playFromQueue(queueIndex + 1);
   return true;
 }
+
+// ---------- Mix: transitions between songs ----------
+
+let mixOn = localStorage.getItem('mixOn') === '1';
+/** A transition handing over to the song being loaded (load() and playFromQueue read it). */
+let incomingMix: { tr: Pick<Transition, 'volume' | 'eq' | 'effect'>; dur: number; x0: number; at: number; bIn: number } | null = null;
+let mixStarting = false;
+let edgesFor: { buffer: AudioBuffer; edges: { start: number; end: number } } | null = null;
+
+/** Where the playing song's music really ends (cached per buffer). */
+function playingEdges() {
+  if (!buffer) return null;
+  if (edgesFor?.buffer !== buffer) edgesFor = { buffer, edges: musicEdges(buffer) };
+  return edgesFor.edges;
+}
+
+/** The transition into the next song, if one should start now. */
+function mixWatch() {
+  if (!mixOn || mixStarting || !player?.playing || player.mixing) return;
+  if (player.repeating || player.looping || player.provisional || estDuration) return;
+  if (!libraryId || libraryId !== queue[queueIndex] || queueIndex + 1 >= queue.length) return;
+  const remaining = (player.duration - player.position) / params.ratio;
+  if (remaining < 80) {
+    if (ahead && !ahead.ready) decodeAhead();
+  }
+  const a = ahead;
+  if (!a || a.id !== queue[queueIndex + 1] || !a.decoded || !a.edges) return;
+  const e = playingEdges();
+  if (!e) return;
+  const tr = transitionFor(libraryId, a.id);
+  const bpm = origBpm ? origBpm * params.ratio : null;
+  const dur = mixSeconds(tr, bpm);
+  // A's music ends at e.end; the transition ends there (moved by the shift).
+  const startAt = e.end - (dur - tr.shift) * params.ratio; // A's seconds
+  const lead = (startAt - player.position) / params.ratio;
+  if (lead > 0.12) return;
+  const x0 = Math.max(0, -lead / dur);
+  if (x0 > 0.85) return; // too late for this one
+  mixStarting = true;
+  if (!player.detachTail(tr, dur, x0)) {
+    mixStarting = false;
+    return;
+  }
+  npLog(`mix → ${a.id} (${tr.volume}/${tr.eq}/${tr.effect}, ${dur.toFixed(1)} s)`);
+  incomingMix = { tr, dur, x0, at: player.ctx.currentTime, bIn: a.edges.start };
+  void playFromQueue(queueIndex + 1).finally(() => (mixStarting = false));
+}
+setInterval(mixWatch, 100);
+
+const mixUi = initMix({
+  showSheet,
+  closeSheets,
+  queue: () => queue.slice(queueIndex),
+  playingId: () => libraryId,
+  isOn: () => mixOn,
+  setOn: (on) => {
+    mixOn = on;
+    localStorage.setItem('mixOn', on ? '1' : '0');
+    $('openMix').classList.toggle('on', on);
+  },
+  playingBuffer: () => (libraryId === queue[queueIndex] ? buffer : null),
+  playingBpm: () => origBpm,
+  aheadBuffer: (id) => (ahead?.id === id && ahead.decoded ? ahead.decoded : null),
+  ratio: () => params.ratio,
+  preview: (tr) => {
+    // Hear the transition: jump to a few seconds before it starts.
+    if (!player || !buffer || queueIndex + 1 >= queue.length) return;
+    const e = playingEdges();
+    if (!e) return;
+    const bpm = origBpm ? origBpm * params.ratio : null;
+    const dur = mixSeconds(tr, bpm);
+    const startAt = e.end - (dur - tr.shift) * params.ratio;
+    player.seek(Math.max(0, startAt - 4 * params.ratio));
+    if (!player.playing) player.play();
+    if (!mixOn) mixUi.turnOn();
+    render();
+  },
+});
+$('openMix').classList.toggle('on', mixOn);
+$('openMix').addEventListener('click', () => mixUi.open());
 
 /** Like every player: back to the start first, then the previous song. */
 async function prevInQueue() {

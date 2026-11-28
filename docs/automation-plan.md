@@ -117,10 +117,85 @@ echo mix / time / feedback, bass, EQ low / mid / high / air, low cut, high cut.
 - Still to come: gaps/overlaps (sections with their own position),
   duplicate a section, keyboard shortcuts on desktop.
 
-### Phase 4: mix two tracks
-- A second track row: the next song in the queue. Crossfade lane (equal power)
-  between the end of A and the start of B, beat-matched by speed if the BPMs
-  are close (we have both BPMs). Export as one file.
+### Phase 4: mix two tracks (plan, not built yet)
+
+**What the others do (researched Nov 28):**
+- Spotify **Mix** (Premium, own playlists only, shuffle must be off, no
+  export): stacked waveforms of the two songs, drag one to set the
+  transition, length 2/4/8 bars when a beat grid is found, green downbeats
+  to line up. Three controls with presets each: Volume, EQ (low/mid/high),
+  Filter (low/high-pass sweep). Presets: Auto, Fade (bass swap mid), Rise
+  (LP on the new song, HP on the old, bass swap at the end), Blend (3-band
+  EQ fade), Wave, Melt, Slam (hard cut). Shows BPM and Camelot key.
+  Complaints: tedious to do a whole playlist, grid snaps slightly off.
+- Spotify **Automix**: beat-matched transitions on some editorial playlists,
+  Spotify picks the points; separate plain Crossfade (seconds).
+- Apple Music **AutoMix** (iOS 26): time-stretch + beat match, cuts silence,
+  falls back to a crossfade when songs don't fit; on by default; odd
+  pairings reported.
+
+**Ours, and why it's better:**
+- Free, any queue: library, shuffle, files. No "own playlist" rule.
+- Works with everything the app already does: the pedal, keep pitch,
+  automation lanes.
+- **Export the mix as one file** (and stories). Spotify can't.
+- Transitions are made of lanes, so after a preset you can bend every curve
+  (Spotify: presets only).
+- Moves that suit slowed + reverb, which nobody else has:
+  - **Wash**: A dissolves into a reverb swell while B comes in.
+  - **Echo out**: A's last beat repeats and decays (DJ echo-out).
+  - **Tape stop**: A brakes to a halt, then B drops.
+  - **Backspin**: A spins backwards into B.
+  - **Slow in**: B starts at A's pedal speed and eases to its own.
+- Spotify's set as well: Fade, Rise, Blend, Wave, Melt, Slam.
+- Auto picks the move from BPM gap, energy and how the songs end/start, and
+  never forces a beat match on songs that don't fit (Apple's odd pairings).
+
+**Engine (4a, player):**
+- Two decks (A playing, B next). Each deck: source (+ keep-pitch node while
+  needed) → own 3-band EQ → own low/high-pass → own gain → the shared chain
+  (pedal reverb/echo/EQ). Each deck also has its own small echo and reverb
+  send, for Echo out and Wash.
+- Transition = a few curves (volume A/B, EQ A/B, filter A/B, send A,
+  speed A/B) scheduled on the audio clock; the same curves drive the offline
+  export.
+- Beat match: detectGrid on both. If BPMs are within ~8% (or half/double),
+  B plays at A's tempo with its downbeat on A's downbeat; length 2/4/8
+  bars; then B eases to its own speed. Otherwise seconds-based, no match.
+- Smart edges: skip A's silent tail and B's silent intro.
+- Handover at the middle: title, cover, lyrics, lock screen, timeline switch
+  to B. The silent lock-screen element is never paused.
+- B decoded before the transition (decodeAhead moves earlier); if not ready,
+  gapless switch as today. ⏭ = 1 s quick fade. No transition on repeat-one,
+  loop region or the last song.
+- Risk: two keep-pitch nodes on older iPhones. Fallback: B without keep pitch
+  during the overlap.
+
+**Editor (4b, timeline):** tap the dot between two songs (Spotify-style):
+both waveforms stacked, zoomed on the overlap, drag B to move it, bar
+grid with downbeats highlighted, length chips (2/4/8 bars), preset row,
+then lanes to fine-tune. Saved per pair (key A|B). Export A+B as one file.
+
+**Later:** key detection (Camelot) and "smart order" of the queue by BPM/key.
+
+**Shipped (step 1+2, Nov 28):** two decks (each song keeps its own chain
+while it plays out, so its reverb/speed don't jump), a DJ strip per song
+(`src/engine/mix.ts`: high/low-pass, 3-band EQ, fader, curves scheduled on
+the audio clock), silent intro/outro skipped, presets Fade/Rise/Blend/Wave/
+Melt/Slam + Volume/EQ/Effect options, length in bars from the BPM, ⏭ = 1.2 s
+fade. The Mix sheet (button next to Export): the queue with a pill between
+every two songs; the editor has the two waveforms stacked, beat lines, drag
+to move where B comes in (snaps to beats), saved per pair in localStorage
+`mixPairs`. Off by default (switch in the sheet; editing turns it on).
+
+**Order:**
+1. Two decks + Fade/Slam with seconds (Settings: Off / 3 / 6 / 12 s / Auto).
+2. Per-deck EQ + filter → Rise, Blend, Wave, Melt.
+3. Beat match + bar lengths + smart edges → Auto.
+4. Our moves: Wash, Echo out, Tape stop, Backspin, Slow in.
+5. Editor between two songs, saved per pair.
+6. Export the mix.
+PC first, then the iPhone home-screen app.
 
 ## Pedal lock (shipped with the scaffold)
 A **Lock** chip next to Keep pitch: when on, a new song starts at the same

@@ -233,6 +233,9 @@
         <button id="openTimeline" class="icon-btn" hidden data-i18n-aria="timeline" aria-label="Timeline">
           <svg viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18" /><path d="M4 15l4-5 4 3 4-6 4 4" /></svg>
         </button>
+        <button id="openMix" class="icon-btn mix-btn" data-i18n-aria="mixTitle" aria-label="Mix">
+          <svg viewBox="0 0 24 24"><path d="M3 7h4c4 0 6 10 10 10h4" /><path d="M3 17h4c4 0 6-10 10-10h4" /></svg>
+        </button>
         <button id="openExport" class="icon-btn" data-i18n-aria="export" aria-label="Export">
           <svg viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>
         </button>
@@ -827,6 +830,54 @@
             <button id="scCopyTags" class="ghost-btn" data-i18n="scCopyTags"></button>
           </div>
           <a class="sc-tip-link" href="https://soundcloud.com/upload" target="_blank" rel="noopener" data-i18n="scOpenUpload"></a>
+        </div>
+      </div>
+    </section>
+
+    <section id="mixSheet" class="sheet mix-sheet" aria-hidden="true" aria-labelledby="mixTitle">
+      <button class="grabber" data-close aria-label="Close"></button>
+      <div class="sheet-body">
+        <div id="mixListView">
+          <div class="mix-head">
+            <h2 id="mixTitle" class="sheet-title" data-i18n="mixTitle"></h2>
+            <label class="switch">
+              <input id="mixOn" type="checkbox" />
+              <span class="track"><i></i></span>
+            </label>
+          </div>
+          <p class="hint mix-hint" data-i18n="mixHint"></p>
+          <ol id="mixQueue" class="mix-queue"></ol>
+          <p id="mixEmpty" class="hint" data-i18n="mixEmpty" hidden></p>
+        </div>
+        <div id="mixEditView" hidden>
+          <div class="mix-edit-head">
+            <button id="mixBack" class="icon-btn" data-i18n-aria="back" aria-label="Back">
+              <svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" /></svg>
+            </button>
+            <div class="mix-pair">
+              <span id="mixA"></span>
+              <span id="mixB"></span>
+            </div>
+            <button id="mixPreview" class="mix-preview" data-i18n="mixPreview"></button>
+          </div>
+          <div class="mix-stage">
+            <canvas id="mixCanvas" class="mix-canvas"></canvas>
+            <p id="mixStageInfo" class="mix-stage-info"></p>
+          </div>
+          <div class="mix-row">
+            <small data-i18n="mixLength"></small>
+            <div id="mixLen" class="mix-chips"></div>
+          </div>
+          <div class="mix-row">
+            <small data-i18n="mixStyle"></small>
+            <div id="mixPresets" class="mix-chips scroll"></div>
+          </div>
+          <div id="mixTabs" class="mix-tabs" role="tablist">
+            <button data-tab="volume" class="vol" aria-pressed="true" data-i18n="mixVolume"></button>
+            <button data-tab="eq" class="eq" aria-pressed="false" data-i18n="mixEq"></button>
+            <button data-tab="effect" class="fx" aria-pressed="false" data-i18n="mixEffect"></button>
+          </div>
+          <div id="mixOptions" class="mix-chips scroll"></div>
         </div>
       </div>
     </section>

@@ -6,6 +6,7 @@
 import { buildChain, CEILING_DB, Chain, FxParams } from './chain';
 import { makeImpulse, roomStep } from './impulse';
 import { LIMITER_WORKLET } from './limiter';
+import { NEUTRAL, Strip, type Transition } from './mix';
 
 /** The parts of Signalsmith Stretch's node we use. */
 export type StretchNode = AudioWorkletNode & {
@@ -30,9 +31,24 @@ export function stereoCopies(buffer: AudioBuffer): Float32Array<ArrayBuffer>[] {
   return [l, r];
 }
 
+/** The song that's leaving during a transition: it plays out on its own. */
+interface Tail {
+  chain: Chain;
+  strip: Strip;
+  src: AudioBufferSourceNode | null;
+  stretch: StretchNode | null;
+  timer: number;
+}
+
 export class Player {
   ctx: AudioContext;
   private chain: Chain;
+  /** The DJ strip after the chain (filters, EQ, fader) for transitions. */
+  private strip: Strip;
+  /** Where every song's strip ends: the analyser and the limiter listen here. */
+  private bus: GainNode;
+  private lastParams: FxParams;
+  private tails: Tail[] = [];
   private buffer: AudioBuffer | null = null;
   private src: AudioBufferSourceNode | null = null;
   // Where the current source is, in the audio engine's own time: at engine
@@ -74,11 +90,16 @@ export class Player {
 
   constructor(params: FxParams) {
     this.ctx = new AudioContext({ latencyHint: 'playback' });
+    this.lastParams = { ...params };
+    this.bus = this.ctx.createGain();
     this.chain = buildChain(this.ctx, params);
+    this.strip = new Strip(this.ctx);
+    this.chain.output.connect(this.strip.input);
+    this.strip.output.connect(this.bus);
     this.analyser = this.ctx.createAnalyser();
     this.analyser.fftSize = 4096;
     this.analyser.smoothingTimeConstant = 0.75;
-    this.chain.output.connect(this.analyser);
+    this.bus.connect(this.analyser);
     // If the system takes the audio away (a call, Siri, another app),
     // pause properly so the play button and timeline stay truthful.
     this.ctx.addEventListener('statechange', () => {
@@ -97,7 +118,7 @@ export class Player {
     fallback.ratio.value = 12;
     fallback.attack.value = 0.005;
     fallback.release.value = 0.25;
-    this.chain.output.connect(fallback).connect(this.ctx.destination);
+    this.bus.connect(fallback).connect(this.ctx.destination);
     void this.useWorkletLimiter(fallback);
 
     this.setParams(params);
@@ -117,8 +138,8 @@ export class Player {
         processorOptions: { ceilingDb: CEILING_DB },
       });
       node.connect(this.ctx.destination);
-      this.chain.output.connect(node);
-      this.chain.output.disconnect(fallback);
+      this.bus.connect(node);
+      this.bus.disconnect(fallback);
       fallback.disconnect();
       this.limiter = 'worklet';
     } catch (err) {
@@ -307,6 +328,7 @@ export class Player {
   }
 
   pause() {
+    this.dropTails();
     if (!this.playing) return;
     this.offset = this.position;
     this.stopSource();
@@ -390,6 +412,100 @@ export class Player {
     this.stretchRunning = false;
   }
 
+  // ---------- mixing two songs ----------
+
+  /** A transition is playing out (the old song is still audible). */
+  get mixing() {
+    return this.tails.length > 0;
+  }
+
+  /**
+   * The song that's playing becomes a tail that plays out by itself through
+   * its own chain and strip, following the transition's curves for "A" over
+   * `dur` seconds from now (x0 = how far into the transition it already is).
+   * The player is then empty, with a fresh chain, ready to load the next song.
+   * Returns false (and changes nothing) when nothing is playing.
+   */
+  detachTail(tr: Pick<Transition, 'volume' | 'eq' | 'effect'>, dur: number, x0 = 0): boolean {
+    if (!this.playing || this.waitingForStretch || !this.buffer) return false;
+    const now = this.ctx.currentTime;
+    const left = (this.duration - this.position) / this.ratio; // real seconds until A's end
+    const stretch = this.stretchRunning ? this.stretch : null;
+    const tail: Tail = { chain: this.chain, strip: this.strip, src: this.src, stretch, timer: 0 };
+    tail.strip.run(tr, 'a', now, dur, x0);
+    if (tail.src) tail.src.onended = null;
+    const end = Math.min(left, dur * (1 - x0)) + 0.05;
+    tail.timer = window.setTimeout(() => this.endTail(tail), end * 1000);
+    this.tails.push(tail);
+
+    // The player starts over, empty, on a new chain.
+    clearInterval(this.endTimer);
+    this.startToken++;
+    this.src = null;
+    if (stretch) {
+      this.stretch = null;
+      this.stretchLoading = null;
+      this.stretchHas = null;
+    }
+    this.stretchRunning = false;
+    this.playing = false;
+    this.offset = 0;
+    this.buffer = null;
+    this.chain = buildChain(this.ctx, this.lastParams);
+    this.strip = new Strip(this.ctx);
+    this.chain.output.connect(this.strip.input);
+    this.strip.output.connect(this.bus);
+    if (this.stretch) {
+      // An idle stretcher (keep pitch, not playing) moves to the new chain.
+      this.stretch.disconnect();
+      this.stretch.connect(this.chain.input);
+    }
+    this.irKey = '';
+    this.irTimer = 0;
+    this.setParams(this.lastParams); // builds the new chain's reverb room
+    return true;
+  }
+
+  /**
+   * Fade the song that's (about to be) playing in, as "B" of the transition,
+   * over `dur` seconds from now. Call right after play().
+   */
+  mixIn(tr: Pick<Transition, 'volume' | 'eq' | 'effect'>, dur: number, x0 = 0) {
+    this.strip.run(tr, 'b', this.ctx.currentTime, dur, x0);
+  }
+
+  /** Stop any transition right away: the tail goes, this song is at full. */
+  private dropTails() {
+    for (const t of [...this.tails]) this.endTail(t);
+    this.strip.set(NEUTRAL);
+  }
+
+  private endTail(t: Tail) {
+    clearTimeout(t.timer);
+    const i = this.tails.indexOf(t);
+    if (i < 0) return;
+    this.tails.splice(i, 1);
+    const now = this.ctx.currentTime;
+    // A very short fade, so stopping early never clicks.
+    t.strip.output.gain.cancelScheduledValues(now);
+    t.strip.output.gain.setValueAtTime(t.strip.output.gain.value, now);
+    t.strip.output.gain.linearRampToValueAtTime(0, now + 0.03);
+    setTimeout(() => {
+      try {
+        t.src?.stop();
+      } catch {
+        /* already stopped */
+      }
+      t.src?.disconnect();
+      if (t.stretch) {
+        void t.stretch.schedule({ active: false, output: this.ctx.currentTime });
+        void t.stretch.dropBuffers();
+        t.stretch.disconnect();
+      }
+      t.strip.disconnect();
+    }, 60);
+  }
+
   seek(seconds: number) {
     const wasPlaying = this.playing;
     this.pause();
@@ -405,6 +521,7 @@ export class Player {
    * room is rebuilt on a steady beat instead of waiting for changes to stop.
    */
   setParams(p: FxParams, fromLanes = false) {
+    this.lastParams = { ...p };
     if (p.keepPitch !== this.keepPitch) {
       // Switch engines in place, keeping the position.
       const wasPlaying = this.playing;

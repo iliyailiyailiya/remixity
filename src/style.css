@@ -3216,3 +3216,237 @@ select.tl-btn {
 body.timeline-open {
   overflow: hidden;
 }
+
+/* ---------- Mix (transitions between songs) ---------- */
+.mix-btn.on svg {
+  stroke: var(--cold-2);
+  filter: drop-shadow(0 0 6px rgba(41, 200, 255, 0.55));
+}
+.mix-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.mix-head .sheet-title {
+  margin-bottom: 4px;
+}
+.mix-hint {
+  margin: 0 4px 14px;
+}
+.mix-queue {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.mix-song {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 16px;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.mix-song b,
+.mix-song span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mix-song span {
+  color: var(--dim);
+  font-size: 0.85rem;
+}
+.mix-song.now {
+  border-color: rgba(41, 200, 255, 0.35);
+}
+.mix-link {
+  display: flex;
+  justify-content: center;
+  position: relative;
+  padding: 6px 0;
+}
+.mix-link::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  border-left: 1px dashed var(--line);
+}
+.mix-pill {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(41, 200, 255, 0.4);
+  background: #141e30;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+.mix-pill svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: var(--cold-2);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+.mix-off .mix-pill {
+  opacity: 0.45;
+  border-color: var(--line);
+}
+.mix-edit-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.mix-pair {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  font-size: 0.85rem;
+}
+.mix-pair span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mix-pair span:first-child {
+  color: var(--dim);
+}
+.mix-pair span:last-child::before {
+  content: '↳ ';
+  color: var(--cold-2);
+}
+.mix-preview {
+  flex: none;
+  border: 0;
+  border-radius: 999px;
+  padding: 8px 14px;
+  background: var(--text);
+  color: #000;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+.mix-stage {
+  position: relative;
+  border-radius: 18px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+.mix-canvas {
+  display: block;
+  width: 100%;
+  height: clamp(150px, 30 * var(--vh), 240px);
+  contain: size;
+  touch-action: pan-y;
+  cursor: ew-resize;
+}
+.mix-stage-info {
+  position: absolute;
+  right: 10px;
+  bottom: 6px;
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  background: rgba(0, 0, 0, 0.6);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.mix-row {
+  margin-top: 12px;
+}
+.mix-row small {
+  display: block;
+  color: var(--dim);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin: 0 4px 6px;
+}
+.mix-chips {
+  display: flex;
+  gap: 6px;
+}
+.mix-chips.scroll {
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin: 0 -16px;
+  padding: 0 16px;
+}
+.mix-chips.scroll::-webkit-scrollbar {
+  display: none;
+}
+.mix-chips button {
+  flex: none;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.07);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+#mixLen button {
+  flex: 1;
+}
+.mix-chips button[aria-pressed='true'] {
+  background: var(--text);
+  color: #000;
+  border-color: transparent;
+  font-weight: 650;
+}
+#mixOptions[data-tab='volume'] button[aria-pressed='true'] {
+  background: #29c8ff;
+}
+#mixOptions[data-tab='eq'] button[aria-pressed='true'] {
+  background: #ffd23b;
+}
+#mixOptions[data-tab='effect'] button[aria-pressed='true'] {
+  background: #c77dff;
+}
+.mix-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin: 16px 0 8px;
+}
+.mix-tabs button {
+  border: 1px solid var(--line);
+  background: transparent;
+  border-radius: 12px;
+  padding: 9px 0;
+  font-weight: 650;
+  font-size: 0.85rem;
+  position: relative;
+}
+.mix-tabs button::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: 1px;
+}
+.mix-tabs .vol::before {
+  background: #29c8ff;
+}
+.mix-tabs .eq::before {
+  background: #ffd23b;
+}
+.mix-tabs .fx::before {
+  background: #c77dff;
+}
+.mix-tabs button[aria-pressed='true'] {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.3);
+}
