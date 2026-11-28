@@ -1,21 +1,27 @@
 // The timeline overlay (see docs/automation-plan.md): a ruler, the song cut
 // into sections, and up to 5 automation lanes, on a beat grid.
 //
-//   ruler     tap / drag to seek
-//   track     drag a section left or right to move it (Split makes sections)
-//   lane name tap it for a close-up of that lane (and the track), tap again to go back
-//   lanes     tap to add a point, drag to move it, double-tap to delete it;
-//             drag the dot in the middle of a segment to curve it (double-tap
-//             it to straighten); with a shape picked, drag across a lane to
-//             draw it (start/end height = the two levels)
-//   zoom      pinch, ctrl/⌘ + wheel (trackpad pinch), or the − / + buttons
-//   scroll    two fingers, or the wheel / trackpad; follows the playhead
+// Two views:
+//   overview   ruler (tap/drag = seek), the track (drag a section to move it,
+//              tap = seek), and every lane small. A tap on a lane opens it.
+//              Nothing in a lane changes from a tap here.
+//   close-up   one lane, big, drawn over the song's waveform:
+//                double-tap an empty spot     add a point
+//                drag a point                 move it
+//                double-tap a point           delete it
+//                drag a hollow dot            curve that segment
+//                double-tap a hollow dot      straighten it
+//                with a shape picked          drag across to draw it
+//                one finger on empty space    scrolls (when zoomed in)
+//              "‹" (top left) goes back to all lanes.
+//   zoom       pinch, ctrl/⌘ + wheel (trackpad pinch), or the − / + buttons
+//   scroll     two fingers, or the wheel / trackpad; follows the playhead
 //
+// Every change asks the host for a checkpoint first, so Undo covers it.
 // Drawn on one canvas; the toolbar is plain HTML in index.html.
 
 import type { EditState } from '../engine/edit';
 import {
-  AUTO_PARAMS,
   applyShape,
   bend,
   bendFor,
@@ -29,6 +35,7 @@ import {
   sectionStarts,
   valueAt,
   type Automation,
+  type AutoParam,
   type Lane,
 } from './model';
 
@@ -44,6 +51,8 @@ export interface TimelineHost {
   seek(t: number): void;
   /** Move section `from` to `to` (the host commits it, so Undo works). */
   moveSection(from: number, to: number): void;
+  /** About to change the lanes: remember how they are, for Undo. */
+  checkpoint(): void;
   /** Lanes changed (points moved, lane removed). */
   changed(): void;
   removeLane(id: string): void;
@@ -55,19 +64,46 @@ export interface TimelineHost {
 const RULER = 22;
 const TRACK = 70;
 const LANE_MAX = 56;
-const HIT = 16; // px around a point that grabs it
+const HIT = 22; // px around a point that grabs it (fingers are wide)
+const HANDLE_HIT = 18;
+const DOUBLE_MS = 350; // two taps this close together = a double-tap
+const DOUBLE_PX = 28; // … and this close in space
 const COLORS = ['#ff7ab6', '#7ac8ff', '#ffd166', '#8affc1', '#c49bff'];
 const PEAK_HOP = 256; // samples per waveform peak (~5 ms): sharp even zoomed in
 const MIN_SPAN = 2; // seconds on screen at the closest zoom
+const PAD = 14; // space above/below the line in a close-up
 
 type Drag =
   | { kind: 'seek' }
   | { kind: 'section'; index: number; x0: number; dx: number; moved: boolean }
-  | { kind: 'pending'; lane: Lane; x0: number; y0: number } // a tap that may become a new point
-  | { kind: 'point'; lane: Lane; index: number }
-  | { kind: 'curve'; lane: Lane; index: number }
+  | { kind: 'tap'; lane: Lane | null; x0: number; y0: number; view0: number; moved: boolean } // empty spot: tap, double-tap or scroll
+  | { kind: 'point'; lane: Lane; index: number; x0: number; y0: number; moved: boolean }
+  | { kind: 'curve'; lane: Lane; index: number; x0: number; y0: number; moved: boolean }
   | { kind: 'shape'; lane: Lane; t0: number; n0: number; t1: number; n1: number }
   | { kind: 'pinch' };
+
+/** How a lane's value reads to a person. */
+export function formatValue(param: AutoParam, v: number): string {
+  switch (param) {
+    case 'ratio':
+      return `×${v.toFixed(2)}`;
+    case 'decay':
+      return `${v.toFixed(1)} s`;
+    case 'delayTime':
+      return `${Math.round(v * 1000)} ms`;
+    case 'lowCut':
+    case 'highCut':
+      return v >= 1000 ? `${(v / 1000).toFixed(1)} kHz` : `${Math.round(v)} Hz`;
+    case 'bass':
+    case 'eqLow':
+    case 'eqMid':
+    case 'eqHigh':
+    case 'eqAir':
+      return `${v > 0 ? '+' : ''}${v.toFixed(1)} dB`;
+    default:
+      return `${Math.round(v * 100)}%`;
+  }
+}
 
 export class Timeline {
   private ctx: CanvasRenderingContext2D;
@@ -75,20 +111,22 @@ export class Timeline {
   private peaksOf: AudioBuffer | null = null;
   private raf = 0;
   private drag: Drag | null = null;
-  private lastTap = { lane: '', index: -1, at: 0 };
+  /** The last single tap (for double-taps): where, when, on what. */
+  private lastTap = { x: -1e9, y: -1e9, at: 0 };
   private w = 0;
   private h = 0;
   /** Grid size in beats (4 = a bar, 1 = a quarter, 2/3 = quarter triplets); 0 = off. */
   grid = 1;
   /** Snap to the grid (it can stay visible with snapping off). */
   snapOn = true;
-  /** What dragging on a lane does: move/add points, or draw a shape. */
+  /** What dragging in a close-up does: move/add points, or draw a shape. */
   shape: ShapeKind | 'points' = 'points';
   /** Turn the page with the playhead while playing (off = the view stays put). */
   followOn = true;
-  /** Close-up: only this lane (by id) is shown, big, under a taller track. */
+  /** Close-up: only this lane (by id) is shown, big, over the waveform. */
   focus: string | null = null;
-  private nameChips: { lane: Lane; x0: number; x1: number; y0: number; y1: number }[] = [];
+  /** The point (lane id + index) being dragged, for its value label. */
+  private live: { lane: Lane; index: number } | null = null;
   // The visible window, in timeline seconds. span 0 = the whole song.
   private viewStart = 0;
   private viewSpan = 0;
@@ -108,6 +146,7 @@ export class Timeline {
       this.pointers.delete(e.pointerId);
       this.drag = null;
       this.pinch = null;
+      this.live = null;
     });
     canvas.addEventListener('wheel', (e) => this.wheel(e), { passive: false });
     new ResizeObserver(() => this.resize()).observe(canvas);
@@ -127,6 +166,14 @@ export class Timeline {
   close() {
     cancelAnimationFrame(this.raf);
     this.raf = 0;
+  }
+
+  /** Open a lane's close-up (null = all lanes). */
+  setFocus(id: string | null) {
+    this.focus = id;
+    this.drag = null;
+    this.live = null;
+    this.host.focusChanged?.(id);
   }
 
   private resize() {
@@ -156,7 +203,7 @@ export class Timeline {
   private tOf(x: number) {
     return this.w ? Math.min(this.length, Math.max(0, this.viewStart + (x / this.w) * this.span)) : 0;
   }
-  /** Seconds per pixel → x of a duration. */
+  /** Seconds → pixels. */
   private px(seconds: number) {
     return this.span ? (seconds / this.span) * this.w : 0;
   }
@@ -191,6 +238,12 @@ export class Timeline {
   fit() {
     this.viewStart = 0;
     this.viewSpan = 0;
+    this.focus = null;
+  }
+
+  /** Zoomed in at all (Follow only matters then). */
+  get zoomed() {
+    return this.viewSpan > 0;
   }
 
   private panBy(seconds: number) {
@@ -226,7 +279,7 @@ export class Timeline {
     return { step: g.beat * this.grid, offset: g.offset, bar: g.beat * 4 };
   }
 
-  /** The nearest grid line to t (t itself when the grid is off). */
+  /** The nearest grid line to t (t itself when the grid or snapping is off). */
   snap(t: number) {
     const g = this.gridLines();
     if (!g || !this.snapOn) return t;
@@ -248,35 +301,44 @@ export class Timeline {
     }
   }
 
-  // ---------- drawing ----------
+  // ---------- layout ----------
 
-  /** The lanes on screen: all, or just the one in close-up. */
-  private lanes(): Lane[] {
-    const all = this.host.automation.lanes;
-    if (this.focus) {
-      const one = all.find((l) => l.id === this.focus);
-      if (one) return [one];
-      this.focus = null; // it was removed
-    }
-    return all;
+  private focusLane(): Lane | null {
+    if (!this.focus) return null;
+    const one = this.host.automation.lanes.find((l) => l.id === this.focus);
+    if (!one) this.focus = null; // it was removed
+    return one ?? null;
   }
-  /** Track row height: taller in a close-up. */
-  private trackH() {
-    return this.focus ? Math.max(TRACK, Math.round((this.h - RULER) * 0.38)) : TRACK;
+  /** The lanes in the overview. */
+  private lanes(): Lane[] {
+    return this.host.automation.lanes;
   }
   private laneH() {
     const n = this.lanes().length;
-    const room = this.h - RULER - this.trackH();
-    if (this.focus) return Math.max(LANE_MAX, room);
+    const room = this.h - RULER - TRACK;
     return n ? Math.min(LANE_MAX, room / n) : LANE_MAX;
   }
-  private laneTop(i: number) {
-    return RULER + this.trackH() + i * this.laneH();
+  /** Where a lane's values are drawn: top and height of its value range. */
+  private area(lane: Lane): { top: number; h: number } | null {
+    if (this.focusLane()) {
+      return lane.id === this.focus ? { top: RULER + PAD + 26, h: this.h - RULER - 2 * PAD - 26 } : null;
+    }
+    const i = this.lanes().indexOf(lane);
+    if (i < 0) return null;
+    const lh = this.laneH();
+    return { top: RULER + TRACK + i * lh + 4, h: lh - 8 };
   }
-  /** Index of a lane among those on screen (-1 when hidden). */
-  private shownIndex(lane: Lane) {
-    return this.lanes().indexOf(lane);
+  private yOf(lane: Lane, v: number, a: { top: number; h: number }) {
+    return a.top + (1 - norm(lane.param, v)) * a.h;
   }
+  private normFromY(y: number, a: { top: number; h: number }) {
+    return Math.min(1, Math.max(0, 1 - (y - a.top) / a.h));
+  }
+  private colorOf(lane: Lane) {
+    return COLORS[Math.max(0, this.host.automation.lanes.indexOf(lane)) % COLORS.length];
+  }
+
+  // ---------- drawing ----------
 
   private ensurePeaks() {
     const b = this.host.buffer();
@@ -315,6 +377,7 @@ export class Timeline {
     g.fillStyle = 'rgba(255,255,255,0.55)';
     g.font = '600 10px system-ui, -apple-system, sans-serif';
     g.textBaseline = 'middle';
+    g.textAlign = 'left';
     const r = this.host.ratio();
     const step = [1, 2, 5, 10, 15, 30, 60, 120, 300].find((s) => this.px(s * r) >= 46) ?? 600;
     for (let s = Math.floor(this.viewStart / r / step) * step; s * r <= this.viewStart + this.span; s += step) {
@@ -324,97 +387,9 @@ export class Timeline {
     }
 
     this.drawGrid();
-
-    // Sections.
-    const e = this.host.edit();
-    const starts = sectionStarts(e);
-    e.segments.forEach((s, i) => {
-      const len = s.end - s.start;
-      let x = this.xOf(starts[i]);
-      const sw = this.px(len);
-      const d = this.drag;
-      const dragging = d?.kind === 'section' && d.index === i && d.moved;
-      if (dragging) x += d.dx;
-      if (x > w || x + sw < 0) return;
-      g.fillStyle = dragging ? 'rgba(255,255,255,0.22)' : i % 2 ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.14)';
-      g.beginPath();
-      g.roundRect(x + 1, RULER + 4, Math.max(2, sw - 2), this.trackH() - 8, 6);
-      g.fill();
-      this.drawWave(x, sw, starts[i], len);
-    });
-
-    // Lanes.
-    const lh = this.laneH();
-    this.nameChips = [];
-    this.lanes().forEach((lane, i) => {
-      const top = this.laneTop(i);
-      const c = COLORS[Math.max(0, this.host.automation.lanes.indexOf(lane)) % COLORS.length]; // its own colour, in a close-up too
-      g.fillStyle = i % 2 ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.06)';
-      g.fillRect(0, top, w, lh);
-      g.strokeStyle = c;
-      g.lineWidth = 2;
-      g.beginPath();
-      for (let x = 0; x <= w; x += 2) {
-        const y = top + 4 + (1 - norm(lane.param, valueAt(lane, this.tOf(x)))) * (lh - 8);
-        if (x) g.lineTo(x, y);
-        else g.moveTo(x, y);
-      }
-      g.stroke();
-      g.fillStyle = c;
-      // Dots only where they're far enough apart to grab (a drawn shape has
-      // many points; zoom in to edit them one by one).
-      let lastX = -Infinity;
-      for (const p of lane.points) {
-        const x = this.xOf(p.t);
-        if (x < -6 || x > w + 6 || x - lastX < 7) continue;
-        lastX = x;
-        g.beginPath();
-        g.arc(x, top + 4 + (1 - norm(lane.param, p.v)) * (lh - 8), 5, 0, Math.PI * 2);
-        g.fill();
-      }
-      // Curve handles: a hollow dot in the middle of each sloped segment.
-      if (this.shape === 'points') {
-        g.strokeStyle = c;
-        g.lineWidth = 1.5;
-        for (const hnd of this.handles(lane, top, lh)) {
-          g.beginPath();
-          g.arc(hnd.x, hnd.y, 4, 0, Math.PI * 2);
-          g.stroke();
-        }
-      }
-      // A shape being drawn.
-      const d = this.drag;
-      if (d?.kind === 'shape' && d.lane === lane) {
-        const pts = this.shapeOf(d);
-        const tmp: Lane = { id: '', param: lane.param, points: pts.map((q) => ({ t: q.t, v: denorm(lane.param, q.n), c: q.c })) };
-        g.strokeStyle = '#fff';
-        g.lineWidth = 2;
-        g.setLineDash([4, 3]);
-        g.beginPath();
-        const xa = Math.max(0, this.xOf(pts[0]?.t ?? 0));
-        const xb = Math.min(w, this.xOf(pts[pts.length - 1]?.t ?? 0));
-        for (let x = xa; x <= xb; x += 2) {
-          const y = top + 4 + (1 - norm(lane.param, valueAt(tmp, this.tOf(x)))) * (lh - 8);
-          if (x === xa) g.moveTo(x, y);
-          else g.lineTo(x, y);
-        }
-        g.stroke();
-        g.setLineDash([]);
-      }
-      const info = AUTO_PARAMS[lane.param];
-      const name = `${this.focus ? '‹ ' : ''}${this.host.label(lane)}${info.live ? '' : ' ·'}`;
-      g.font = '650 11px system-ui, -apple-system, sans-serif';
-      const tw = g.measureText(name).width;
-      g.fillStyle = 'rgba(10,6,20,0.7)';
-      g.beginPath();
-      g.roundRect(4, top + 4, tw + 30, 18, 9);
-      this.nameChips.push({ lane, x0: 22, x1: tw + 34, y0: top + 2, y1: top + 26 });
-      g.fill();
-      g.fillStyle = '#fff';
-      g.fillText('×', 11, top + 13);
-      g.fillStyle = c;
-      g.fillText(name, 24, top + 13);
-    });
+    const focus = this.focusLane();
+    if (focus) this.drawCloseUp(focus);
+    else this.drawOverview();
 
     // Playhead.
     const px = this.xOf(this.host.position());
@@ -433,18 +408,214 @@ export class Timeline {
     }
   }
 
-  private drawWave(x: number, sw: number, t0: number, len: number) {
+  /** Sections as rounded blocks with their waveform, in a band. */
+  private drawSections(top: number, height: number, alpha: number, draggable: boolean) {
+    const g = this.ctx;
+    const e = this.host.edit();
+    const starts = sectionStarts(e);
+    e.segments.forEach((s, i) => {
+      const len = s.end - s.start;
+      let x = this.xOf(starts[i]);
+      const sw = this.px(len);
+      const d = this.drag;
+      const dragging = draggable && d?.kind === 'section' && d.index === i && d.moved;
+      if (dragging) x += d.dx;
+      if (x > this.w || x + sw < 0) return;
+      g.fillStyle = dragging ? 'rgba(255,255,255,0.22)' : i % 2 ? `rgba(255,255,255,${0.1 * alpha})` : `rgba(255,255,255,${0.14 * alpha})`;
+      g.beginPath();
+      g.roundRect(x + 1, top, Math.max(2, sw - 2), height, 6);
+      g.fill();
+      this.drawWave(x, sw, starts[i], len, top, height, alpha);
+    });
+  }
+
+  private drawOverview() {
+    const g = this.ctx;
+    const w = this.w;
+    this.drawSections(RULER + 4, TRACK - 8, 1, true);
+    const lh = this.laneH();
+    this.lanes().forEach((lane, i) => {
+      const top = RULER + TRACK + i * lh;
+      const a = this.area(lane)!;
+      const c = this.colorOf(lane);
+      g.fillStyle = i % 2 ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.06)';
+      g.fillRect(0, top, w, lh);
+      this.drawLine(lane, a, c, 2);
+      // Name, ×, and a "tap to edit" cue.
+      g.font = '650 11px system-ui, -apple-system, sans-serif';
+      const name = `${this.host.label(lane)}  ›`;
+      const tw = g.measureText(name).width;
+      g.fillStyle = 'rgba(10,6,20,0.72)';
+      g.beginPath();
+      g.roundRect(4, top + 4, tw + 34, 20, 10);
+      g.fill();
+      g.fillStyle = 'rgba(255,255,255,0.85)';
+      g.fillText('×', 12, top + 14);
+      g.fillStyle = c;
+      g.fillText(name, 26, top + 14);
+    });
+  }
+
+  private drawCloseUp(lane: Lane) {
+    const g = this.ctx;
+    const w = this.w;
+    const a = this.area(lane)!;
+    const c = this.colorOf(lane);
+    // The song underneath, big and dim: you shape the line against the music.
+    this.drawSections(RULER + 4, this.h - RULER - 8, 0.55, false);
+    // Guides at 0 / 25 / 50 / 75 / 100 %, with the values at the right.
+    g.font = '600 10px system-ui, -apple-system, sans-serif';
+    g.textAlign = 'right';
+    for (const n of [0, 0.25, 0.5, 0.75, 1]) {
+      const y = a.top + (1 - n) * a.h;
+      g.fillStyle = 'rgba(255,255,255,0.08)';
+      g.fillRect(0, Math.round(y), w, 1);
+      g.fillStyle = 'rgba(255,255,255,0.45)';
+      g.fillText(formatValue(lane.param, denorm(lane.param, n)), w - 6, y + (n === 1 ? 8 : n === 0 ? -6 : -6));
+    }
+    g.textAlign = 'left';
+    this.drawLine(lane, a, c, 3);
+    // Points and curve handles (only when there's room to grab them).
+    const dots = this.dotsVisible(lane);
+    g.fillStyle = c;
+    lane.points.forEach((p, i) => {
+      const x = this.xOf(p.t);
+      if (!dots || x < -8 || x > w + 8) return;
+      const y = this.yOf(lane, p.v, a);
+      const active = this.live?.lane === lane && this.live.index === i;
+      g.beginPath();
+      g.arc(x, y, active ? 8 : 6, 0, Math.PI * 2);
+      g.fillStyle = c;
+      g.fill();
+      g.lineWidth = 2;
+      g.strokeStyle = active ? '#fff' : 'rgba(10,6,20,0.8)';
+      g.stroke();
+    });
+    if (this.shape === 'points' && dots) {
+      g.lineWidth = 2;
+      for (const hnd of this.handles(lane, a)) {
+        g.beginPath();
+        g.arc(hnd.x, hnd.y, 5, 0, Math.PI * 2);
+        g.fillStyle = 'rgba(10,6,20,0.85)';
+        g.fill();
+        g.strokeStyle = c;
+        g.stroke();
+      }
+    }
+    // A shape being drawn.
+    const d = this.drag;
+    if (d?.kind === 'shape' && d.lane === lane) {
+      const pts = this.shapeOf(d);
+      if (pts.length >= 2) {
+        const tmp: Lane = { id: '', param: lane.param, points: pts.map((q) => ({ t: q.t, v: denorm(lane.param, q.n), c: q.c })) };
+        g.strokeStyle = '#fff';
+        g.lineWidth = 2;
+        g.setLineDash([5, 4]);
+        g.beginPath();
+        const xa = Math.max(0, this.xOf(pts[0].t));
+        const xb = Math.min(w, this.xOf(pts[pts.length - 1].t));
+        for (let x = xa; x <= xb; x += 2) {
+          const y = this.yOf(lane, valueAt(tmp, this.tOf(x)), a);
+          if (x === xa) g.moveTo(x, y);
+          else g.lineTo(x, y);
+        }
+        g.stroke();
+        g.setLineDash([]);
+      }
+    }
+    // The value of the point being dragged.
+    if (this.live?.lane === lane) {
+      const p = lane.points[this.live.index];
+      if (p) this.bubble(this.xOf(p.t), this.yOf(lane, p.v, a), formatValue(lane.param, p.v));
+    }
+    // Back chip, top left.
+    g.font = '700 12px system-ui, -apple-system, sans-serif';
+    const name = `‹  ${this.host.label(lane)}`;
+    const tw = g.measureText(name).width;
+    g.fillStyle = 'rgba(10,6,20,0.78)';
+    g.beginPath();
+    g.roundRect(6, RULER + 6, tw + 22, 24, 12);
+    g.fill();
+    g.fillStyle = c;
+    g.fillText(name, 17, RULER + 18);
+  }
+
+  /**
+   * A lane's line across the screen, drawn through its points (sampling it
+   * every few pixels instead aliased dense shapes into big fake triangles).
+   * Curved segments get filled in between their points.
+   */
+  private drawLine(lane: Lane, a: { top: number; h: number }, color: string, width: number) {
+    const g = this.ctx;
+    const pts = lane.points;
+    if (!pts.length) return;
+    g.strokeStyle = color;
+    g.lineWidth = width;
+    g.lineJoin = 'round';
+    g.beginPath();
+    const t0 = this.viewStart;
+    const t1 = this.viewStart + this.span;
+    // Before the first point / after the last, the value holds.
+    g.moveTo(Math.min(0, this.xOf(pts[0].t)), this.yOf(lane, pts[0].v, a));
+    for (let i = 0; i < pts.length; i++) {
+      const p = pts[i];
+      const q = pts[i + 1];
+      if (q && q.t < t0) continue; // whole segment left of the screen
+      const xp = this.xOf(p.t);
+      g.lineTo(xp, this.yOf(lane, p.v, a));
+      if (!q) break;
+      const xq = this.xOf(q.t);
+      if (p.c && Math.abs(p.c) > 1e-3 && xq - xp > 3) {
+        const steps = Math.min(48, Math.ceil((xq - xp) / 3));
+        const na = norm(lane.param, p.v);
+        const nb = norm(lane.param, q.v);
+        for (let k = 1; k < steps; k++) {
+          const f = k / steps;
+          g.lineTo(xp + f * (xq - xp), a.top + (1 - (na + bend(f, p.c) * (nb - na))) * a.h);
+        }
+      }
+      if (p.t > t1) break; // the rest is right of the screen
+    }
+    const last = pts[pts.length - 1];
+    if (last.t < t1) g.lineTo(this.w, this.yOf(lane, last.v, a));
+    g.stroke();
+  }
+
+  /** Point dots only when they're far enough apart to grab (else: zoom in). */
+  private dotsVisible(lane: Lane) {
+    let n = 0;
+    for (const p of lane.points) if (p.t >= this.viewStart && p.t <= this.viewStart + this.span) n++;
+    return n <= this.w / 14;
+  }
+
+  /** A small label above a point. */
+  private bubble(x: number, y: number, text: string) {
+    const g = this.ctx;
+    g.font = '700 12px system-ui, -apple-system, sans-serif';
+    const tw = g.measureText(text).width + 16;
+    const bx = Math.min(this.w - tw - 4, Math.max(4, x - tw / 2));
+    const by = y - 40 < RULER + 4 ? y + 16 : y - 36;
+    g.fillStyle = '#fff';
+    g.beginPath();
+    g.roundRect(bx, by, tw, 22, 11);
+    g.fill();
+    g.fillStyle = '#120c1f';
+    g.textAlign = 'center';
+    g.fillText(text, bx + tw / 2, by + 11);
+    g.textAlign = 'left';
+  }
+
+  private drawWave(x: number, sw: number, t0: number, len: number, top: number, height: number, alpha: number) {
     const peaks = this.peaks;
     const b = this.host.buffer();
     if (!peaks || !b) return;
     const g = this.ctx;
-    const th = this.trackH();
-    const mid = RULER + th / 2;
-    const amp = th / 2 - 8;
+    const mid = top + height / 2;
+    const amp = height / 2 - 4;
     const perSec = b.sampleRate / PEAK_HOP;
     const from = Math.max(0, -x);
     const to = Math.min(sw, this.w - x);
-    g.fillStyle = 'rgba(255,255,255,0.75)';
+    g.fillStyle = `rgba(255,255,255,${0.75 * alpha})`;
     for (let px = from - (from % 2); px < to; px += 2) {
       const a = Math.floor((t0 + (px / sw) * len) * perSec);
       const z = Math.max(a + 1, Math.floor((t0 + ((px + 2) / sw) * len) * perSec));
@@ -455,20 +626,20 @@ export class Timeline {
     }
   }
 
-  /** Curve handles of a lane on screen: the middle of each sloped, wide-enough segment. */
-  private handles(lane: Lane, top: number, lh: number) {
+  /** Curve handles on screen: the middle of each sloped, wide-enough segment. */
+  private handles(lane: Lane, a: { top: number; h: number }) {
     const out: { index: number; x: number; y: number }[] = [];
     const pts = lane.points;
     for (let i = 0; i + 1 < pts.length; i++) {
-      const a = pts[i];
-      const b = pts[i + 1];
-      const na = norm(lane.param, a.v);
-      const nb = norm(lane.param, b.v);
-      const xa = this.xOf(a.t);
-      const xb = this.xOf(b.t);
-      if (Math.abs(nb - na) < 0.03 || xb - xa < 28 || xb < 0 || xa > this.w) continue;
-      const n = na + bend(0.5, a.c) * (nb - na);
-      out.push({ index: i, x: (xa + xb) / 2, y: top + 4 + (1 - n) * (lh - 8) });
+      const p = pts[i];
+      const q = pts[i + 1];
+      const na = norm(lane.param, p.v);
+      const nb = norm(lane.param, q.v);
+      const xa = this.xOf(p.t);
+      const xb = this.xOf(q.t);
+      if (Math.abs(nb - na) < 0.03 || xb - xa < 44 || xb < 0 || xa > this.w) continue;
+      const n = na + bend(0.5, p.c) * (nb - na);
+      out.push({ index: i, x: (xa + xb) / 2, y: a.top + (1 - n) * a.h });
     }
     return out;
   }
@@ -483,10 +654,6 @@ export class Timeline {
     return shapePoints(kind, a, b, d.n0, d.n1, period);
   }
 
-  private normFromY(y: number, top: number, lh: number) {
-    return Math.min(1, Math.max(0, 1 - (y - top - 4) / (lh - 8)));
-  }
-
   // ---------- input ----------
 
   private where(e: PointerEvent) {
@@ -499,6 +666,14 @@ export class Timeline {
     return { d: Math.max(20, Math.hypot(a.x - b.x, a.y - b.y)), cx: (a.x + b.x) / 2 };
   }
 
+  /** Is this tap the second of a double-tap? (Remembers it as the first otherwise.) */
+  private isDouble(x: number, y: number) {
+    const now = performance.now();
+    const hit = now - this.lastTap.at < DOUBLE_MS && Math.hypot(x - this.lastTap.x, y - this.lastTap.y) < DOUBLE_PX;
+    this.lastTap = hit ? { x: -1e9, y: -1e9, at: 0 } : { x, y, at: now };
+    return hit;
+  }
+
   private down(e: PointerEvent) {
     if (!this.length) return;
     const { x, y } = this.where(e);
@@ -509,10 +684,9 @@ export class Timeline {
       /* the pointer is already gone */
     }
     if (this.pointers.size === 2) {
-      // Second finger: zoom/scroll instead of whatever the first one started
-      // (a pending new point is simply never added).
-      if (this.drag?.kind === 'section') this.drag = null;
+      // Second finger: zoom/scroll instead of whatever the first one started.
       this.drag = { kind: 'pinch' };
+      this.live = null;
       const { d, cx } = this.pinchInfo();
       this.pinch = { d0: d, span0: this.span, t0: this.tOf(cx) };
       return;
@@ -523,84 +697,75 @@ export class Timeline {
       this.host.seek(this.tOf(x));
       return;
     }
-    if (y < RULER + this.trackH()) {
-      const starts = sectionStarts(this.host.edit());
-      const t = this.tOf(x);
-      let index = starts.findIndex((s, i) => t >= s && (i === starts.length - 1 || t < starts[i + 1]));
-      if (index < 0) index = 0;
-      this.drag = { kind: 'section', index, x0: x, dx: 0, moved: false };
-      return;
-    }
-    const lh = this.laneH();
-    const li = Math.floor((y - RULER - this.trackH()) / lh);
-    const lane = this.lanes()[li];
-    if (!lane) return;
-    const top = this.laneTop(li);
-    if (x < 22 && y < top + 24) {
-      this.host.removeLane(lane.id);
-      this.drag = null;
-      return;
-    }
-    // The lane's name: close-up of it, or back to all lanes.
-    if (this.nameChips.some((c) => c.lane === lane && x >= c.x0 && x <= c.x1 && y >= c.y0 && y <= c.y1)) {
-      this.focus = this.focus ? null : lane.id;
-      this.drag = null;
-      this.host.focusChanged?.(this.focus);
-      return;
-    }
-    if (this.shape !== 'points') {
-      const t = this.snap(this.tOf(x));
-      const n = this.normFromY(y, top, lh);
-      this.drag = { kind: 'shape', lane, t0: t, n0: n, t1: t, n1: n };
-      return;
-    }
-    const yOf = (v: number) => top + 4 + (1 - norm(lane.param, v)) * (lh - 8);
-    const index = lane.points.findIndex((p) => Math.hypot(this.xOf(p.t) - x, yOf(p.v) - y) < HIT);
-    const now = performance.now();
-    if (index < 0) {
-      const hnd = this.handles(lane, top, lh).find((q) => Math.hypot(q.x - x, q.y - y) < 12);
-      if (hnd) {
-        const key = `${lane.id}#c`;
-        if (this.lastTap.lane === key && this.lastTap.index === hnd.index && now - this.lastTap.at < 320) {
-          delete lane.points[hnd.index].c; // double-tap: straight again
-          this.lastTap.at = 0;
-          this.drag = null;
-          this.host.changed();
-          return;
-        }
-        this.lastTap = { lane: key, index: hnd.index, at: now };
-        this.drag = { kind: 'curve', lane, index: hnd.index };
+    const focus = this.focusLane();
+    if (!focus) {
+      // Overview: the track, or a lane (× removes it, anything else opens it).
+      if (y < RULER + TRACK) {
+        const starts = sectionStarts(this.host.edit());
+        const t = this.tOf(x);
+        let index = starts.findIndex((s, i) => t >= s && (i === starts.length - 1 || t < starts[i + 1]));
+        if (index < 0) index = 0;
+        this.drag = { kind: 'section', index, x0: x, dx: 0, moved: false };
         return;
       }
-    }
-    if (index >= 0 && this.lastTap.lane === lane.id && this.lastTap.index === index && now - this.lastTap.at < 320) {
-      removePoint(lane, index);
-      this.lastTap.at = 0;
-      this.drag = null;
-      this.host.changed();
+      const li = Math.floor((y - RULER - TRACK) / this.laneH());
+      const lane = this.lanes()[li];
+      if (!lane) return;
+      this.drag = { kind: 'tap', lane, x0: x, y0: y, view0: this.viewStart, moved: false };
       return;
     }
+
+    // Close-up.
+    if (x < 150 && y < RULER + 36) {
+      this.drag = { kind: 'tap', lane: null, x0: x, y0: y, view0: this.viewStart, moved: false }; // the back chip
+      return;
+    }
+    const a = this.area(focus)!;
+    if (this.shape !== 'points') {
+      const t = this.snap(this.tOf(x));
+      const n = this.normFromY(y, a);
+      this.drag = { kind: 'shape', lane: focus, t0: t, n0: n, t1: t, n1: n };
+      return;
+    }
+    // The nearest point within reach, then a curve handle, else empty space.
+    // (Too dense to see the dots? Then they can't be grabbed either: zoom in.)
+    let index = -1;
+    let best = HIT;
+    const dots = this.dotsVisible(focus);
+    if (dots) focus.points.forEach((p, i) => {
+      const dist = Math.hypot(this.xOf(p.t) - x, this.yOf(focus, p.v, a) - y);
+      if (dist < best) {
+        best = dist;
+        index = i;
+      }
+    });
     if (index >= 0) {
-      this.lastTap = { lane: lane.id, index, at: now };
-      this.drag = { kind: 'point', lane, index };
+      if (this.isDouble(x, y)) {
+        this.host.checkpoint();
+        removePoint(focus, index);
+        this.drag = null;
+        this.host.changed();
+        return;
+      }
+      this.drag = { kind: 'point', lane: focus, index, x0: x, y0: y, moved: false };
+      this.live = { lane: focus, index };
       return;
     }
-    // Empty spot: the point is added on release or once the finger moves,
-    // so a pinch that starts on a lane doesn't leave a stray point.
-    this.drag = { kind: 'pending', lane, x0: x, y0: y };
-  }
-
-  private valueFromY(lane: Lane, y: number, top: number, lh: number) {
-    return denorm(lane.param, 1 - (y - top - 4) / (lh - 8));
-  }
-
-  private addAt(lane: Lane, x: number, y: number) {
-    const li = this.shownIndex(lane);
-    if (li < 0) return -1;
-    const index = addPoint(lane, this.snap(this.tOf(x)), this.valueFromY(lane, y, this.laneTop(li), this.laneH()));
-    this.lastTap = { lane: lane.id, index, at: performance.now() };
-    this.host.changed();
-    return index;
+    const hnd = dots ? this.handles(focus, a).find((q) => Math.hypot(q.x - x, q.y - y) < HANDLE_HIT) : undefined;
+    if (hnd) {
+      if (this.isDouble(x, y)) {
+        if (focus.points[hnd.index].c) {
+          this.host.checkpoint();
+          delete focus.points[hnd.index].c; // straight again
+          this.host.changed();
+        }
+        this.drag = null;
+        return;
+      }
+      this.drag = { kind: 'curve', lane: focus, index: hnd.index, x0: x, y0: y, moved: false };
+      return;
+    }
+    this.drag = { kind: 'tap', lane: focus, x0: x, y0: y, view0: this.viewStart, moved: false };
   }
 
   private move(e: PointerEvent) {
@@ -617,38 +782,56 @@ export class Timeline {
       this.viewStart = this.pinch.t0 - (cx / this.w) * this.span; // the time under the fingers stays put
       this.clampView();
       this.userMovedAt = performance.now();
-    } else if (d.kind === 'seek') this.host.seek(this.tOf(x));
-    else if (d.kind === 'section') {
+      return;
+    }
+    if (d.kind === 'seek') {
+      this.host.seek(this.tOf(x));
+      return;
+    }
+    if (d.kind === 'section') {
       d.dx = x - d.x0;
       if (Math.abs(d.dx) > 6) d.moved = true;
-    } else if (d.kind === 'curve' || d.kind === 'shape') {
-      const li = this.shownIndex(d.lane);
-      if (li < 0) return;
-      const n = this.normFromY(y, this.laneTop(li), this.laneH());
-      if (d.kind === 'shape') {
-        d.t1 = this.snap(this.tOf(x));
-        d.n1 = n;
-        return;
-      }
-      const pts = d.lane.points;
-      const a = pts[d.index];
-      const b = pts[d.index + 1];
-      if (!b) return;
-      const na = norm(d.lane.param, a.v);
-      const nb = norm(d.lane.param, b.v);
-      if (Math.abs(nb - na) < 1e-3) return;
-      a.c = bendFor((n - na) / (nb - na));
-      this.host.changed();
-    } else if (d.kind === 'pending') {
-      if (Math.hypot(x - d.x0, y - d.y0) < 5) return;
-      const index = this.addAt(d.lane, d.x0, d.y0);
-      this.drag = index >= 0 ? { kind: 'point', lane: d.lane, index } : null;
-    } else {
-      const li = this.shownIndex(d.lane);
-      if (li < 0) return;
-      movePoint(d.lane, d.index, this.snap(this.tOf(x)), this.valueFromY(d.lane, y, this.laneTop(li), this.laneH()));
-      this.host.changed();
+      return;
     }
+    if (d.kind === 'tap') {
+      // One finger on empty space scrolls the view (when zoomed in).
+      if (!d.moved && Math.hypot(x - d.x0, y - d.y0) < 8) return;
+      d.moved = true;
+      if (this.viewSpan) {
+        this.viewStart = d.view0 - ((x - d.x0) / this.w) * this.span;
+        this.clampView();
+        this.userMovedAt = performance.now();
+      }
+      return;
+    }
+    const lane = d.lane;
+    const a = this.area(lane);
+    if (!a) return;
+    if (d.kind === 'shape') {
+      d.t1 = this.snap(this.tOf(x));
+      d.n1 = this.normFromY(y, a);
+      return;
+    }
+    // Points and curves only start moving after a small threshold, so a
+    // resting finger (or the first tap of a double-tap) changes nothing.
+    if (!d.moved) {
+      if (Math.hypot(x - d.x0, y - d.y0) < 6) return;
+      d.moved = true;
+      this.lastTap.at = 0;
+      this.host.checkpoint();
+    }
+    if (d.kind === 'curve') {
+      const p = lane.points[d.index];
+      const q = lane.points[d.index + 1];
+      if (!q) return;
+      const na = norm(lane.param, p.v);
+      const nb = norm(lane.param, q.v);
+      if (Math.abs(nb - na) < 1e-3) return;
+      p.c = bendFor((this.normFromY(y, a) - na) / (nb - na));
+    } else {
+      movePoint(lane, d.index, this.snap(this.tOf(x)), denorm(lane.param, this.normFromY(y, a)));
+    }
+    this.host.changed();
   }
 
   private up(e: PointerEvent) {
@@ -662,21 +845,42 @@ export class Timeline {
       return;
     }
     this.drag = null;
+    this.live = null;
     if (!d) return;
-    if (d.kind === 'pending') {
-      this.addAt(d.lane, d.x0, d.y0); // a tap adds a point
+    const { x, y } = this.where(e);
+    if (d.kind === 'tap') {
+      if (d.moved) return; // it was a scroll
+      if (!this.focusLane()) {
+        // Overview: × removes the lane, a tap anywhere else opens it.
+        if (d.lane && x < 22 && y - (RULER + TRACK + this.lanes().indexOf(d.lane) * this.laneH()) < 26) this.host.removeLane(d.lane.id);
+        else if (d.lane) this.setFocus(d.lane.id);
+        return;
+      }
+      if (!d.lane) {
+        this.setFocus(null); // the back chip
+        return;
+      }
+      // Close-up, empty spot: only a double-tap adds a point.
+      if (this.isDouble(x, y)) {
+        const a = this.area(d.lane);
+        if (!a) return;
+        this.host.checkpoint();
+        addPoint(d.lane, this.snap(this.tOf(x)), denorm(d.lane.param, this.normFromY(y, a)));
+        this.host.changed();
+      }
       return;
     }
+    if (d.kind === 'point' || d.kind === 'curve') return; // (a tap on one was counted on the way down)
     if (d.kind === 'shape') {
       const pts = this.shapeOf(d);
       if (pts.length >= 2) {
+        this.host.checkpoint();
         applyShape(d.lane, pts);
         this.host.changed();
       }
       return;
     }
     if (d.kind !== 'section') return;
-    const { x } = this.where(e);
     if (!d.moved) {
       this.host.seek(this.tOf(x)); // a tap on the track seeks
       return;

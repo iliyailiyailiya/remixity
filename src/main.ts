@@ -24,7 +24,7 @@ import { initFix } from './library/fix';
 import { Backdrop } from './ui/backdrop';
 import { defaultPalette, generatedCover, paletteFrom } from './ui/palette';
 import { Pedal, MAX_RATIO, MIN_RATIO } from './ui/pedal';
-import { AUTO_PARAMS, addLane, emptyAutomation, moveLanesWithSection, moveSection, paramsAt, removeLane, split, valueAt, type Automation, type AutoParam } from './automation/model';
+import { AUTO_PARAMS, addLane, emptyAutomation, moveLanesWithSection, moveSection, paramsAt, removeLane, split, valueAt, type Automation, type AutoParam, type Lane } from './automation/model';
 import { Timeline } from './automation/timeline';
 import { deleteTimeline, loadTimeline, saveTimeline, songKey } from './automation/store';
 
@@ -47,7 +47,8 @@ let speedLocked = (() => {
 let original: AudioBuffer | null = null; // as decoded, never modified
 let buffer: AudioBuffer | null = null; // after trims and cuts; what plays and exports
 let edit: EditState = initialEdit(0);
-let history: EditState[] = [];
+// Undo: how the song's sections and the automation lanes were before each change.
+let history: { edit: EditState; lanes: Lane[] }[] = [];
 // Automation lanes for the timeline (per song, not saved yet: see docs/automation-plan.md).
 let automation = emptyAutomation();
 let autoDirty = false; // re-apply the lanes on the next frame
@@ -58,8 +59,6 @@ let timelineUsed = false;
 // The beat grid (detected once per song, or set with "Beat 1 here").
 let gridInfo: BeatGrid | null = null;
 let gridDetecting = false;
-// Lanes as they were before a section move, by the edit Undo goes back to.
-const laneSnaps = new WeakMap<EditState, typeof automation.lanes>();
 // Quick start: while only the start of the song is decoded, the whole one is
 // on its way. Export, stories and chop wait for it (a moment).
 let fullReady: Promise<void> | null = null;
@@ -832,18 +831,52 @@ function tick() {
 requestAnimationFrame(tick);
 
 // Lock screen / Control Center / headphone buttons.
+// The cover for the lock screen as a data: URL. The lock screen and Dynamic
+// Island are drawn by another process that can't open this page's blob: URLs
+// (that's why they showed a white square), but it can read image data.
+let artFor = '';
+let artData = '';
+async function lockScreenArt(): Promise<string> {
+  if (!coverUrl) return '';
+  if (artFor === coverUrl) return artData;
+  const src = coverUrl;
+  try {
+    const img = new Image();
+    img.src = src;
+    await img.decode();
+    const c = document.createElement('canvas');
+    c.width = c.height = 512;
+    const g = c.getContext('2d')!;
+    const side = Math.min(img.naturalWidth, img.naturalHeight);
+    g.drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, 512, 512);
+    artFor = src;
+    artData = c.toDataURL('image/jpeg', 0.86);
+  } catch {
+    artFor = src;
+    artData = '';
+  }
+  return artData;
+}
+
 function updateMediaSession(title: string, artist: string) {
   if (!('mediaSession' in navigator)) return;
-  navigator.mediaSession.metadata = new MediaMetadata({
-    title,
-    artist,
-    album: 'THE REMIXITY',
-    artwork: coverUrl ? [{ src: coverUrl, sizes: '512x512' }] : [],
+  const set = (art: string) => {
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title,
+      artist,
+      album: 'THE REMIXITY',
+      artwork: art ? [{ src: art, sizes: '512x512', type: 'image/jpeg' }] : [],
+    });
+  };
+  set(artFor === coverUrl ? artData : '');
+  void lockScreenArt().then((art) => {
+    // Still the same song? Then add the cover.
+    if (art && navigator.mediaSession.metadata?.title === title) set(art);
   });
 }
 if ('mediaSession' in navigator) {
   const ms = navigator.mediaSession;
-  const on = (a: MediaSessionAction, h: MediaSessionActionHandler) => {
+  const on = (a: MediaSessionAction, h: MediaSessionActionHandler | null) => {
     try {
       ms.setActionHandler(a, h);
     } catch {
@@ -852,8 +885,10 @@ if ('mediaSession' in navigator) {
   };
   on('play', () => player && !player.playing && togglePlay());
   on('pause', () => player?.playing && togglePlay());
-  on('seekbackward', () => skip(-10));
-  on('seekforward', () => skip(10));
+  // No seek ±10 s handlers: when they exist, iOS shows ⏪ ⏩ (skip seconds)
+  // instead of ⏮ ⏭, and the lock screen can't change the song.
+  on('seekbackward', null);
+  on('seekforward', null);
   on('previoustrack', () => void prevInQueue());
   on('nexttrack', () => void nextInQueue(false));
   on('seekto', (d) => {
@@ -1288,10 +1323,9 @@ const eq = new EqView($<HTMLCanvasElement>('eqCanvas'), {
 });
 
 /** Apply an edit, keeping it undoable, and rebuild the buffer if needed. */
-function commit(next: EditState, keepAt?: number) {
+function commit(next: EditState, keepAt?: number, lanesBefore?: Lane[]) {
   if (!original || !player) return;
-  history.push(edit);
-  if (history.length > 50) history.shift();
+  pushHistory(lanesBefore);
   const rebuild = next.segments !== edit.segments;
   edit = next;
   if (rebuild) {
@@ -1301,6 +1335,12 @@ function commit(next: EditState, keepAt?: number) {
   }
   saveTimelineSoon();
   render();
+}
+
+/** Remember the sections and lanes as they are now (before a change), for Undo. */
+function pushHistory(lanesBefore?: Lane[]) {
+  history.push({ edit, lanes: lanesBefore ?? structuredClone(automation.lanes) });
+  if (history.length > 80) history.shift();
 }
 
 function clearSelection() {
@@ -1329,14 +1369,13 @@ function trimToSelection() {
 }
 
 function undo() {
-  const prev = history.pop();
-  if (!prev || !original || !player) return;
-  const snap = laneSnaps.get(prev);
-  if (snap) {
-    automation.lanes = snap;
-    fillLaneMenu(); // the "+ Automation" list follows the lanes
-    autoDirty = true;
-  }
+  const step = history.pop();
+  if (!step || !original || !player) return;
+  automation.lanes = step.lanes;
+  fillLaneMenu(); // the "+ Automation" list follows the lanes
+  autoDirty = true;
+  if (!automation.lanes.length) apply(); // no lanes left: back to the plain settings
+  const prev = step.edit;
   const rebuild = prev.segments !== edit.segments;
   edit = prev;
   if (rebuild) {
@@ -1394,6 +1433,7 @@ function renderEdit() {
   $<HTMLButtonElement>('tTrim').disabled = !sel;
   $<HTMLButtonElement>('tCut').disabled = !sel;
   $<HTMLButtonElement>('tUndo').disabled = history.length === 0;
+  $<HTMLButtonElement>('tlUndo').disabled = history.length === 0;
 
   const info = $('selInfo');
   info.replaceChildren();
@@ -1736,15 +1776,20 @@ const timeline = new Timeline($<HTMLCanvasElement>('tlCanvas'), {
   },
   moveSection: (from, to) => {
     // Undo puts the lanes back too (they moved with the section).
-    laneSnaps.set(edit, structuredClone(automation.lanes));
+    const before = structuredClone(automation.lanes);
     moveLanesWithSection(automation, edit, from, to);
-    commit(moveSection(edit, from, to));
+    commit(moveSection(edit, from, to), undefined, before);
+  },
+  checkpoint: () => {
+    pushHistory();
+    render();
   },
   changed: () => {
     autoDirty = true;
     saveTimelineSoon();
   },
   removeLane: (id) => {
+    pushHistory();
     removeLane(automation, id);
     saveTimelineSoon();
     fillLaneMenu();
@@ -1772,11 +1817,13 @@ document.querySelectorAll('[data-tl-close]').forEach((b) =>
     backdrop.covered = libraryOpen();
   }),
 );
-// Rebuilt right before the list opens too, so it can never show another song's lanes.
-for (const ev of ['pointerdown', 'focus'] as const) tlAdd.addEventListener(ev, fillLaneMenu);
 tlAdd.addEventListener('change', () => {
   const param = tlAdd.value as AutoParam;
-  if (param && buffer) addLane(automation, param, params[param], buffer.duration);
+  if (param && buffer) {
+    pushHistory();
+    const lane = addLane(automation, param, params[param], buffer.duration);
+    if (lane) timeline.setFocus(lane.id); // straight into its close-up, ready to draw
+  }
   fillLaneMenu();
   autoDirty = true;
   saveTimelineSoon();
@@ -1810,6 +1857,19 @@ function currentGrid(): BeatGrid | null {
   return Math.abs(gridInfo.beat - handBeat) / handBeat < 0.005 ? gridInfo : { beat: handBeat, offset: gridInfo.offset };
 }
 
+/** A short message in the timeline bar, then the usual hint again. */
+let infoTimer = 0;
+function flashInfo(text: string) {
+  const el = $('tlInfo');
+  el.textContent = text;
+  el.classList.add('flash');
+  clearTimeout(infoTimer);
+  infoTimer = window.setTimeout(() => {
+    el.classList.remove('flash');
+    el.textContent = t('timelineHint');
+  }, 2500);
+}
+
 // "Beat 1 here": the bar starts at the playhead.
 $('tlBeatOne').addEventListener('click', () => {
   const g = currentGrid();
@@ -1817,6 +1877,7 @@ $('tlBeatOne').addEventListener('click', () => {
   const bar = g.beat * 4;
   gridInfo = { beat: g.beat, offset: ((player.position % bar) + bar) % bar };
   saveTimelineSoon();
+  flashInfo(t('beatOneSet'));
 });
 $('tlZoomIn').addEventListener('click', () => timeline.zoom(1.6));
 // Snap on/off and the drawing tool (points or a shape). Both remembered.
@@ -1888,10 +1949,10 @@ $('tlUndo').addEventListener('click', () => undo());
 // Reset: the song as it was, no lanes (Undo brings it all back).
 $('tlReset').addEventListener('click', () => {
   if (!original || !player) return;
-  laneSnaps.set(edit, structuredClone(automation.lanes));
+  const before = structuredClone(automation.lanes);
   automation.lanes = [];
   fillLaneMenu();
-  commit(initialEdit(original.duration), 0);
+  commit(initialEdit(original.duration), 0, before);
   apply();
 });
 

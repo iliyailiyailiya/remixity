@@ -130,3 +130,19 @@ speed instead of ×1.00 (the reverb still follows the pedal). Remembered in
 ## Open questions
 - Should a lane for speed show BPM instead of ×ratio? (Probably yes when BPM is known.)
 - Desktop: keyboard shortcuts (S = split, Delete = remove point, Cmd+Z = undo).
+
+## Round of fixes after testing (Nov 28)
+- Two views. **Overview**: the track (drag sections, tap = seek) and every
+  lane small; a tap on a lane opens it, nothing else happens there.
+  **Close-up**: one lane drawn over the whole song's waveform, with value
+  guides; double-tap adds a point, double-tap a point deletes it, drag moves
+  it (its value shows above it), hollow dots curve a segment, one finger on
+  empty space scrolls when zoomed in. A new lane opens straight in close-up.
+- A single tap never adds a point any more (it was too easy by accident).
+- **Undo** covers everything: history entries are {edit, lanes}; the
+  timeline asks for a checkpoint before each change (points, curves, shapes,
+  lanes added/removed, Reset, section moves).
+- Lines are drawn through their points instead of sampled every 2 px (dense
+  shapes aliased into fake big triangles); dots hide when there are too many
+  to grab — zoom in to edit them.
+- "Beat 1 here" confirms in the bar; Undo greys out when there's nothing to undo.
