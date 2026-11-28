@@ -221,6 +221,15 @@ within 0.1 ms, nudge −3.2%.
   on and the editor opens. "Each song's automation" buttons open a song's
   timeline (loading it first).
 
+**Shipped: export the mix.** "Export the mix" in the editor renders A → B as
+one MP3 (`renderMix` in render.ts): each song through its own speed,
+effects, cuts and automation (the playing song as you hear it; the other as
+saved, starting like a new song), B held at A's tempo during the transition
+and gliding back, both through the DJ strips with the same curves as live,
+then the limiter. Checked on test tracks: kicks stay single and 0.50 s apart
+through the whole transition. Story video of a transition: waiting for the
+design.
+
 **Order:**
 1. Two decks + Fade/Slam with seconds (Settings: Off / 3 / 6 / 12 s / Auto).
 2. Per-deck EQ + filter → Rise, Blend, Wave, Melt.

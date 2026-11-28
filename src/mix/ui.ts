@@ -73,6 +73,8 @@ export interface MixHost {
   startStudio(files: [File, File]): Promise<[string, string] | null>;
   /** The cover colours behind full-screen views are held still while covered. */
   setCovered(on: boolean): void;
+  /** Render the transition a → b as one file and share / download it. */
+  exportMix(a: string, b: string, onProgress: (fraction: number) => void): Promise<boolean>;
 }
 
 // ---------- saved transitions (per pair of songs) ----------
@@ -392,6 +394,28 @@ export function initMix(host: MixHost) {
     const id = ed.b.id;
     closeFull();
     host.editSong(id);
+  });
+
+  let exporting = false;
+  $('mixExport').addEventListener('click', async () => {
+    if (!ed || exporting) return;
+    exporting = true;
+    const btn = $<HTMLButtonElement>('mixExport');
+    const lbl = $('mixExportLabel');
+    btn.disabled = true;
+    lbl.textContent = `${t('mixExporting')} 0%`;
+    try {
+      const ok = await host.exportMix(ed.a.id, ed.b.id, (f) => (lbl.textContent = `${t('mixExporting')} ${Math.round(f * 100)}%`));
+      lbl.textContent = ok ? t('mixExported') : t('loadError');
+    } catch (err) {
+      console.error(err);
+      lbl.textContent = t('loadError');
+    }
+    exporting = false;
+    btn.disabled = false;
+    setTimeout(() => {
+      if (!exporting) lbl.textContent = t('mixExport');
+    }, 2500);
   });
 
   /** Where and how the transition happens (the same planner playback uses). */

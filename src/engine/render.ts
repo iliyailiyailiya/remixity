@@ -6,6 +6,7 @@ import { limit } from './limiter';
 import { encodeMp3, resample, resampleWarp } from './dsp';
 import { createStretch } from './player';
 import { inputAt, makeWarp, outputAt, WARP_BLOCK, type Warp } from './warp';
+import { NEUTRAL, Strip, type Plan } from './mix';
 
 export type Format = 'mp3' | 'wav16' | 'wav24';
 export type Stage = 'resample' | 'render' | 'encode';
@@ -132,8 +133,16 @@ export async function exportAudio(
   const sr = buffer.sampleRate;
   const copy = Array.from({ length: buffer.numberOfChannels }, (_, c) => buffer.getChannelData(c).slice());
   const { out } = await processChannels(copy, sr, p, true, onProgress, auto);
+  return encode(out, sr, format, onProgress);
+}
 
-  // 4. Encode.
+/** 4. Encode. */
+async function encode(
+  out: Float32Array<ArrayBuffer>[],
+  sr: number,
+  format: Format,
+  onProgress: (stage: Stage, fraction: number | null) => void,
+): Promise<Blob> {
   if (format === 'mp3') {
     onProgress('encode', 0);
     let data = out.map((c) => c.slice());
@@ -275,4 +284,94 @@ export async function renderClip(
     clip.copyToChannel(ch, c);
   }
   return clip;
+}
+
+// ---------- a mix of two songs ----------
+
+/** One song of a mix, as it is set up: its audio (with its cuts), settings and automation. */
+export interface MixSide {
+  buffer: AudioBuffer;
+  params: FxParams;
+  auto?: RenderAuto;
+}
+
+const smooth = (k: number) => k * k * (3 - 2 * k);
+
+/**
+ * Two songs as one file, the way Mix plays them: A with its own speed,
+ * effects and automation until the transition; B coming in at `plan.bIn`,
+ * at A's tempo during the transition (`plan.rateIn`) and gliding back to its
+ * own speed over `easeSeconds`; each through its DJ strip following the
+ * transition's curves. Same maths as live playback, sample-exact.
+ */
+export async function renderMix(
+  a: MixSide,
+  b: MixSide,
+  plan: Plan,
+  easeSeconds: number,
+  format: Format,
+  onProgress: (stage: Stage, fraction: number | null) => void,
+): Promise<Blob> {
+  const sr = a.buffer.sampleRate;
+  const part = (from: number, to: number) => (stage: Stage, f: number | null) =>
+    onProgress(stage, f === null ? null : from + (to - from) * f);
+
+  // A: the whole song up to the end of the transition.
+  const aCh = Array.from({ length: a.buffer.numberOfChannels }, (_, c) => a.buffer.getChannelData(c).slice());
+  const A = await processChannels(aCh, sr, a.params, false, part(0, 0.4), a.auto);
+  const tA = A.outAt(plan.startA); // where the transition starts, in output seconds
+
+  // B: from where it comes in, with its speed held at A's tempo, then easing back.
+  let bCh = Array.from({ length: b.buffer.numberOfChannels }, (_, c) => b.buffer.getChannelData(c).slice(Math.floor(plan.bIn * b.buffer.sampleRate)));
+  if (b.buffer.sampleRate !== sr) {
+    const step = b.buffer.sampleRate / sr;
+    bCh = await resample(bCh, step, Math.floor(bCh[0].length / step));
+  }
+  const baseAt = (t: number) => (b.auto ? b.auto.at(t + plan.bIn) : b.params);
+  const held = plan.dur * plan.rateIn; // B's input seconds during the transition
+  const glide = Math.max(0.01, easeSeconds * plan.rateIn);
+  const nudged = Math.abs(plan.rateIn - b.params.ratio) > 1e-4;
+  const bAuto: RenderAuto | undefined =
+    nudged || b.auto
+      ? {
+          at: (t) => {
+            const q = baseAt(t);
+            if (!nudged) return q;
+            const k = t < held ? 0 : Math.min(1, (t - held) / glide);
+            return { ...q, ratio: plan.rateIn + (q.ratio - plan.rateIn) * smooth(k) };
+          },
+          speed: nudged || !!b.auto?.speed,
+          room: !!b.auto?.room,
+        }
+      : undefined;
+  const B = await processChannels(bCh, sr, b.params, true, part(0.4, 0.85), bAuto);
+
+  // Both through their strips, B starting where the transition does.
+  onProgress('render', 0.9);
+  const aLen = Math.min(A.out[0].length, Math.ceil((tA + plan.dur) * sr));
+  const bStart = Math.round(tA * sr);
+  const total = Math.max(aLen, bStart + B.out[0].length);
+  const off = new OfflineAudioContext(2, total, sr);
+  const deck = (out: Float32Array<ArrayBuffer>[], len: number) => {
+    const buf = off.createBuffer(2, len, sr);
+    buf.copyToChannel(out[0].subarray(0, len), 0);
+    buf.copyToChannel(out[1].subarray(0, len), 1);
+    const src = off.createBufferSource();
+    src.buffer = buf;
+    const strip = new Strip(off);
+    src.connect(strip.input);
+    strip.output.connect(off.destination);
+    return { src, strip };
+  };
+  const da = deck(A.out, aLen);
+  const db = deck(B.out, B.out[0].length);
+  da.strip.set(NEUTRAL, 0);
+  da.strip.run(plan.tr, 'a', tA, plan.dur);
+  db.strip.run(plan.tr, 'b', tA, plan.dur);
+  da.src.start(0);
+  db.src.start(tA);
+  const mixed = await off.startRendering();
+  const out = [mixed.getChannelData(0), mixed.getChannelData(1)] as Float32Array<ArrayBuffer>[];
+  limit(out, sr, CEILING_DB);
+  return encode(out, sr, format, part(0.92, 1));
 }

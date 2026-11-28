@@ -3,7 +3,7 @@ import { applyI18n, getLang, Lang, setLang, t } from './i18n';
 import { DEFAULT_PARAMS, FxParams } from './engine/chain';
 import { decodeData, niceName, quickPart, safeFileName } from './engine/decode';
 import { Player } from './engine/player';
-import { exportAudio, Format, renderClip, Stage, type RenderAuto } from './engine/render';
+import { exportAudio, Format, renderClip, renderMix, Stage, type MixSide, type RenderAuto } from './engine/render';
 import { canRecordVideo, levelsOf, storyImage, storyVideo, type StoryInfo, type StoryStyle } from './ui/story';
 import { shareOrDownload } from './library/export';
 import { addMarker, assemble, cut, EditState, initialEdit, keepOnly, removeMarker } from './engine/edit';
@@ -764,6 +764,54 @@ function mixWatch() {
 }
 setInterval(mixWatch, 50);
 
+/**
+ * One song of a mix as it's set up: the playing song as you hear it now; any
+ * other with its saved cuts and automation, starting like a new song would.
+ */
+async function mixSide(id: string): Promise<{ side: MixSide; grid: Grid | null; title: string } | null> {
+  const track = await getTrack(id);
+  if (!track) return null;
+  if (id === libraryId && buffer && original) {
+    const grid = gridInfo ?? (buffer === original ? (await songInfo(id, original, origBpm)).grid : playingGrid().grid);
+    return { side: { buffer, params: { ...params }, auto: renderAuto() }, grid, title: $('title').textContent || track.title };
+  }
+  const audio = await getAudio(id);
+  if (!audio) return null;
+  const orig = await decodeData(await audio.arrayBuffer());
+  const saved = await loadTimeline(songKey(id, { name: track.fileName, size: track.size }));
+  const fits = saved && Math.abs(saved.duration - orig.duration) < 0.05;
+  const buf = fits ? assemble(orig, saved.segments) : orig;
+  const base: FxParams = { ...DEFAULT_PARAMS, keepPitch: params.keepPitch, ratio: speedLocked ? params.ratio : 1 };
+  Object.assign(base, spaceFor(base.ratio)); // a new song starts with the reverb following the pedal
+  const info = await songInfo(id, orig);
+  const grid = (fits ? saved.grid : null) ?? (buf === orig ? info.grid : info.bpm ? await detectGrid(buf, info.bpm).catch(() => null) : null);
+  return { side: { buffer: buf, params: base, auto: fits ? autoFor({ lanes: saved.lanes }, base, true) : undefined }, grid, title: track.title };
+}
+
+/** Render the transition a → b as one file (MP3) and hand it over (share or download). */
+async function exportMix(a: string, b: string, onProgress: (f: number) => void): Promise<boolean> {
+  const [A, B] = await Promise.all([mixSide(a), mixSide(b)]);
+  if (!A || !B) return false;
+  const eA = musicEdges(A.side.buffer);
+  const eB = musicEdges(B.side.buffer);
+  const rateA = A.side.auto ? A.side.auto.at(Math.max(0, eA.end - 1)).ratio : A.side.params.ratio;
+  const plan = planTransition({
+    tr: transitionFor(a, b),
+    aEnd: eA.end,
+    bStart: eB.start,
+    rateA,
+    rateB: B.side.params.ratio,
+    gridA: A.grid,
+    gridB: B.grid,
+    bDuration: B.side.buffer.duration,
+  });
+  const ease = plan.synced && plan.bar ? plan.bar * 4 : 0;
+  const blob = await renderMix(A.side, B.side, plan, ease, 'mp3', (_s, f) => f !== null && onProgress(f));
+  const name = safeFileName(`${A.title} → ${B.title} (THE REMIXITY mix)`) + '.mp3';
+  await shareOrDownload([new File([blob], name, { type: 'audio/mpeg' })]);
+  return true;
+}
+
 const mixUi = initMix({
   showSheet,
   closeSheets,
@@ -831,6 +879,7 @@ const mixUi = initMix({
   setCovered: (on) => {
     backdrop.covered = on || libraryOpen();
   },
+  exportMix: (a, b, onProgress) => exportMix(a, b, onProgress),
 });
 $('openMix').classList.toggle('on', mixOn);
 $('openMix').addEventListener('click', () => mixUi.open());
@@ -2354,10 +2403,14 @@ setInterval(tickAutomation, 40);
 
 /** A frozen copy of the automation for an export or a story clip. */
 function renderAuto(): RenderAuto | undefined {
-  if (!automation.lanes.length) return undefined;
-  const a = structuredClone(automation);
-  const base = { ...params };
-  const follow = autoSpace;
+  return autoFor(automation, params, autoSpace);
+}
+
+/** Automation for an offline render, from lanes, settings and "reverb follows the pedal". */
+function autoFor(lanes: Automation, settings: FxParams, follow: boolean): RenderAuto | undefined {
+  if (!lanes.lanes.length) return undefined;
+  const a = structuredClone(lanes);
+  const base = { ...settings };
   const has = (k: AutoParam) => a.lanes.some((l) => l.param === k);
   return {
     at: (t) => automatedAt(base, a, follow, t),

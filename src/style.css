@@ -3660,3 +3660,28 @@ body.mix-open .home {
 .mix-when:empty {
   display: none;
 }
+
+.mix-export {
+  width: 100%;
+  margin-top: 18px;
+  border: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.mix-export svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.mix-export:disabled {
+  opacity: 0.7;
+}
+.mix-export-hint {
+  text-align: center;
+}
