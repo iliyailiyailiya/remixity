@@ -899,7 +899,12 @@ function updateMediaSession(title: string, artist: string) {
     if (art && navigator.mediaSession.metadata?.title === title) set(art);
   });
 }
-if ('mediaSession' in navigator) {
+/**
+ * Attach the lock-screen buttons. Also called again when iOS resets its
+ * widget (see nowPlaying.onLoop): it then forgets them and shows ⏪ ⏩.
+ */
+function registerMediaHandlers() {
+  if (!('mediaSession' in navigator)) return;
   const ms = navigator.mediaSession;
   const on = (a: MediaSessionAction, h: MediaSessionActionHandler | null) => {
     try {
@@ -929,6 +934,7 @@ if ('mediaSession' in navigator) {
     render();
   });
 }
+registerMediaHandlers();
 
 // It's an app, not a document: no pinch zoom (iOS ignores user-scalable).
 for (const ev of ['gesturestart', 'gesturechange']) document.addEventListener(ev, (e) => e.preventDefault());
@@ -2236,6 +2242,16 @@ let lastPositionSync = 0;
 // The lock screen / Control Center: its controls only work while a media
 // element plays along (see nowPlaying.ts).
 const nowPlaying = new NowPlaying();
+// When the silent track starts over, iOS resets its widget to plain ⏪ ⏩ and
+// "paused": give it the buttons, the song and the state again right away.
+nowPlaying.onLoop = () => {
+  npLog('element looped: re-attaching lock-screen buttons');
+  registerMediaHandlers();
+  updateMediaSession(songTitle, songArtist ?? '');
+  lastPositionSync = 0;
+  if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'none';
+  syncLockScreen();
+};
 
 /** Play state and position for the lock screen. Also runs with the screen off. */
 function syncLockScreen() {

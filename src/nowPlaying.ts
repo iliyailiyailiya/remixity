@@ -10,13 +10,14 @@
 import { npLog } from './debugLog';
 
 /**
- * 30 seconds of silence as a WAV file (8 kHz, 8-bit mono, ~240 KB, made here,
- * nothing downloaded). Long on purpose: iOS doesn't treat very short media as
- * the "main" thing playing, and then won't hand it the lock-screen buttons.
+ * 10 minutes of silence as a WAV file (8 kHz, 8-bit mono, ~4.8 MB in
+ * memory, made here, nothing downloaded). Long on purpose: each time it starts
+ * over, iOS resets its lock-screen widget (plain ⏪ ⏩, "paused") and forgets
+ * our buttons — with a 30 s loop that happened every 30 seconds.
  */
 function silentWav(): string {
   const rate = 8000;
-  const n = rate * 30;
+  const n = rate * 600;
   const buf = new ArrayBuffer(44 + n);
   const v = new DataView(buf);
   const s = (o: number, t: string) => [...t].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
@@ -40,6 +41,9 @@ function silentWav(): string {
 export class NowPlaying {
   private el: HTMLAudioElement | null = null;
   private wanted = false;
+  private lastTime = 0;
+  /** The silent track started over (iOS may have reset its widget). */
+  onLoop: () => void = () => {};
 
   private get audio() {
     if (!this.el) {
@@ -51,6 +55,10 @@ export class NowPlaying {
       el.setAttribute('aria-hidden', 'true');
       el.style.display = 'none';
       document.body.append(el); // in the page, like a normal player's element
+      el.addEventListener('timeupdate', () => {
+        if (el.currentTime + 1 < this.lastTime) this.onLoop(); // jumped back to the start
+        this.lastTime = el.currentTime;
+      });
       for (const ev of ['play', 'playing', 'pause', 'ended', 'stalled', 'waiting', 'error', 'suspend', 'emptied'])
         el.addEventListener(ev, () => npLog(`element ${ev}${ev === 'error' ? ` ${el.error?.code ?? ''}` : ''}`));
       this.el = el;
