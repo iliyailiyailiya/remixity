@@ -21,6 +21,7 @@ import { getAudio, getTrack, updateTrack, type Track } from './library/db';
 import { initLibrary } from './library/ui';
 import { initMove } from './move';
 import { NowPlaying } from './nowPlaying';
+import { debugOn, initDebugPanel, npLog } from './debugLog';
 import { initFix } from './library/fix';
 import { Backdrop } from './ui/backdrop';
 import { defaultPalette, generatedCover, paletteFrom } from './ui/palette';
@@ -123,6 +124,7 @@ for (const s of langSels) {
 }
 applyI18n();
 initMove();
+initDebugPanel();
 
 // ---------- file loading ----------
 
@@ -186,7 +188,11 @@ async function load(file: File, known?: Track, ready?: Promise<Prepared>) {
         nowPlaying.set(false); // the end of the queue: nothing plays any more
         render();
       };
-      player.onInterrupted = render;
+      player.onInterrupted = () => {
+        npLog(`audio interrupted (ctx ${player?.ctx.state})`);
+        render();
+      };
+      player.ctx.addEventListener('statechange', () => npLog(`audio ctx ${player?.ctx.state}`));
       player.onPlay = () => {
         announcePlaying();
         nowPlaying.set(true); // the lock screen's controls follow
@@ -525,6 +531,7 @@ function decodeAhead() {
 /** Load (and by default start) the queue's song at `index`. */
 async function playFromQueue(index: number, autoplay = true): Promise<boolean> {
   const id = queue[index];
+  npLog(`playFromQueue(${index}) of ${queue.length}`);
   if (!id) return false;
   // Start the lock screen's media element now, before anything is awaited:
   // iOS only lets it start inside the tap itself. (Loading and decoding come
@@ -828,6 +835,7 @@ coverFileIn.addEventListener('change', () => {
 
 function togglePlay() {
   if (!player || !buffer) return;
+  npLog(`togglePlay → ${player.playing ? 'pause' : 'play'}`);
   if (player.playing) player.pause();
   else player.play();
   nowPlaying.set(player.playing);
@@ -895,9 +903,16 @@ if ('mediaSession' in navigator) {
   const ms = navigator.mediaSession;
   const on = (a: MediaSessionAction, h: MediaSessionActionHandler | null) => {
     try {
-      ms.setActionHandler(a, h);
-    } catch {
-      /* action not supported here */
+      ms.setActionHandler(
+        a,
+        h &&
+          ((d) => {
+            npLog(`LOCK SCREEN: ${a}`);
+            h(d);
+          }),
+      );
+    } catch (err) {
+      npLog(`setActionHandler(${a}) failed: ${(err as Error)?.message}`);
     }
   };
   on('play', () => player && !player.playing && togglePlay());
@@ -1752,6 +1767,17 @@ const tlAdd = $<HTMLSelectElement>('tlAddLane');
 $('openTimeline').hidden = !lab;
 // The same switch in the ⋯ menu (a home-screen app has its own storage, so a
 // ?lab=1 link opened in Safari never reaches it).
+// Playback log (lock-screen bugs): turning it on reloads with the panel.
+const debugBox = $<HTMLInputElement>('labDebug');
+debugBox.checked = debugOn;
+debugBox.addEventListener('change', () => {
+  try {
+    localStorage.setItem('npdebug', debugBox.checked ? '1' : '0');
+  } catch {
+    /* storage blocked */
+  }
+  location.reload();
+});
 const labBox = $<HTMLInputElement>('labTimeline');
 labBox.checked = lab;
 labBox.addEventListener('change', () => {

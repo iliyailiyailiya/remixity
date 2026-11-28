@@ -7,6 +7,8 @@
 // then sends those buttons to our Media Session handlers. It's silent and
 // a few kilobytes; the music itself still comes from Web Audio.
 
+import { npLog } from './debugLog';
+
 /**
  * 30 seconds of silence as a WAV file (8 kHz, 8-bit mono, ~240 KB, made here,
  * nothing downloaded). Long on purpose: iOS doesn't treat very short media as
@@ -49,6 +51,8 @@ export class NowPlaying {
       el.setAttribute('aria-hidden', 'true');
       el.style.display = 'none';
       document.body.append(el); // in the page, like a normal player's element
+      for (const ev of ['play', 'playing', 'pause', 'ended', 'stalled', 'waiting', 'error', 'suspend', 'emptied'])
+        el.addEventListener(ev, () => npLog(`element ${ev}${ev === 'error' ? ` ${el.error?.code ?? ''}` : ''}`));
       this.el = el;
     }
     return this.el;
@@ -60,12 +64,14 @@ export class NowPlaying {
    * start on its own, e.g. when the next song begins).
    */
   set(playing: boolean) {
-    this.wanted = playing;
     const el = this.audio;
+    if (playing !== this.wanted || playing === el.paused) npLog(`nowPlaying.set(${playing}) element ${el.paused ? 'paused' : 'playing'}`);
+    this.wanted = playing;
     if (playing && el.paused) {
-      el.play().catch(() => {
-        /* not allowed yet (no tap so far): the next tap will start it */
-      });
+      el.play().then(
+        () => npLog('element play() ok'),
+        (err: Error) => npLog(`element play() REFUSED: ${err?.name} ${err?.message ?? ''}`),
+      );
     } else if (!playing && !el.paused) el.pause();
   }
 
