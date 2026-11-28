@@ -144,6 +144,7 @@ def page(name, content, title_en):
     <link rel="canonical" href="https://remixity.app/{name}" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="icon" href="/favicon-48.png" type="image/png" sizes="48x48" />
+    <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" href="/icon-192.png" type="image/png" sizes="192x192" />
     <style>
       :root {{ color-scheme: dark; }}
